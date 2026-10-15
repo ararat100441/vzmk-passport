@@ -125,6 +125,12 @@ def check(root,project,number,vom_path,variants=(0,),new=False):
     # For a new passport, dates are recalculated by Stage 1 and previewed again.
     batch=part2.preview_groups(project,p.last_number if new else number,isolated,assignments)
     for n in variants:part2.group_preview(batch,n)
+    # Show the real АКЗ coverage in the preview. An empty № АКЗ
+    # intentionally means "without АКЗ" and must not become variant 0.
+    by_mark=a.catalog(assignments)
+    akz_counts={str(n):sum(by_mark.get(row['mark'],{}).get('assignment')==n for row in raw['rows'])
+                for n in range(4)}
+    without_akz=sum(by_mark.get(row['mark'],{}).get('assignment') is None for row in raw['rows'])
     from . import akz_auto
     auto_akz=akz_auto.enabled(root)
     if auto_akz and variants:akz_auto.validate_batch(root,batch,variants)
@@ -141,6 +147,7 @@ def check(root,project,number,vom_path,variants=(0,),new=False):
           'quantity':str(v.quantity),'mass_kg':str(v.mass),'area_m2':str(v.area),'visible_rows':len(v.rows),
           'hidden_excluded':len(raw['hidden_rows']),'uzk_units':sum(m['Q'] for m in marks),
           'fingerprints':hashes,'official_issue':False,'akz_auto':auto_akz,
+          'akz_rows_by_variant':akz_counts,'akz_rows_without_coating':without_akz,
           'akz_settings_sha256':S.sha(akz_settings) if akz_settings.exists() else None}
     plan={'data':data,'seal':S.digest(data),'vom':v,'raw':raw,'fields':f,'marks':marks,'batch':batch,'stage1':stage1}
     save(run/'PREVIEW.json',data|{'seal':plan['seal']})
@@ -163,7 +170,11 @@ def describe(plan):
     return (f"ТЕСТ — официальная выдача запрещена\nПроект: {d['project']}\nПаспорт: {d['number']}\n"
       f"Видимых строк: {d['visible_rows']}; скрытых исключено: {d['hidden_excluded']}\n"
       f"Количество: {d['quantity']} шт.\nМасса: {d['mass_kg']} кг\nПлощадь: {d['area_m2']} м²\n"
-      f"УЗК: {d['uzk_units']} изделий; образец, контроль не подтверждён\nАКЗ: {', '.join(map(str,d['variants'])) or 'не выбраны'}\n"
+      f"УЗК: {d['uzk_units']} изделий; образец, контроль не подтверждён\n"
+      f"АКЗ: {', '.join(map(str,d['variants'])) or 'не выбраны'}; строк в выбранных вариантах: "
+      f"{sum(d['akz_rows_by_variant'][str(n)] for n in d['variants'])}; "
+      f"без АКЗ: {d['akz_rows_without_coating']}; "
+      f"в других вариантах: {sum(v for k,v in d['akz_rows_by_variant'].items() if int(k) not in d['variants'])}\n"
       'Приложение №1 → ВИК → УЗК → АКЗ → Документ о качестве (последним).\n'+
       ('АКЗ: климат и толщины будут смоделированы в TEST-диапазонах; это не измерения.\n' if d.get('akz_auto') else '')+
       'Измерения, подписи и подтверждения контроля не создаются.')
