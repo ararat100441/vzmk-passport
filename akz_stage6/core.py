@@ -684,12 +684,8 @@ def validate_saved_pair(app, act, application, p):
         require(t.Range(f'A{total}').Value2=='Итого' and
                 all(not bool(t.Rows(r).Hidden) for r in range(1,total+1)),
                 'SAVED_DYNAMIC_TOTAL_POSITION_STOP')
-        require(str(t.PageSetup.PrintArea).replace('
-    finally:
-        if b is not None:b.Close(SaveChanges=False)
-        a.Close(SaveChanges=False)
-,'').upper().endswith(f'G{total}') and
-                int(t.PageSetup.Pages.Count)>=1, 'SAVED_DYNAMIC_PRINT_AREA_STOP')
+        require(str(t.PageSetup.PrintArea).replace('$','').upper().endswith(f'G{total}') and
+                int(t.PageSetup.Pages.Count)>=1,'SAVED_DYNAMIC_PRINT_AREA_STOP')
         for col,f in [('C','quantity'),('E','mass_total'),('G','area_total')]:
             require(t.Range(f'{col}{total}').Formula==f'=SUM({col}4:{col}{total-1})' and
                     abs(Decimal(str(t.Range(f'{col}{total}').Value2))-data['totals'][f])<=Decimal('0.00000001'),
