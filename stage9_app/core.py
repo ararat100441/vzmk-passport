@@ -111,15 +111,25 @@ def check(root,project,number,vom_path,variants=(0,),new=False):
     profiles=load_catalog(root/'DEV/Справочники/Профили.xlsx') if required else None
     rows=[{'row':r['row'],'mark':r['mark'],'quantity':r['quantity']} for r in raw['rows']]
     marks,excluded=calculate_marks(project,rows,stock,mappings,profiles)
+    # Stage 9 uses the current DEV project's mark assignments, not the pinned
+    # three-mark Stage 6 acceptance fixture. Snapshot the catalog into this run's
+    # own fixture file because the accepted Stage 6 parser only reads fixtures.
+    # Blank № АКЗ remains unassigned; it must never be treated as variant 0.
+    assignments=a.FIXTURES/(run.name+'_assignments.xlsx')
+    with S.frozen([catalog]):
+        catalog_sha=S.sha(catalog)
+        S.exclusive_bytes(assignments,catalog.read_bytes())
+        if S.sha(assignments)!=catalog_sha or S.sha(catalog)!=catalog_sha:
+            raise S.Stop('AKZ_ASSIGNMENTS_COPY_SHA_CONFLICT')
     # Templates/assignments must pass before Stage 1 can append even a TEST row.
     # For a new passport, dates are recalculated by Stage 1 and previewed again.
-    batch=part2.preview_groups(project,p.last_number if new else number,isolated,a.FIXTURES/'assignments.xlsx')
+    batch=part2.preview_groups(project,p.last_number if new else number,isolated,assignments)
     for n in variants:part2.group_preview(batch,n)
     from . import akz_auto
     auto_akz=akz_auto.enabled(root)
     if auto_akz and variants:akz_auto.validate_batch(root,batch,variants)
     files=[r.path,source,imported,isolated,v.path,catalog,root/'DEV/УЗК_DEV.xlsm',
-           *list((root/'DEV/Справочники').glob('*')),a.FIXTURES/'assignments.xlsx',
+           *list((root/'DEV/Справочники').glob('*')),assignments,
            *list((a.PROJECT/'Паспорт').glob('*.xlsx')),*list((a.PROJECT/'Паспорт').glob('*.docx'))]
     from uzk_stage5.result_samples import ACCEPTED_SOURCES
     files += [a.PROJECT/p for p,_,_ in ACCEPTED_SOURCES]
