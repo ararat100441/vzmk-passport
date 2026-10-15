@@ -259,14 +259,13 @@ def write_act(app,path,p,cfg,folder):
     finally:b.Close(SaveChanges=False)
 
 def write_application(app,path,p,source_shape):
+    """Stage 6 writes and validates the correctly relocated dynamic totals.
+
+    Never restore original-template SUM formulas into their old cell addresses:
+    those cells can now contain actual VOM marks on larger appendices.
+    """
     from akz_stage6 import core as c,part2
     (c.write_application if p.payload.get('variant',0)==0 else part2.write_application)(app,path,p)
-    book=c.native_open(app,path,read_only=False)
-    try:
-        for sheet,old in source_shape.items():
-            for cell,formula in old['formulas'].items():book.Worksheets(sheet).Range(cell).Formula=formula
-        app.CalculateFull();c.native_save(book,path)
-    finally:book.Close(SaveChanges=False)
 
 def validate_pair(app,act,application,p,proof,source_shape,application_shape):
     from akz_stage6 import core as c,part2
@@ -284,9 +283,40 @@ def validate_pair(app,act,application,p,proof,source_shape,application_shape):
                     if cell not in replaced:require(now['formulas'].get(cell)==formula,'AKZ_FORMULA_CHANGED: '+cell)
         application_actual=shape(application)
         require(list(application_actual)==list(application_shape),'AKZ_APPLICATION_SHEETS_CHANGED')
-        for sheet,old in application_shape.items():
-            for key in ('merges','print_area','fonts','fills','borders','formulas'):
-                require(old[key]==application_actual[sheet][key],'AKZ_APPLICATION_FORMAT_CHANGED: '+sheet+'/'+key)
+        from openpyxl.utils.cell import range_boundaries
+        first=4 if n==0 else 5
+        last=first+len(d['selected'])-1
+        total=last+1
+        sheet=b.active;cached=bv.active
+        old=application_shape[sheet.title];now=application_actual[sheet.title]
+        header_end=first-1
+        def header_map(mapping):
+            return {cell:style for cell,style in mapping.items()
+                    if int(re.search(r'\\d+',cell).group())<=header_end}
+        def header_merges(merges):
+            return sorted(address for address in merges if range_boundaries(address)[3]<=header_end)
+        require(header_merges(old['merges'])==header_merges(now['merges']),'AKZ_APPLICATION_HEADER_MERGES_CHANGED')
+        for key in ('fonts','fills','borders'):
+            require(header_map(old[key])==header_map(now[key]),'AKZ_APPLICATION_HEADER_FORMAT_CHANGED: '+key)
+        require(sheet[f'A{total}'].value=='Итого' and
+                all(sheet[f'A{rn}'].value==d['selected'][rn-first]['mark'] for rn in range(first,total)),
+                'AKZ_APPLICATION_MARKS_OR_TOTAL_POSITION_STOP')
+        require(str(sheet.print_area).replace('$','').upper().endswith(f'G{total}') and
+                sheet.print_title_rows==f'$1:${header_end}' and
+                all(not sheet.row_dimensions[rn].hidden for rn in range(1,total+1)),
+                'AKZ_APPLICATION_DYNAMIC_PRINT_STOP')
+        # The original bold total row must retain its native visual styling
+        # after an Excel row insertion or deletion.
+        original=load_workbook(d['templates']['application'],data_only=False)
+        try:
+            template_sheet=original.active
+            original_total=21 if n==0 else part2.layout(n).total
+            for col in 'ABCDEFG':
+                before=template_sheet[f'{col}{original_total}']
+                after=sheet[f'{col}{total}']
+                require(before.font==after.font and before.fill==after.fill and
+                        before.border==after.border,'AKZ_TOTAL_ROW_STYLE_CHANGED: '+col)
+        finally:original.close()
         for book in (a,values,b,bv):
             for sheet in book:
                 for row in sheet:
@@ -303,9 +333,8 @@ def validate_pair(app,act,application,p,proof,source_shape,application_shape):
         require(a['4']['E4'].value==d['act_number']+' от ','AKZ_CURRENT_NUMBER_STOP')
         require(values['4']['H4'].value.date().isoformat()==d['date'],'AKZ_CURRENT_DATE_STOP')
         if n==2:require(a['4']['I27'].number_format=='0','AKZ_THICKNESS_CURRENCY_FORMAT_STOP')
-        sheet=b.active;cached=bv.active;last=20 if n==0 else part2.layout(n).last;total=21 if n==0 else last+1
         for col,key in [('C','quantity'),('E','mass_total'),('G','area_total')]:
-            require(sheet[f'{col}{total}'].value==application_shape[sheet.title]['formulas'][f'{col}{total}'],'AKZ_TOTAL_FORMULA_CHANGED')
+            require(sheet[f'{col}{total}'].value==f'=SUM({col}{first}:{col}{last})','AKZ_TOTAL_FORMULA_CHANGED')
             require(abs(Decimal(str(cached[f'{col}{total}'].value))-d['totals'][key])<=Decimal('.00000001'),'AKZ_VISIBLE_VOM_TOTAL_STOP')
         for index,col in enumerate(proof['columns']):
             layerday=values['4'][col+'22'].value.date().isoformat()
