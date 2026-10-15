@@ -283,7 +283,7 @@ def validate_pair(app,act,application,p,proof,source_shape,application_shape):
                     if cell not in replaced:require(now['formulas'].get(cell)==formula,'AKZ_FORMULA_CHANGED: '+cell)
         application_actual=shape(application)
         require(list(application_actual)==list(application_shape),'AKZ_APPLICATION_SHEETS_CHANGED')
-        from openpyxl.utils.cell import range_boundaries
+        from openpyxl.utils.cell import range_boundaries, coordinate_from_string
         first=4 if n==0 else 5
         last=first+len(d['selected'])-1
         total=last+1
@@ -292,7 +292,7 @@ def validate_pair(app,act,application,p,proof,source_shape,application_shape):
         header_end=first-1
         def header_map(mapping):
             return {cell:style for cell,style in mapping.items()
-                    if int(re.search(r'\\d+',cell).group())<=header_end}
+                    if coordinate_from_string(cell)[1]<=header_end}
         def header_merges(merges):
             return sorted(address for address in merges if range_boundaries(address)[3]<=header_end)
         require(header_merges(old['merges'])==header_merges(now['merges']),'AKZ_APPLICATION_HEADER_MERGES_CHANGED')
