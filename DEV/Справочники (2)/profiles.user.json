@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "revision": 6,
+  "manual_rows": [
+    {
+      "record_id": "USER-0577d2900ade479b945d7f7811d2a4e3",
+      "source_id": "USER-0577d2900ade479b945d7f7811d2a4e3",
+      "source": "USER",
+      "display": "Гн.[140X60X4",
+      "key": "ГН.[140×60×4",
+      "family": "Гнутый швеллер",
+      "standard": "ГОСТ 8278-83",
+      "geometry": {
+        "h": 140,
+        "b": 60,
+        "t": 4
+      },
+      "quality": {},
+      "raw": {
+        "profile": "Гн.[140X60X4",
+        "family": "Гнутый швеллер",
+        "standard": "ГОСТ 8278-83",
+        "geometry": {
+          "h": 140,
+          "b": 60,
+          "t": 4
+        },
+        "note": "Гараж Казахстан; USER_CONFIRMED_UZK_RULE; [{'file': 'C:\\\\Users\\\\arara\\\\Desktop\\\\ВЗМК рабочий стол\\\\Работа\\\\Документы\\\\Гараж казахстан\\\\WAA0007144-AC2-КМД.pdf', 'pages': [413, 414], 'parts': [536, 527]}]"
+      },
+      "date": "2026-10-07T13:21:35.260350+00:00",
+      "evidence": {
+        "file": "profiles.user.json",
+        "record_id": "USER-0577d2900ade479b945d7f7811d2a4e3"
+      },
+      "notes": [
+        "Гараж Казахстан; USER_CONFIRMED_UZK_RULE; [{'file': 'C:\\\\Users\\\\arara\\\\Desktop\\\\ВЗМК рабочий стол\\\\Работа\\\\Документы\\\\Гараж казахстан\\\\WAA0007144-AC2-КМД.pdf', 'pages': [413, 414], 'parts': [536, 527]}]",
+        "ПОДТВЕРЖДЕНО ПО КМД"
+      ],
+      "uzk_confirmed": false,
+      "verification": {
+        "kind": "KMD",
+        "confirmed_by": "USER",
+        "decision_date": "2026-10-07",
+        "references": [
+          {
+            "file": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\WAA0007144-AC2-КМД.pdf",
+            "pages": [
+              413,
+              414
+            ],
+            "parts": [
+              536,
+              527
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "record_id": "USER-d32a20df5bf143ae9c2d45582689af72",
+      "source_id": "USER-d32a20df5bf143ae9c2d45582689af72",
+      "source": "USER",
+      "display": "Гн.[]120х3",
+      "key": "120×120×3",
+      "family": "Квадратный профиль",
+      "standard": "ГОСТ 30245-2003",
+      "geometry": {
+        "h": 120,
+        "b": 120,
+        "t": 3
+      },
+      "quality": {},
+      "raw": {
+        "profile": "Гн.[]120х3",
+        "family": "Квадратный профиль",
+        "standard": "ГОСТ 30245-2003",
+        "geometry": {
+          "h": 120,
+          "b": 120,
+          "t": 3
+        },
+        "note": "Гараж Казахстан; USER_CONFIRMED_UZK_RULE; [{'file': 'C:\\\\Users\\\\arara\\\\Desktop\\\\ВЗМК рабочий стол\\\\Работа\\\\Документы\\\\Гараж казахстан\\\\WAA0007144-AC2-КМД.pdf', 'pages': [458], 'parts': [718]}, {'file': 'C:\\\\Users\\\\arara\\\\Desktop\\\\ВЗМК рабочий стол\\\\Работа\\\\Документы\\\\Гараж казахстан\\\\Детали.pdf', 'pages': [531]}]"
+      },
+      "date": "2026-10-07T13:21:35.445969+00:00",
+      "evidence": {
+        "file": "profiles.user.json",
+        "record_id": "USER-d32a20df5bf143ae9c2d45582689af72"
+      },
+      "notes": [
+        "Гараж Казахстан; USER_CONFIRMED_UZK_RULE; [{'file': 'C:\\\\Users\\\\arara\\\\Desktop\\\\ВЗМК рабочий стол\\\\Работа\\\\Документы\\\\Гараж казахстан\\\\WAA0007144-AC2-КМД.pdf', 'pages': [458], 'parts': [718]}, {'file': 'C:\\\\Users\\\\arara\\\\Desktop\\\\ВЗМК рабочий стол\\\\Работа\\\\Документы\\\\Гараж казахстан\\\\Детали.pdf', 'pages': [531]}]",
+        "ПОДТВЕРЖДЕНО ПО КМД"
+      ],
+      "uzk_confirmed": false,
+      "verification": {
+        "kind": "KMD",
+        "confirmed_by": "USER",
+        "decision_date": "2026-10-07",
+        "references": [
+          {
+            "file": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\WAA0007144-AC2-КМД.pdf",
+            "pages": [
+              458
+            ],
+            "parts": [
+              718
+            ]
+          },
+          {
+            "file": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Детали.pdf",
+            "pages": [
+              531
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "resolutions": {},
+  "preferences": [
+    {
+      "key": "35Б1",
+      "standard": "ГОСТ Р 57837-2017",
+      "basis": "USER_CONFIRMED_UZK_328x6_348x9",
+      "status": "ПОДТВЕРЖДЕНО ПОЛЬЗОВАТЕЛЕМ",
+      "date": "2026-10-06"
+    }
+  ],
+  "uzk_approvals": [
+    {
+      "basis": "USER_CONFIRMED_UZK_RULE_20261007",
+      "status": "ПОДТВЕРЖДЕНО ПОЛЬЗОВАТЕЛЕМ",
+      "date": "2026-10-07",
+      "decision_attachment": "C:\\Users\\arara\\.codex\\attachments\\75f98616-525d-42ff-8c62-88e21aaabc77\\Вставленный текст.txt",
+      "decision_sha256": "018d2b8cb11ebc408562a8516b05e43365d024e7710a0967322c862137c9822e",
+      "rule": "ГНУТЫЙ_ШВЕЛЛЕР_1",
+      "key": "Гн.[140X60X4",
+      "families": [
+        "Гнутый швеллер"
+      ],
+      "standard": "ГОСТ 8278-83",
+      "references": [
+        {
+          "file": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\WAA0007144-AC2-КМД.pdf",
+          "pages": [
+            413,
+            414
+          ],
+          "parts": [
+            536,
+            527
+          ]
+        }
+      ]
+    },
+    {
+      "basis": "USER_CONFIRMED_UZK_RULE_20261007",
+      "status": "ПОДТВЕРЖДЕНО ПОЛЬЗОВАТЕЛЕМ",
+      "date": "2026-10-07",
+      "decision_attachment": "C:\\Users\\arara\\.codex\\attachments\\75f98616-525d-42ff-8c62-88e21aaabc77\\Вставленный текст.txt",
+      "decision_sha256": "018d2b8cb11ebc408562a8516b05e43365d024e7710a0967322c862137c9822e",
+      "rule": "ЗАМКНУТЫЙ_ПРОФИЛЬ_1",
+      "families": [
+        "Квадратный профиль",
+        "Прямоугольный профиль"
+      ],
+      "standard": "ГОСТ 30245-2003",
+      "references": [
+        {
+          "file": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\WAA0007144-AC2-КМД.pdf",
+          "pages": [
+            458
+          ],
+          "parts": [
+            718
+          ]
+        },
+        {
+          "file": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Детали.pdf",
+          "pages": [
+            531
+          ]
+        }
+      ]
+    },
+    {
+      "basis": "USER_CONFIRMED_UZK_RULE_20261007",
+      "status": "ПОДТВЕРЖДЕНО ПОЛЬЗОВАТЕЛЕМ",
+      "date": "2026-10-07",
+      "decision_attachment": "C:\\Users\\arara\\.codex\\attachments\\75f98616-525d-42ff-8c62-88e21aaabc77\\Вставленный текст.txt",
+      "decision_sha256": "018d2b8cb11ebc408562a8516b05e43365d024e7710a0967322c862137c9822e",
+      "rule": "ШВЕЛЛЕР_16П_1",
+      "key": "16П",
+      "families": [
+        "Швеллер"
+      ],
+      "standard": "ГОСТ 8240-97",
+      "references": [
+        {
+          "historical_marks": [
+            "Бп2-6",
+            "Бп2-13",
+            "Бп2-1"
+          ],
+          "source": "Explicit user acceptance contract 2026-10-07"
+        }
+      ]
+    }
+  ]
+}

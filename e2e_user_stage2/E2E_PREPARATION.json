@@ -1,0 +1,38 @@
+{
+  "status": "READY_FOR_USER_E2E",
+  "production_hashes_before": {
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\ВЗМК.xlsx": "99559f545a8ced26b07628696228645213327b2abd2dd15cf82b585c9743a40e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\8 от 02.10.2026\\ВОМ отгрузочный.xlsx": "f0b8afb7dbd2424170213d569e7b8514ee8dfcab3072720baa45028b2106707c",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - Приложение № 1.xlsx": "65bda240aa5b250e978b54844f6d74bff00bb13d62a7db4c26d6ca9c022ae4a0",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - ВИК.docx": "1ea022a3079447f21930cb68ec2910a046ac037b80e55fe6ea7ed29644a58fc7",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Шаблоны\\ВИК.docx": "71c84611042dd90a2d340c1490ea529f03ce07f8ea70a6a8c6b85954c0fc93ab"
+  },
+  "production_hashes_after": {
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\ВЗМК.xlsx": "99559f545a8ced26b07628696228645213327b2abd2dd15cf82b585c9743a40e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\8 от 02.10.2026\\ВОМ отгрузочный.xlsx": "f0b8afb7dbd2424170213d569e7b8514ee8dfcab3072720baa45028b2106707c",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - Приложение № 1.xlsx": "65bda240aa5b250e978b54844f6d74bff00bb13d62a7db4c26d6ca9c022ae4a0",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - ВИК.docx": "1ea022a3079447f21930cb68ec2910a046ac037b80e55fe6ea7ed29644a58fc7",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Шаблоны\\ВИК.docx": "71c84611042dd90a2d340c1490ea529f03ce07f8ea70a6a8c6b85954c0fc93ab"
+  },
+  "protected_files_checked": 185,
+  "all_protected_files_unchanged": true,
+  "unchanged_product_code_copies": 12,
+  "active_registry": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage2\\validation\\user_e2e\\ВЗМК.xlsx",
+  "active_project_vik": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage2\\validation\\user_e2e\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - ВИК.docx",
+  "active_output": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage2\\validation\\user_e2e\\Документы\\Гараж казахстан\\Паспорт\\9-2026 от 06.10.2026\\9_2026 - ВИК.docx",
+  "preflight_checks": {
+    "python_check_only": "PASS",
+    "root_CMD_CheckOnly": "PASS",
+    "E2E_CMD_CheckOnly": "PASS",
+    "production_registry_path_rejected": "PASS",
+    "production_template_path_rejected": "PASS",
+    "production_output_path_rejected": "PASS",
+    "production_fallback_path_rejected": "PASS",
+    "relocated_root_rejected": "PASS",
+    "changed_input_hash_rejected": "PASS"
+  },
+  "generation": "NOT_RUN",
+  "Word_open": "NOT_RUN",
+  "user_visual_E2E": "NOT_RUN",
+  "Stage3": "NOT_RUN"
+}

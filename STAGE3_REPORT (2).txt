@@ -1,0 +1,110 @@
+1. ACTUAL STATE
+Продолжение после Work review: BLOCKER 1 (B1 TEST DEFECT), MAJOR 1 (M1 PRODUCT DEFECT), MINOR 0.
+Выполнен один consolidated fix только B1/M1. Остальные принятые части переиспользованы.
+Production Stage 3 checkpoint сохранён:
+ad0bb1ddf160362136504e0c029a44b8c5de6a40c566ae7b23336f6fa61a4d66.
+На старте accepted hashes 30/30 и Stage3 source hashes 14/14 совпали.
+Stage1/2, GUI, import business logic, manual columns и safe write не изменялись.
+Предыдущий manifest и исходные изменённые файлы сохранены в before snapshots.
+
+2. ROOT CAUSE
+B1: старый targeted PASS не содержал версию tested product code.
+Finalizer принимал старый PASS, записывая отдельно текущие source hashes.
+M1: automatic mapping проверял только immediate children Документы,
+не учитывая exact project folders внутри известного контейнера ЗАКРЫТЫЕ ОБЪЕКТЫ.
+
+3. CHANGED FILES
+Product: passport_app/catalog.py — только project_folder и константа ARCHIVE_CONTAINER.
+Modified tests: tests/stage3_validate.py, tests/stage3_finalize.py,
+tests/stage3_native_reopen.py, tests/stage3_additional.py.
+Added tests: tests/stage3_evidence.py, tests/stage3_mapping.py,
+tests/stage3_consolidated.py, tests/stage3_integrity_checks.py.
+Documentation: STAGE3_README.txt, STAGE3_REPORT.txt.
+Output: STAGE3_REVIEW_MANIFEST.json; новая папка validation.
+catalog_gui.py, stage3.py, Stage3 launchers, settings и Stage1/2 не менялись.
+Исходный STAGE3_CHECKPOINT.json не менялся.
+
+4. IMPLEMENTATION
+B1: небольшой helper связывает каждый результат с timestamp UTC,
+точными paths и SHA-256 пяти Stage3 product files, PASS/FAIL counts.
+Снимки делаются до imports/tests и после запуска; PASS допускается только при равенстве.
+Consolidated runner фиксирует общий BEFORE до mapping tests и AFTER после всех проверок.
+Также фиксируются восемь файлов test harness и хеши дочерних result files.
+Finalizer проверяет mandatory evidence, consolidated evidence, mapping/audit/native/extra/negative
+against current product SHA-256 и текущий test harness. Legacy unbound PASS отвергается.
+Mismatch/failed run дают exit code 1; successful manifest не обновляется.
+M1: valid explicit mapping имеет приоритет. Иначе поиск только immediate children
+Документы и Документы\ЗАКРЫТЫЕ ОБЪЕКТЫ: exact normalized NFC/case/spaces matching.
+0 candidates -> MISSING/explicit mapping; >1 -> ambiguity STOP.
+Нет recursion, fuzzy aliases, автоматического создания папок или fallback при missing explicit.
+
+5. PROJECT MAPPING AUDIT
+Read-only total 53:
+AUTO_DIRECT 1; AUTO_ARCHIVE 11; EXPLICIT 1; AMBIGUOUS 0; MISSING 40.
+Гараж Казахстан -> EXPLICIT, Гараж казахстан.
+Гранит -> AUTO_DIRECT.
+Быков, Роксемаш, Теплица, СКФ, Щёкиназот -> AUTO_ARCHIVE.
+Также архивные: ТЭЦ, Кондитерский Дом, Галерея 7, склад мелкозернистого КМ1.1,
+Усть-Луга. Площадки, Парковка Казахстан.
+ТЭМПО 1, ТЭМПО 2, Ковчег -> MISSING/explicit mapping required, без угадывания.
+Реальных normalized ambiguities не найдено; synthetic collisions дают STOP.
+Production catalogs у 13 сопоставленных проектов отсутствуют; ничего не создавалось.
+
+6. TARGETED VALIDATION
+Финальный consolidated run: 06.10.2026, 12:55:24–12:55:42 Europe/Samara.
+Mandatory Stage3 20/20 PASS на финальном product code, 18 test groups:
+создание, четыре столбца, NEW, FILL, SAME;
+CONFLICT без/с подтверждением; новая ПРОВЕРИТЬ; normal profile не затирается;
+duplicate same/conflicting; порядок новых марок;
+Краска preserved; № АКЗ preserved включая numeric 0;
+backup; locked/unwritable; preview no-write; malformed;
+normalization ambiguity; reopen saved XLSX.
+Mapping 14/14 PASS: A–L и дополнительно no-recursion/no-fuzzy Ковчег.
+Explicit priority проверен при наличии двух automatic candidates;
+missing explicit не переключается на существующую automatic folder.
+Native Excel normal read-only reopen 2/2 PASS.
+Дополнительные проверки 4/4 PASS: backup junction, concurrent writer lock,
+native Excel-saved XML/manual formulas/comments, минимальный GUI smoke.
+B1 negative gates 5/5 PASS:
+legacy unbound PASS; stale tested hash; before/after mismatch; missing product path;
+suite post-run hash mismatch. Каждый finalizer refusal exit 1, successful manifest unchanged.
+Stage1/2 accepted hashes 30/30 unchanged; минимальный startup/selection/import smoke PASS.
+Production SHA before/after unchanged.
+Product hash BEFORE == AFTER для всех пяти product files.
+Первый новый запуск остановился на ошибке переменной в дополнительном test harness.
+Он помечен FAIL/incomplete; successful manifest не обновлялся.
+После исправления только тестовой переменной весь набор заново выполнен в свежей final папке.
+
+7. EVIDENCE INTEGRITY
+Final evidence root:
+validation/stage3_B1_M1_final_20261006_125437.
+tested_code_before.json; mapping_results.json; project_mapping_audit.json;
+targeted_results.json; native_reopen_results.json; final_targeted_additions.json;
+integrity_negative_results.json; consolidated_results.json; preservation_final.json.
+Tested product SHA-256 BEFORE/AFTER:
+catalog.py: 378bf53eb62c373c388c1c82c4160f383639514c338158c6149f426a788e181c
+catalog_gui.py: f3a0fac99fc0eff351e2bea95f490d3a8d7ce7183e5529a24e3f34a0924270de
+stage3.py: 7d2f473e3f4ae6ec9a45e2bed92f05a39d2312ff8ba9bcebc2b382dd032f6de3
+Запустить Этап 3.ps1: 4fddf1ca96eb7f784889e096aeb19d84844ca04b821c4ec885792734adbe28b0
+Запустить Этап 3.cmd: d9c3d160c319620ca87c77ab40c81625cb7d692901a3c9acacd57cfbb5fffef4
+Finalizer сверяет evidence/current hashes до записи и повторно перед публикацией.
+STAGE3_REVIEW_MANIFEST.json обновляется только после всех gates PASS.
+Work visual workbook evidence переиспользовано; новый render не выполнялся.
+
+8. REGRESSION IMPACT
+AST comparison PASS: catalog.py вне project_folder/ARCHIVE_CONTAINER не изменён.
+Все четыре остальных Stage3 product files равны Work-reviewed source hashes.
+Бизнес-логика импорта, ПРОВЕРИТЬ, ручные столбцы, safe write и GUI сохранены.
+Accepted Stage1/2 code и production ВЗМК.xlsx сохранены.
+Вся запись при validation ограничена disposable validation copies/evidence.
+Ваши рабочие документы не восстанавливались и не редактировались.
+
+9. NOT_RUN
+Targeted independent B1/M1 rereview; human Stage3 E2E; production catalog/import;
+генерация паспорта/ВИК; full Stage1/2 regression; all-project runtime imports;
+новый visual render (Work PASS reused); crash/power loss;
+Stage4, NotebookLM API, 23met, Профили.xlsx, УЗК, АКЗ, PDF, EXE, deploy.
+
+10. READY FOR TARGETED REREVIEW — YES
+Все B1/M1 targeted gates выполнены; новый mandatory 20/20 связан с финальным кодом.
+Stage4 не начинался. Production Справочник марок.xlsx не создавался.

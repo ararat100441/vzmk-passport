@@ -1,0 +1,17 @@
+{
+  "source_path": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\УЗК.xlsm",
+  "source_sha256": "9f25a30139ab9e31b6da7248284c2ae6e9d4327f0d68251d5723293992662302",
+  "dev_path": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\DEV\\УЗК_DEV.xlsm",
+  "dev_initial_sha256": "9f25a30139ab9e31b6da7248284c2ae6e9d4327f0d68251d5723293992662302",
+  "creation_timestamp": "2026-10-07T13:25:32.607797+04:00",
+  "source_size_bytes": 140984,
+  "source_modified_timestamp": "2026-10-05T14:28:37.940394+04:00",
+  "source_sha256_after_copy": "9f25a30139ab9e31b6da7248284c2ae6e9d4327f0d68251d5723293992662302",
+  "policy": {
+    "development_input": "DEV_ONLY",
+    "auto_sync": false,
+    "future_refresh": "EXPLICIT_USER_DECISION_ONLY",
+    "registry_decrement": "NOT_AUTHORIZED",
+    "source_use": "INITIAL_COPY_AND_FINGERPRINT_ONLY"
+  }
+}

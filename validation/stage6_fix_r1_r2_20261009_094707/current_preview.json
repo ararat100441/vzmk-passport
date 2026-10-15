@@ -1,0 +1,2163 @@
+{
+  "seal": "e9fc12e4433feafd2982391d9d680838242807d341f425eb653e1afb8e4abbf6",
+  "payload": {
+    "mode": "TEST_ONLY",
+    "synthetic": false,
+    "passport": {
+      "project": "Гараж Казахстан",
+      "number": "9/2026",
+      "row": 400,
+      "mapping": {
+        "date": "O400",
+        "contract": "C400",
+        "customer": "D400",
+        "object": "E400",
+        "cipher": "F400"
+      },
+      "date": "2026-10-05",
+      "contract": "06/26 от 03.06.2026",
+      "customer": "ООО \"СТК ВК\"",
+      "object": "Архитектурно-строительные решения здания парковки подвижного состава",
+      "cipher": "WAA0007144-AC2-КМД"
+    },
+    "templates": {
+      "act": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\Акт № 4-2026.xlsx",
+      "application": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - Приложение к АКЗ.xlsx",
+      "material": "Противокоррозионная грунт-эмаль Pirocor Protect 057",
+      "ral": "RAL 7004",
+      "required_dry_microns": 80,
+      "layers": 1
+    },
+    "act_number": "9/2026",
+    "date": "2026-10-05",
+    "sources": {
+      "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\DEV\\ВЗМК_DEV.xlsx": "8e56f68518c70cade9efb09084dd67cd5d72e07e3fdc813b8515030e9cb98e80",
+      "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\Акт № 4-2026.xlsx": "7f6420ac50149805b46454852d62ad68fa9625c53b7c9d375460769b6ae0f8ac",
+      "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - Приложение к АКЗ.xlsx": "704d92eb0c5ea87c3951f6643488aa9100cd18f99e177d21ddc85f8843938d6f",
+      "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\9 от 06.10.2026\\ВОМ отгрузочный счет 183  (5).xls": "aae5e5b8c0246c8fe97b3dec9cbcc039bc3e3cedb9d245b474b2f871b90596ae",
+      "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\DEV\\Stage6_Fixtures\\stage6_akz_part1_20261009_085822_release3\\TEST_Справочник марок.xlsx": "7bd30ae4dae52fe9ad43e1d86debef825eca77be1fc14f0feb92245b03483b03"
+    },
+    "vom": {
+      "path": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\9 от 06.10.2026\\ВОМ отгрузочный счет 183  (5).xls",
+      "sheet": "!01_ВЗМК_A_Ведомость отправочны",
+      "rows": [
+        {
+          "mark": "Бп2-1",
+          "name": "Балка",
+          "quantity": 8.0,
+          "mass_unit": 50.84,
+          "mass_total": 406.72,
+          "area_unit": 1.943,
+          "area_total": 277.895,
+          "row": 36
+        },
+        {
+          "mark": "Бп2-5",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 37.2,
+          "mass_total": 37.2,
+          "area_unit": 1.412,
+          "area_total": 1.412,
+          "row": 40
+        },
+        {
+          "mark": "Бп2-18",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 31.32,
+          "mass_total": 31.32,
+          "area_unit": 1.184,
+          "area_total": 1.184,
+          "row": 53
+        },
+        {
+          "mark": "Бп2-19",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 36.74,
+          "mass_total": 36.74,
+          "area_unit": 1.393,
+          "area_total": 1.393,
+          "row": 54
+        },
+        {
+          "mark": "Бп2-21",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 30.5,
+          "mass_total": 30.5,
+          "area_unit": 1.152,
+          "area_total": 1.152,
+          "row": 56
+        },
+        {
+          "mark": "Бп2-23",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 35.92,
+          "mass_total": 35.92,
+          "area_unit": 1.362,
+          "area_total": 1.362,
+          "row": 58
+        },
+        {
+          "mark": "Бп2-25",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 41.32,
+          "mass_total": 41.32,
+          "area_unit": 1.571,
+          "area_total": 1.571,
+          "row": 60
+        },
+        {
+          "mark": "Бп2-26",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 46.74,
+          "mass_total": 46.74,
+          "area_unit": 1.78,
+          "area_total": 1.78,
+          "row": 61
+        },
+        {
+          "mark": "Бп2-27",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 52.15,
+          "mass_total": 52.15,
+          "area_unit": 1.99,
+          "area_total": 1.99,
+          "row": 62
+        },
+        {
+          "mark": "Бп2-29",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 27.63,
+          "mass_total": 27.63,
+          "area_unit": 1.041,
+          "area_total": 1.041,
+          "row": 64
+        },
+        {
+          "mark": "Бп2-30",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 33.04,
+          "mass_total": 33.04,
+          "area_unit": 1.251,
+          "area_total": 1.251,
+          "row": 65
+        },
+        {
+          "mark": "Бп2-31",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 38.46,
+          "mass_total": 38.46,
+          "area_unit": 1.46,
+          "area_total": 1.46,
+          "row": 66
+        },
+        {
+          "mark": "Бп2-35",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 28.14,
+          "mass_total": 28.14,
+          "area_unit": 1.061,
+          "area_total": 1.061,
+          "row": 70
+        },
+        {
+          "mark": "Бп2-36",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 33.55,
+          "mass_total": 33.55,
+          "area_unit": 1.27,
+          "area_total": 1.27,
+          "row": 71
+        },
+        {
+          "mark": "Бп2-39",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 31.8,
+          "mass_total": 31.8,
+          "area_unit": 1.202,
+          "area_total": 1.202,
+          "row": 74
+        },
+        {
+          "mark": "Вр1-1",
+          "name": "Воротный ригель",
+          "quantity": 1.0,
+          "mass_unit": 61.16,
+          "mass_total": 61.16,
+          "area_unit": 2.691,
+          "area_total": 2.691,
+          "row": 141
+        },
+        {
+          "mark": "Вр1-2",
+          "name": "Воротный ригель",
+          "quantity": 1.0,
+          "mass_unit": 59.48,
+          "mass_total": 59.48,
+          "area_unit": 2.619,
+          "area_total": 2.619,
+          "row": 142
+        },
+        {
+          "mark": "Вр1-3",
+          "name": "Воротный ригель",
+          "quantity": 1.0,
+          "mass_unit": 42.93,
+          "mass_total": 42.93,
+          "area_unit": 1.843,
+          "area_total": 1.843,
+          "row": 143
+        },
+        {
+          "mark": "Вр1-5",
+          "name": "Воротный ригель",
+          "quantity": 1.0,
+          "mass_unit": 26.12,
+          "mass_total": 26.12,
+          "area_unit": 1.136,
+          "area_total": 1.136,
+          "row": 145
+        },
+        {
+          "mark": "Вр1-7",
+          "name": "Воротный ригель",
+          "quantity": 1.0,
+          "mass_unit": 26.12,
+          "mass_total": 26.12,
+          "area_unit": 1.136,
+          "area_total": 1.136,
+          "row": 147
+        },
+        {
+          "mark": "Н1-13",
+          "name": "Настил",
+          "quantity": 2.0,
+          "mass_unit": 91.44,
+          "mass_total": 182.88,
+          "area_unit": 6.968,
+          "area_total": 13.936,
+          "row": 205
+        },
+        {
+          "mark": "Н1-15",
+          "name": "Настил",
+          "quantity": 45.0,
+          "mass_unit": 87.1,
+          "mass_total": 3919.4999999999995,
+          "area_unit": 6.974,
+          "area_total": 690.434,
+          "row": 207
+        },
+        {
+          "mark": "Н1-18",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 87.1,
+          "mass_total": 87.1,
+          "area_unit": 6.738,
+          "area_total": 6.738,
+          "row": 210
+        },
+        {
+          "mark": "Н1-25",
+          "name": "Настил",
+          "quantity": 2.0,
+          "mass_unit": 86.78,
+          "mass_total": 173.56,
+          "area_unit": 6.948,
+          "area_total": 125.067,
+          "row": 217
+        },
+        {
+          "mark": "Н1-26",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 86.78,
+          "mass_total": 86.78,
+          "area_unit": 6.948,
+          "area_total": 6.948,
+          "row": 218
+        },
+        {
+          "mark": "Н1-27",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 86.78,
+          "mass_total": 86.78,
+          "area_unit": 6.549,
+          "area_total": 6.549,
+          "row": 219
+        },
+        {
+          "mark": "Н1-33",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 87.1,
+          "mass_total": 87.1,
+          "area_unit": 6.974,
+          "area_total": 6.974,
+          "row": 225
+        },
+        {
+          "mark": "Н1-36",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 87.1,
+          "mass_total": 87.1,
+          "area_unit": 6.747,
+          "area_total": 6.747,
+          "row": 228
+        },
+        {
+          "mark": "Н1-45",
+          "name": "Настил",
+          "quantity": 6.0,
+          "mass_unit": 87.42,
+          "mass_total": 524.52,
+          "area_unit": 7.0,
+          "area_total": 49.0,
+          "row": 237
+        },
+        {
+          "mark": "Н1-48",
+          "name": "Настил",
+          "quantity": 2.0,
+          "mass_unit": 102.26,
+          "mass_total": 204.52,
+          "area_unit": 7.798,
+          "area_total": 23.393,
+          "row": 240
+        },
+        {
+          "mark": "Н1-51",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 46.58,
+          "mass_total": 46.58,
+          "area_unit": 3.366,
+          "area_total": 3.366,
+          "row": 243
+        },
+        {
+          "mark": "Н1-56",
+          "name": "Настил",
+          "quantity": 3.0,
+          "mass_unit": 65.27,
+          "mass_total": 195.81,
+          "area_unit": 4.98,
+          "area_total": 14.94,
+          "row": 248
+        },
+        {
+          "mark": "Н1-57",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 65.27,
+          "mass_total": 65.27,
+          "area_unit": 4.986,
+          "area_total": 4.986,
+          "row": 249
+        },
+        {
+          "mark": "Н1-62",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 82.43,
+          "mass_total": 82.43,
+          "area_unit": 6.464,
+          "area_total": 6.464,
+          "row": 254
+        },
+        {
+          "mark": "Н1-63",
+          "name": "Настил",
+          "quantity": 8.0,
+          "mass_unit": 82.43,
+          "mass_total": 659.44,
+          "area_unit": 6.601,
+          "area_total": 52.809,
+          "row": 255
+        },
+        {
+          "mark": "Н1-68",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 95.84,
+          "mass_total": 95.84,
+          "area_unit": 6.943,
+          "area_total": 6.943,
+          "row": 260
+        },
+        {
+          "mark": "Н1-70",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 65.27,
+          "mass_total": 65.27,
+          "area_unit": 5.04,
+          "area_total": 5.04,
+          "row": 262
+        },
+        {
+          "mark": "Н1-71",
+          "name": "Настил",
+          "quantity": 2.0,
+          "mass_unit": 65.27,
+          "mass_total": 130.54,
+          "area_unit": 4.98,
+          "area_total": 9.96,
+          "row": 263
+        },
+        {
+          "mark": "Н1-72",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 65.27,
+          "mass_total": 65.27,
+          "area_unit": 4.98,
+          "area_total": 4.98,
+          "row": 264
+        },
+        {
+          "mark": "Н1-76",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 71.35,
+          "mass_total": 71.35,
+          "area_unit": 5.077,
+          "area_total": 5.077,
+          "row": 268
+        },
+        {
+          "mark": "Н1-78",
+          "name": "Настил",
+          "quantity": 7.0,
+          "mass_unit": 82.11,
+          "mass_total": 574.77,
+          "area_unit": 6.575,
+          "area_total": 52.602,
+          "row": 270
+        },
+        {
+          "mark": "Н1-82",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 43.21,
+          "mass_total": 43.21,
+          "area_unit": 2.932,
+          "area_total": 2.932,
+          "row": 274
+        },
+        {
+          "mark": "Н1-85",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 71.34,
+          "mass_total": 71.34,
+          "area_unit": 5.161,
+          "area_total": 5.161,
+          "row": 277
+        },
+        {
+          "mark": "Н1-89",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 65.83,
+          "mass_total": 65.83,
+          "area_unit": 4.906,
+          "area_total": 4.906,
+          "row": 281
+        },
+        {
+          "mark": "Н1-95",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 89.22,
+          "mass_total": 89.22,
+          "area_unit": 6.988,
+          "area_total": 6.988,
+          "row": 287
+        },
+        {
+          "mark": "Н1-96",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 91.1,
+          "mass_total": 91.1,
+          "area_unit": 6.966,
+          "area_total": 6.966,
+          "row": 288
+        },
+        {
+          "mark": "Н1-97",
+          "name": "Настил",
+          "quantity": 1.0,
+          "mass_unit": 86.78,
+          "mass_total": 86.78,
+          "area_unit": 6.725,
+          "area_total": 6.725,
+          "row": 289
+        },
+        {
+          "mark": "Пл-1",
+          "name": "Площадка",
+          "quantity": 1.0,
+          "mass_unit": 490.51,
+          "mass_total": 490.51,
+          "area_unit": 26.397,
+          "area_total": 26.397,
+          "row": 313
+        },
+        {
+          "mark": "Пл-2",
+          "name": "Площадка",
+          "quantity": 1.0,
+          "mass_unit": 91.53,
+          "mass_total": 91.53,
+          "area_unit": 3.598,
+          "area_total": 3.598,
+          "row": 314
+        },
+        {
+          "mark": "Пл-3",
+          "name": "Площадка",
+          "quantity": 1.0,
+          "mass_unit": 122.24,
+          "mass_total": 122.24,
+          "area_unit": 6.34,
+          "area_total": 6.34,
+          "row": 315
+        },
+        {
+          "mark": "Пп1-13",
+          "name": "Прогон",
+          "quantity": 1.0,
+          "mass_unit": 60.09,
+          "mass_total": 60.09,
+          "area_unit": 2.589,
+          "area_total": 31.072,
+          "row": 328
+        },
+        {
+          "mark": "Пс1-1",
+          "name": "Прогон",
+          "quantity": 2.0,
+          "mass_unit": 17.8,
+          "mass_total": 35.6,
+          "area_unit": 1.124,
+          "area_total": 2.249,
+          "row": 343
+        },
+        {
+          "mark": "Пс1-2",
+          "name": "Прогон",
+          "quantity": 2.0,
+          "mass_unit": 15.31,
+          "mass_total": 30.62,
+          "area_unit": 0.961,
+          "area_total": 1.922,
+          "row": 344
+        },
+        {
+          "mark": "Пс1-3",
+          "name": "Прогон",
+          "quantity": 4.0,
+          "mass_unit": 16.0,
+          "mass_total": 64.0,
+          "area_unit": 1.007,
+          "area_total": 4.027,
+          "row": 345
+        },
+        {
+          "mark": "Пс1-7",
+          "name": "Прогон",
+          "quantity": 3.0,
+          "mass_unit": 14.43,
+          "mass_total": 43.29,
+          "area_unit": 0.904,
+          "area_total": 2.711,
+          "row": 349
+        },
+        {
+          "mark": "Пс1-9",
+          "name": "Прогон стеновой",
+          "quantity": 14.0,
+          "mass_unit": 29.55,
+          "mass_total": 413.7,
+          "area_unit": 1.937,
+          "area_total": 27.116,
+          "row": 351
+        },
+        {
+          "mark": "Пс1-10",
+          "name": "Прогон стеновой",
+          "quantity": 49.0,
+          "mass_unit": 27.21,
+          "mass_total": 1333.29,
+          "area_unit": 1.784,
+          "area_total": 128.432,
+          "row": 352
+        },
+        {
+          "mark": "Пс1-11",
+          "name": "Прогон стеновой",
+          "quantity": 2.0,
+          "mass_unit": 27.21,
+          "mass_total": 54.42,
+          "area_unit": 1.784,
+          "area_total": 3.568,
+          "row": 353
+        },
+        {
+          "mark": "Пс1-12",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 26.58,
+          "mass_total": 26.58,
+          "area_unit": 1.743,
+          "area_total": 1.743,
+          "row": 354
+        },
+        {
+          "mark": "Пс1-13",
+          "name": "Прогон стеновой",
+          "quantity": 3.0,
+          "mass_unit": 27.21,
+          "mass_total": 81.63,
+          "area_unit": 1.784,
+          "area_total": 5.351,
+          "row": 355
+        },
+        {
+          "mark": "Пс1-14",
+          "name": "Прогон стеновой",
+          "quantity": 6.0,
+          "mass_unit": 28.0,
+          "mass_total": 168.0,
+          "area_unit": 1.835,
+          "area_total": 11.01,
+          "row": 356
+        },
+        {
+          "mark": "Пс1-15",
+          "name": "Прогон",
+          "quantity": 1.0,
+          "mass_unit": 15.81,
+          "mass_total": 15.81,
+          "area_unit": 0.994,
+          "area_total": 0.994,
+          "row": 357
+        },
+        {
+          "mark": "Пс1-16",
+          "name": "Прогон",
+          "quantity": 1.0,
+          "mass_unit": 15.03,
+          "mass_total": 15.03,
+          "area_unit": 0.943,
+          "area_total": 0.943,
+          "row": 358
+        },
+        {
+          "mark": "Пс1-17",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 29.48,
+          "mass_total": 29.48,
+          "area_unit": 1.932,
+          "area_total": 1.932,
+          "row": 359
+        },
+        {
+          "mark": "Пс1-18",
+          "name": "Прогон стеновой",
+          "quantity": 5.0,
+          "mass_unit": 29.48,
+          "mass_total": 147.4,
+          "area_unit": 1.932,
+          "area_total": 9.661,
+          "row": 360
+        },
+        {
+          "mark": "Пс1-19",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 33.73,
+          "mass_total": 33.73,
+          "area_unit": 2.211,
+          "area_total": 2.211,
+          "row": 361
+        },
+        {
+          "mark": "Пс1-20",
+          "name": "Прогон стеновой",
+          "quantity": 5.0,
+          "mass_unit": 33.73,
+          "mass_total": 168.64999999999998,
+          "area_unit": 2.211,
+          "area_total": 11.056,
+          "row": 362
+        },
+        {
+          "mark": "Пс1-21",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 19.62,
+          "mass_total": 19.62,
+          "area_unit": 1.287,
+          "area_total": 1.287,
+          "row": 363
+        },
+        {
+          "mark": "Пс1-22",
+          "name": "Прогон стеновой",
+          "quantity": 3.0,
+          "mass_unit": 19.62,
+          "mass_total": 58.86,
+          "area_unit": 1.287,
+          "area_total": 3.861,
+          "row": 364
+        },
+        {
+          "mark": "Пс1-23",
+          "name": "Прогон стеновой",
+          "quantity": 2.0,
+          "mass_unit": 32.53,
+          "mass_total": 65.06,
+          "area_unit": 2.132,
+          "area_total": 4.264,
+          "row": 365
+        },
+        {
+          "mark": "Пс1-24",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 36.38,
+          "mass_total": 36.38,
+          "area_unit": 2.384,
+          "area_total": 2.384,
+          "row": 366
+        },
+        {
+          "mark": "Пс1-25",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 39.59,
+          "mass_total": 39.59,
+          "area_unit": 2.595,
+          "area_total": 2.595,
+          "row": 367
+        },
+        {
+          "mark": "Пс1-26",
+          "name": "Прогон стеновой",
+          "quantity": 2.0,
+          "mass_unit": 21.4,
+          "mass_total": 42.8,
+          "area_unit": 1.403,
+          "area_total": 2.807,
+          "row": 368
+        },
+        {
+          "mark": "Пс1-28",
+          "name": "Прогон",
+          "quantity": 1.0,
+          "mass_unit": 43.37,
+          "mass_total": 43.37,
+          "area_unit": 2.096,
+          "area_total": 2.096,
+          "row": 370
+        },
+        {
+          "mark": "Пс1-29",
+          "name": "Прогон",
+          "quantity": 1.0,
+          "mass_unit": 38.39,
+          "mass_total": 38.39,
+          "area_unit": 1.89,
+          "area_total": 1.89,
+          "row": 371
+        },
+        {
+          "mark": "Пс1-31",
+          "name": "Прогон",
+          "quantity": 1.0,
+          "mass_unit": 44.65,
+          "mass_total": 44.65,
+          "area_unit": 2.203,
+          "area_total": 4.407,
+          "row": 373
+        },
+        {
+          "mark": "Пс1-32",
+          "name": "Прогон",
+          "quantity": 1.0,
+          "mass_unit": 35.24,
+          "mass_total": 35.24,
+          "area_unit": 1.733,
+          "area_total": 1.733,
+          "row": 374
+        },
+        {
+          "mark": "Пс1-37",
+          "name": "Прогон",
+          "quantity": 2.0,
+          "mass_unit": 17.02,
+          "mass_total": 34.04,
+          "area_unit": 1.07,
+          "area_total": 2.14,
+          "row": 379
+        },
+        {
+          "mark": "Пс2-4",
+          "name": "Прогон стеновой",
+          "quantity": 2.0,
+          "mass_unit": 66.06,
+          "mass_total": 132.12,
+          "area_unit": 2.853,
+          "area_total": 19.969,
+          "row": 384
+        },
+        {
+          "mark": "Пс2-7",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 84.08,
+          "mass_total": 84.08,
+          "area_unit": 3.483,
+          "area_total": 3.483,
+          "row": 387
+        },
+        {
+          "mark": "Пс2-8",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 84.73,
+          "mass_total": 84.73,
+          "area_unit": 3.521,
+          "area_total": 3.521,
+          "row": 388
+        },
+        {
+          "mark": "Пс2-9",
+          "name": "Прогон стеновой",
+          "quantity": 3.0,
+          "mass_unit": 76.26,
+          "mass_total": 228.78000000000003,
+          "area_unit": 3.161,
+          "area_total": 22.125,
+          "row": 389
+        },
+        {
+          "mark": "Пс2-12",
+          "name": "Прогон стеновой",
+          "quantity": 1.0,
+          "mass_unit": 80.2,
+          "mass_total": 80.2,
+          "area_unit": 3.328,
+          "area_total": 3.328,
+          "row": 392
+        },
+        {
+          "mark": "Пс2-16",
+          "name": "Прогон стеновой",
+          "quantity": 9.0,
+          "mass_unit": 55.64,
+          "mass_total": 500.76,
+          "area_unit": 2.409,
+          "area_total": 38.546,
+          "row": 396
+        },
+        {
+          "mark": "Пс2-20",
+          "name": "Прогон стеновой",
+          "quantity": 4.0,
+          "mass_unit": 77.1,
+          "mass_total": 308.4,
+          "area_unit": 3.203,
+          "area_total": 12.813,
+          "row": 400
+        },
+        {
+          "mark": "Р2-8",
+          "name": "Распорка",
+          "quantity": 1.0,
+          "mass_unit": 52.93,
+          "mass_total": 52.93,
+          "area_unit": 1.796,
+          "area_total": 1.796,
+          "row": 430
+        },
+        {
+          "mark": "Р2-9",
+          "name": "Распорка",
+          "quantity": 1.0,
+          "mass_unit": 62.7,
+          "mass_total": 62.7,
+          "area_unit": 2.117,
+          "area_total": 2.117,
+          "row": 431
+        },
+        {
+          "mark": "Св1-1",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 44.16,
+          "mass_total": 44.16,
+          "area_unit": 1.546,
+          "area_total": 3.091,
+          "row": 433
+        },
+        {
+          "mark": "Св1-3",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 56.5,
+          "mass_total": 56.5,
+          "area_unit": 1.942,
+          "area_total": 3.884,
+          "row": 435
+        },
+        {
+          "mark": "Св1-8",
+          "name": "Балка",
+          "quantity": 3.0,
+          "mass_unit": 51.91,
+          "mass_total": 155.73,
+          "area_unit": 1.794,
+          "area_total": 5.383,
+          "row": 440
+        },
+        {
+          "mark": "Св1-9",
+          "name": "Балка",
+          "quantity": 2.0,
+          "mass_unit": 39.31,
+          "mass_total": 78.62,
+          "area_unit": 1.39,
+          "area_total": 4.17,
+          "row": 441
+        },
+        {
+          "mark": "Св1-17",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 36.25,
+          "mass_total": 36.25,
+          "area_unit": 1.292,
+          "area_total": 1.292,
+          "row": 449
+        },
+        {
+          "mark": "Св1-18",
+          "name": "Балка",
+          "quantity": 2.0,
+          "mass_unit": 58.2,
+          "mass_total": 116.4,
+          "area_unit": 1.997,
+          "area_total": 3.993,
+          "row": 450
+        },
+        {
+          "mark": "Св1-19",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 127.41,
+          "mass_total": 127.41,
+          "area_unit": 4.29,
+          "area_total": 4.29,
+          "row": 451
+        },
+        {
+          "mark": "Св1-20",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 103.81,
+          "mass_total": 103.81,
+          "area_unit": 3.559,
+          "area_total": 3.559,
+          "row": 452
+        },
+        {
+          "mark": "Св1-21",
+          "name": "Балка",
+          "quantity": 1.0,
+          "mass_unit": 47.66,
+          "mass_total": 47.66,
+          "area_unit": 1.658,
+          "area_total": 1.658,
+          "row": 453
+        },
+        {
+          "mark": "Сг2-15",
+          "name": "Связь",
+          "quantity": 2.0,
+          "mass_unit": 36.13,
+          "mass_total": 72.26,
+          "area_unit": 1.255,
+          "area_total": 2.51,
+          "row": 480
+        },
+        {
+          "mark": "Сг2-16",
+          "name": "Связь",
+          "quantity": 1.0,
+          "mass_unit": 71.02,
+          "mass_total": 71.02,
+          "area_unit": 2.43,
+          "area_total": 2.43,
+          "row": 481
+        },
+        {
+          "mark": "Сг2-17",
+          "name": "Связь",
+          "quantity": 1.0,
+          "mass_unit": 77.76,
+          "mass_total": 77.76,
+          "area_unit": 2.657,
+          "area_total": 2.657,
+          "row": 482
+        },
+        {
+          "mark": "Сг2-20",
+          "name": "Связь",
+          "quantity": 1.0,
+          "mass_unit": 66.42,
+          "mass_total": 66.42,
+          "area_unit": 2.28,
+          "area_total": 2.28,
+          "row": 485
+        },
+        {
+          "mark": "Сг2-21",
+          "name": "Связь",
+          "quantity": 1.0,
+          "mass_unit": 67.02,
+          "mass_total": 67.02,
+          "area_unit": 2.3,
+          "area_total": 2.3,
+          "row": 486
+        },
+        {
+          "mark": "Сг2-22",
+          "name": "Связь",
+          "quantity": 2.0,
+          "mass_unit": 34.43,
+          "mass_total": 68.86,
+          "area_unit": 1.2,
+          "area_total": 2.399,
+          "row": 487
+        },
+        {
+          "mark": "Сг2-24",
+          "name": "Связь",
+          "quantity": 1.0,
+          "mass_unit": 73.26,
+          "mass_total": 73.26,
+          "area_unit": 2.503,
+          "area_total": 2.503,
+          "row": 489
+        },
+        {
+          "mark": "Сг2-25",
+          "name": "Связь",
+          "quantity": 1.0,
+          "mass_unit": 73.77,
+          "mass_total": 73.77,
+          "area_unit": 2.52,
+          "area_total": 2.52,
+          "row": 490
+        }
+      ],
+      "hidden_rows": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        37,
+        38,
+        39,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        55,
+        57,
+        59,
+        63,
+        67,
+        68,
+        69,
+        72,
+        73,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        122,
+        123,
+        124,
+        125,
+        126,
+        127,
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        144,
+        146,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188,
+        189,
+        190,
+        191,
+        192,
+        193,
+        194,
+        195,
+        196,
+        197,
+        198,
+        199,
+        200,
+        201,
+        202,
+        203,
+        204,
+        206,
+        208,
+        209,
+        211,
+        212,
+        213,
+        214,
+        215,
+        216,
+        220,
+        221,
+        222,
+        223,
+        224,
+        226,
+        227,
+        229,
+        230,
+        231,
+        232,
+        233,
+        234,
+        235,
+        236,
+        238,
+        239,
+        241,
+        242,
+        244,
+        245,
+        246,
+        247,
+        250,
+        251,
+        252,
+        253,
+        256,
+        257,
+        258,
+        259,
+        261,
+        265,
+        266,
+        267,
+        269,
+        271,
+        272,
+        273,
+        275,
+        276,
+        278,
+        279,
+        280,
+        282,
+        283,
+        284,
+        285,
+        286,
+        290,
+        291,
+        292,
+        293,
+        294,
+        295,
+        296,
+        297,
+        298,
+        299,
+        300,
+        301,
+        302,
+        303,
+        304,
+        305,
+        306,
+        307,
+        308,
+        309,
+        310,
+        311,
+        312,
+        316,
+        317,
+        318,
+        319,
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        329,
+        330,
+        331,
+        332,
+        333,
+        334,
+        335,
+        336,
+        337,
+        338,
+        339,
+        340,
+        341,
+        342,
+        346,
+        347,
+        348,
+        350,
+        369,
+        372,
+        375,
+        376,
+        377,
+        378,
+        380,
+        381,
+        382,
+        383,
+        385,
+        386,
+        390,
+        391,
+        393,
+        394,
+        395,
+        397,
+        398,
+        399,
+        401,
+        402,
+        403,
+        404,
+        405,
+        406,
+        407,
+        408,
+        409,
+        410,
+        411,
+        412,
+        413,
+        414,
+        415,
+        416,
+        417,
+        418,
+        419,
+        420,
+        421,
+        422,
+        423,
+        424,
+        425,
+        426,
+        427,
+        428,
+        429,
+        432,
+        434,
+        436,
+        437,
+        438,
+        439,
+        442,
+        443,
+        444,
+        445,
+        446,
+        447,
+        448,
+        454,
+        455,
+        456,
+        457,
+        458,
+        459,
+        460,
+        461,
+        462,
+        463,
+        464,
+        465,
+        466,
+        467,
+        468,
+        469,
+        470,
+        471,
+        472,
+        473,
+        474,
+        475,
+        476,
+        477,
+        478,
+        479,
+        483,
+        484,
+        488,
+        491,
+        492,
+        493,
+        494,
+        495,
+        496,
+        497,
+        498,
+        499,
+        500,
+        501,
+        502,
+        503,
+        504
+      ],
+      "synthetic_source": false,
+      "autofilter": "$A$2:$K$507",
+      "columns": {
+        "mark": 2,
+        "name": 3,
+        "quantity": 4,
+        "mass_unit": 8,
+        "mass_total": 9,
+        "area_unit": 10,
+        "area_total": 11
+      },
+      "adapter": "native Excel XLS/XLSX read-only, links/events/macros disabled"
+    },
+    "selected": [
+      {
+        "mark": "Бп2-5",
+        "name": "Балка",
+        "quantity": "1.0",
+        "mass_unit": "37.2",
+        "mass_total": "37.2",
+        "area_unit": "1.412",
+        "area_total": "1.412",
+        "row": 40,
+        "catalog_row": 41
+      },
+      {
+        "mark": "Бп2-18",
+        "name": "Балка",
+        "quantity": "1.0",
+        "mass_unit": "31.32",
+        "mass_total": "31.32",
+        "area_unit": "1.184",
+        "area_total": "1.184",
+        "row": 53,
+        "catalog_row": 47
+      },
+      {
+        "mark": "Бп2-19",
+        "name": "Балка",
+        "quantity": "1.0",
+        "mass_unit": "36.74",
+        "mass_total": "36.74",
+        "area_unit": "1.393",
+        "area_total": "1.393",
+        "row": 54,
+        "catalog_row": 48
+      }
+    ],
+    "excluded": [
+      {
+        "row": 36,
+        "mark": "Бп2-1",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 56,
+        "mark": "Бп2-21",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 58,
+        "mark": "Бп2-23",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 60,
+        "mark": "Бп2-25",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 61,
+        "mark": "Бп2-26",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 62,
+        "mark": "Бп2-27",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 64,
+        "mark": "Бп2-29",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 65,
+        "mark": "Бп2-30",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 66,
+        "mark": "Бп2-31",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 70,
+        "mark": "Бп2-35",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 71,
+        "mark": "Бп2-36",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 74,
+        "mark": "Бп2-39",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 141,
+        "mark": "Вр1-1",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 142,
+        "mark": "Вр1-2",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 143,
+        "mark": "Вр1-3",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 145,
+        "mark": "Вр1-5",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 147,
+        "mark": "Вр1-7",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 205,
+        "mark": "Н1-13",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 207,
+        "mark": "Н1-15",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 210,
+        "mark": "Н1-18",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 217,
+        "mark": "Н1-25",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 218,
+        "mark": "Н1-26",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 219,
+        "mark": "Н1-27",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 225,
+        "mark": "Н1-33",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 228,
+        "mark": "Н1-36",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 237,
+        "mark": "Н1-45",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 240,
+        "mark": "Н1-48",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 243,
+        "mark": "Н1-51",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 248,
+        "mark": "Н1-56",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 249,
+        "mark": "Н1-57",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 254,
+        "mark": "Н1-62",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 255,
+        "mark": "Н1-63",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 260,
+        "mark": "Н1-68",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 262,
+        "mark": "Н1-70",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 263,
+        "mark": "Н1-71",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 264,
+        "mark": "Н1-72",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 268,
+        "mark": "Н1-76",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 270,
+        "mark": "Н1-78",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 274,
+        "mark": "Н1-82",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 277,
+        "mark": "Н1-85",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 281,
+        "mark": "Н1-89",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 287,
+        "mark": "Н1-95",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 288,
+        "mark": "Н1-96",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 289,
+        "mark": "Н1-97",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 313,
+        "mark": "Пл-1",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 314,
+        "mark": "Пл-2",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 315,
+        "mark": "Пл-3",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 328,
+        "mark": "Пп1-13",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 343,
+        "mark": "Пс1-1",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 344,
+        "mark": "Пс1-2",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 345,
+        "mark": "Пс1-3",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 349,
+        "mark": "Пс1-7",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 351,
+        "mark": "Пс1-9",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 352,
+        "mark": "Пс1-10",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 353,
+        "mark": "Пс1-11",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 354,
+        "mark": "Пс1-12",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 355,
+        "mark": "Пс1-13",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 356,
+        "mark": "Пс1-14",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 357,
+        "mark": "Пс1-15",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 358,
+        "mark": "Пс1-16",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 359,
+        "mark": "Пс1-17",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 360,
+        "mark": "Пс1-18",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 361,
+        "mark": "Пс1-19",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 362,
+        "mark": "Пс1-20",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 363,
+        "mark": "Пс1-21",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 364,
+        "mark": "Пс1-22",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 365,
+        "mark": "Пс1-23",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 366,
+        "mark": "Пс1-24",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 367,
+        "mark": "Пс1-25",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 368,
+        "mark": "Пс1-26",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 370,
+        "mark": "Пс1-28",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 371,
+        "mark": "Пс1-29",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 373,
+        "mark": "Пс1-31",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 374,
+        "mark": "Пс1-32",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 379,
+        "mark": "Пс1-37",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 384,
+        "mark": "Пс2-4",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 387,
+        "mark": "Пс2-7",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 388,
+        "mark": "Пс2-8",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 389,
+        "mark": "Пс2-9",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 392,
+        "mark": "Пс2-12",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 396,
+        "mark": "Пс2-16",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 400,
+        "mark": "Пс2-20",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 430,
+        "mark": "Р2-8",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 431,
+        "mark": "Р2-9",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 433,
+        "mark": "Св1-1",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 435,
+        "mark": "Св1-3",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 440,
+        "mark": "Св1-8",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 441,
+        "mark": "Св1-9",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 449,
+        "mark": "Св1-17",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 450,
+        "mark": "Св1-18",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 451,
+        "mark": "Св1-19",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 452,
+        "mark": "Св1-20",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 453,
+        "mark": "Св1-21",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 480,
+        "mark": "Сг2-15",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 481,
+        "mark": "Сг2-16",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 482,
+        "mark": "Сг2-17",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 485,
+        "mark": "Сг2-20",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 486,
+        "mark": "Сг2-21",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 487,
+        "mark": "Сг2-22",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 489,
+        "mark": "Сг2-24",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      },
+      {
+        "row": 490,
+        "mark": "Сг2-25",
+        "assignment": null,
+        "reason": "NO_ASSIGNMENT"
+      }
+    ],
+    "totals": {
+      "quantity": "3.0",
+      "mass_total": "105.26",
+      "area_total": "3.989"
+    },
+    "climate": {
+      "day": "2026-10-05",
+      "air_c": null,
+      "relative_humidity": null,
+      "surface_c": null,
+      "dew_point_c": null,
+      "confirmation": "MISSING"
+    },
+    "official": "STOP",
+    "warnings": [
+      "ТЕСТ / ЧЕРНОВИК. Не подтверждает выполнение АКЗ.",
+      "Назначения № АКЗ в DEV-каталоге только тестовые.",
+      "Не заполнены фактические измерения, партии, даты/время нанесения и контроль.",
+      "Климат не подтверждён; алгоритм точки росы не выбран.",
+      "DEV дата АКЗ 2026-10-05; исторический акт 9/2026: 2026-10-06.",
+      "Выбор ВОМ явный. DEV имеет 9/2026 последним; на диске есть 10/2026."
+    ]
+  }
+}

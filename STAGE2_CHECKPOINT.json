@@ -1,0 +1,12 @@
+{
+  "stage": "Stage 2 resume",
+  "accepted_by": "explicit user confirmation, 2026-10-06",
+  "production_path": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\ВЗМК.xlsx",
+  "previous_sha256": "b0ece2f9e5cbb1db73a0487da320c4e69c0c8fd815345a417bd9482fd7029b0a",
+  "accepted_sha256": "99559f545a8ced26b07628696228645213327b2abd2dd15cf82b585c9743a40e",
+  "reason": "USER_CONFIRMED_LEGITIMATE_PRODUCTION_CHANGE",
+  "stage1_manifest_preserved": true,
+  "stage1_manifest_sha256": "f951bc90316992dec96b5ef6d6d1b696350a442e0d35b1230762332a56ec271b",
+  "scope": "Stage 2 validation copies only; production strict read only",
+  "description": "Пользователь подтвердил ручное заполнение строки 399 проекта «Гранит». Forensic diff подтвердил сохранность остальных рабочих данных и отсутствие изменений строки 353 проекта «Гараж Казахстан»."
+}

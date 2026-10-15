@@ -1,0 +1,37 @@
+{
+  "prepared_at": "2026-10-05T23:30:00.110667",
+  "production_before": {
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\ВЗМК.xlsx": "734e2146892b46fcd68cea7dbb82733206e77d6a976f687f094657e22e87bc7b",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\8 от 02.10.2026\\ВОМ отгрузочный.xlsx": "f0b8afb7dbd2424170213d569e7b8514ee8dfcab3072720baa45028b2106707c",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - Приложение № 1.xlsx": "65bda240aa5b250e978b54844f6d74bff00bb13d62a7db4c26d6ca9c022ae4a0"
+  },
+  "copied_workbooks": {
+    "ВЗМК.xlsx": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\ВЗМК.xlsx",
+      "sha256": "734e2146892b46fcd68cea7dbb82733206e77d6a976f687f094657e22e87bc7b"
+    },
+    "ВОМ отгрузочный.xlsx": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\8 от 02.10.2026\\ВОМ отгрузочный.xlsx",
+      "sha256": "f0b8afb7dbd2424170213d569e7b8514ee8dfcab3072720baa45028b2106707c"
+    },
+    "Документы\\Гараж казахстан\\Паспорт\\1_2026 - Приложение № 1.xlsx": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Гараж казахстан\\Паспорт\\1_2026 - Приложение № 1.xlsx",
+      "sha256": "65bda240aa5b250e978b54844f6d74bff00bb13d62a7db4c26d6ca9c022ae4a0"
+    }
+  },
+  "accepted_code_copies": {
+    "app\\main.py": "dab4f03df1ef0fb9c6b5a744630bf6bfd5974f47ed879549f06c56283b2c4fdd",
+    "app\\passport_app\\__init__.py": "c46f2b41d1e1ce6eb23dde5c373d79212d7cdf3026d29a530805defdf5844ecb",
+    "app\\passport_app\\appendix.py": "bd22041c3812a4554b91bf42478827aa1e03f3533f2015c70e78546b042b0253",
+    "app\\passport_app\\checks.py": "aecaefd7bc8c681369b08f7786fd06200464c7de640206ace05540dd979bc05e",
+    "app\\passport_app\\config.py": "8166b2ecf6ee67a0b91fe95c977950b7efcb5565a1e738e613a3df1e84edde18",
+    "app\\passport_app\\excel.py": "bd827aab831d340a7c51841c6c824ee8271712218784df107c7026ffdbf967c6",
+    "app\\passport_app\\gui.py": "67b14a4737e19a414519acbe980b829be8f7788f4a659a08eacb9f38dad8aa12",
+    "app\\passport_app\\registry.py": "57790da20da1931baa83be8ea7647a50fd0690aacf3f9ed47775e7d894faa577",
+    "app\\passport_app\\service.py": "dc05ffc96cf9e9f26f83725a80af797ec7eb398e603827a9adb81e0376be1881",
+    "app\\passport_app\\tables.py": "7e01165c6c54f6d321a62486936952b30a958c84b40816c4c02cf42305cf9702",
+    "app\\passport_app\\vom.py": "c63bbd362763ba99f85de1610c01622ac230f3303b7a1e297345d02259ea954f"
+  },
+  "accepted_manifest_sha256": "f951bc90316992dec96b5ef6d6d1b696350a442e0d35b1230762332a56ec271b",
+  "main_launcher_before_sha256": "4ce83a59e8ebf8cd0facc8735ba16b5c71b894088d6e7d04156c43bae217cfc1"
+}

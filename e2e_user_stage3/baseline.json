@@ -1,0 +1,221 @@
+{
+  "accepted_review": "User supplied Work PASS, B1/M1 RESOLVED, BLOCKER/MAJOR/MINOR 0",
+  "runtime_copies": {
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\__init__.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\__init__.py",
+      "sha256": "c46f2b41d1e1ce6eb23dde5c373d79212d7cdf3026d29a530805defdf5844ecb"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\appendix.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\appendix.py",
+      "sha256": "bd22041c3812a4554b91bf42478827aa1e03f3533f2015c70e78546b042b0253"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\catalog.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\catalog.py",
+      "sha256": "378bf53eb62c373c388c1c82c4160f383639514c338158c6149f426a788e181c"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\catalog_gui.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\catalog_gui.py",
+      "sha256": "82812ca3770d4c424ba8cffda278f01686157dd9a0ff5651a3cf832861da2ee8"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\checks.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\checks.py",
+      "sha256": "aecaefd7bc8c681369b08f7786fd06200464c7de640206ace05540dd979bc05e"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\config.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\config.py",
+      "sha256": "8166b2ecf6ee67a0b91fe95c977950b7efcb5565a1e738e613a3df1e84edde18"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\excel.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\excel.py",
+      "sha256": "bd827aab831d340a7c51841c6c824ee8271712218784df107c7026ffdbf967c6"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\gui.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\gui.py",
+      "sha256": "67b14a4737e19a414519acbe980b829be8f7788f4a659a08eacb9f38dad8aa12"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\registry.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\registry.py",
+      "sha256": "57790da20da1931baa83be8ea7647a50fd0690aacf3f9ed47775e7d894faa577"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\service.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\service.py",
+      "sha256": "dc05ffc96cf9e9f26f83725a80af797ec7eb398e603827a9adb81e0376be1881"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\tables.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\tables.py",
+      "sha256": "7e01165c6c54f6d321a62486936952b30a958c84b40816c4c02cf42305cf9702"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\vik.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\vik.py",
+      "sha256": "9f8f1e487e7e8ba60b298ffbf14926c9db2c407f0949c43712ecd9ff7d0c5a2d"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\passport_app\\vom.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\vom.py",
+      "sha256": "c63bbd362763ba99f85de1610c01622ac230f3303b7a1e297345d02259ea954f"
+    },
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\runtime\\stage3.py": {
+      "source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\stage3.py",
+      "sha256": "7d2f473e3f4ae6ec9a45e2bed92f05a39d2312ff8ba9bcebc2b382dd032f6de3"
+    }
+  },
+  "import_sha256": "c52f1b96d844e27cf471e8656e7e824ae123f0e31233efada8a641aabba158c9",
+  "catalog_initial_sha256": "be78b7504f639a7ede7a9d694211e01b1c2c1b6bf572bbead7ee6736c0f8af0e",
+  "original_fixture_path": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\.baseline\\Справочник исходный.xlsx",
+  "original_fixture_sha256": "be78b7504f639a7ede7a9d694211e01b1c2c1b6bf572bbead7ee6736c0f8af0e",
+  "initial_rows": [
+    [
+      "К1",
+      "35Б1",
+      "RAL 7004",
+      0
+    ],
+    [
+      "К2",
+      null,
+      "RAL 6027",
+      1
+    ],
+    [
+      "К4",
+      "30Б1",
+      "RAL 9003",
+      2
+    ]
+  ],
+  "prepared_at_utc": "2026-10-06T10:33:02.247856+00:00",
+  "e2e_root": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3",
+  "development_registry_source": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\DEV\\ВЗМК_DEV.xlsx",
+  "development_registry_sha256": "8e56f68518c70cade9efb09084dd67cd5d72e07e3fdc813b8515030e9cb98e80",
+  "dev_checkpoint_path": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\DEV\\DEV_REGISTRY_CHECKPOINT.json",
+  "dev_checkpoint_sha256": "f4335e81434d8fa6d91f76b1200011ff959bb1f370ff0786468eddfed702208e",
+  "accepted_files_sha256": {
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\REVIEW_MANIFEST.json": "f951bc90316992dec96b5ef6d6d1b696350a442e0d35b1230762332a56ec271b",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\STAGE2_REVIEW_MANIFEST.json": "dc50270541b587c1ff1eb9cc96d91e791c37305ae66d4ac5688ff55a7280adf8",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\STAGE3_REVIEW_MANIFEST.json": "1cc9153cc75038e830f426ed79b87fc6805dc55bdbdacd5186698b03c9b26833",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\STAGE3_CHECKPOINT.json": "d792339d2f9c7455561de0e5b904c4aee216aa771fc0296a5feca765d2773c4c",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\settings.json": "334327af3fec792aeb7e993ddfd2dd5c2c13f1369e6186bb744196e714465c0d",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\catalog.py": "378bf53eb62c373c388c1c82c4160f383639514c338158c6149f426a788e181c",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\catalog_gui.py": "f3a0fac99fc0eff351e2bea95f490d3a8d7ce7183e5529a24e3f34a0924270de",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\stage3.py": "7d2f473e3f4ae6ec9a45e2bed92f05a39d2312ff8ba9bcebc2b382dd032f6de3",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\Запустить Этап 3.ps1": "4fddf1ca96eb7f784889e096aeb19d84844ca04b821c4ec885792734adbe28b0",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\Запустить Этап 3.cmd": "d9c3d160c319620ca87c77ab40c81625cb7d692901a3c9acacd57cfbb5fffef4",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\STAGE3_README.txt": "f103aab7b6c01919893480fcc1ea4edd2f8739c57dcde5c647ac3e8175d34bbf",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\STAGE3_REPORT.txt": "9c7584ff7e07799ca567b8a87151726b2796b31d85912dffcc3d25b3ad09363e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_audit.py": "754d2418462c6982f0a0cd5d312910eb83c5ea5bed8d691b861dd846839c32c6",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_validate.py": "bb7bc42ab1b51944ea241c109e8f02eb7e66535bc19ea2df0f9c22a5a5bec26d",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_render.mjs": "03a44c817e03956031a4d22f3155d80a93cf0d4eab140ae00f66440e9feaf235",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_finalize.py": "0896541ba061118a3494e25b7e58a0aaa3bbb73879cc6ad36d4de83e67766254",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_native_reopen.py": "eb6e23b25f978512a100fe485408f4880c3bd24d3117d3c1349ff0e157c5a6b8",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_additional.py": "587cd04a01cf55c3d845057ec7b108edcda43e6ea17e9b63fc87d8dd9249b4b3",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_evidence.py": "7d980bf0e317c4588f653cb9582d856421a9802490b85979357c8772e2d0a0cd",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_mapping.py": "634cac800ee0c58c8bb5be195d74aef6f8b9219515a2f6f31da3496ae4995a41",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_consolidated.py": "f735876daa2bc4ac9baf1214774ac2644084d7f974d382f68a2c641f5a977e74",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage3_integrity_checks.py": "a0a76aaef26151be6ab156237e52b0431589467ba3f1d0b1159df0a46894c7d4",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\consolidated_results.json": "06835e82408dd1454bbc92a0c25fe758bc9bbb6b67046db61be9c5e9b6bf48bf",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\final_targeted_additions.json": "db92f06ba510ebd94a825b328922b2ac189a87da48bb1fff8c2fdd70c1033dad",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\fix_start.json": "631ec29fd1dadd7c80708190d998e465b3414fa0cdb8a7ffccf351026a82da3a",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\integrity_negative_results.json": "9c0fbf7d6625382e324a04de9a3cd515d556ab0e128230c0eca9125fcc39bd80",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\mapping_results.json": "8ab9dc7fb6f68c1fe3e9671a0ec5ef299f60292ae6c0b3628045cb87a80a036e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\native_reopen_results.json": "30df3f99d1a5f49863b65e375d94e553b58a047b96c2038ccda7f555dcbcaedf",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\preservation_final.json": "c707aee9c42e413246513e104994ea0cfb748132053cb39e2e1d08962a9e39f3",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\project_mapping_audit.json": "8805474e91e392a240cc34b5096449a239fce9d83d15857086cc5cc486d29a7e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\STAGE3_REVIEW_MANIFEST.before.json": "34941e73b6dad49c9ff1745608d484087912a0a9bfc2019c41ebd1dde3284f7b",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\targeted_results.json": "c921590e40d6ea184a2b2ed2515a8f1a296f05d268c70c4dbd1cadcfbd610ed9",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\tested_code_before.json": "824fd5be51310c73622e0220c397c53a419ece9546f34463a61f78bc78c89240",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\ВЗМК.xlsx": "ad0bb1ddf160362136504e0c029a44b8c5de6a40c566ae7b23336f6fa61a4d66",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\ambiguous\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "5ce7b169be061cd696a4896b079ec2c789950969ef1dd9baf16d2fd1a0c9862a",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\backup_guard_final_eb09fd1d\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "6ad2d643e3a875d300598b9493ef655e3be78ab9dbd5509df5c4b30d47d3f21a",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\before\\STAGE3_README.txt": "6a7f25f4a9a58ff69a4a5e73457989b2b8378008c7943563006ebb3681183539",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\before\\STAGE3_REPORT.txt": "8c8bd02a631f0914f4afd488df18d8de04508b66d20267fc3aeb856c12ffd642",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\before\\passport_app\\catalog.py": "f6e3c12ec5b743152df116c3d3303cacb70ed1d236604f1ab32d9910d09520c1",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\before\\tests\\stage3_additional.py": "b73a9b416f79f3e421371d8a64076e9aad41777f5aa9913ac2d3cb1cf93c7dc7",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\before\\tests\\stage3_finalize.py": "635c0ba20ebf1a188b6e94e20f8c00d55219432bc83ebffaf087a41a420f88a7",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\before\\tests\\stage3_native_reopen.py": "5b2add134025d1b2931e8bbef6b62c5320e4dfd8803f9a8d49a0ed9dddd1b6bd",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\before\\tests\\stage3_validate.py": "bf8dc2b51bec08aeb06064825443a3f95ca7c00fbe937184a053cb9a4cca2f64",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\check_required\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "3941d60b9bba4ee9ab458a566b286be36ca83b4c1e8fe2909638e027c7ccc1e1",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\check_required\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.23fd12d71b6b45c9b028c62df058771f.xlsx": "21198c9e8920454d698c2a2d2e7ba7c24d1ebb88f85e21ffd784f4ca80e55256",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\conflict_False\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "d05f81959670f8544d029f188b446a163b9e415832c240092c074ffc04af195e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\conflict_True\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "35e6bae1394c4ca1ae53ecbbded1b01dfa3703b6139b7dcc725f1a28751864fe",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\conflict_True\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.d8e42d8be6ba45f4b334189b4807110e.xlsx": "d05f81959670f8544d029f188b446a163b9e415832c240092c074ffc04af195e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\creation\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "6d417da7449993cc2d7d93668c12d259a43615c193b564181e468b262fbe8f61",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\creation\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.6410059d98a74f2c811551194b992881.absent.txt": "f5fcb9fa6517b556dbd7d7ab4489680cafdaaadebd97468a0181e6e12c36e8f9",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\duplicates\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "b66c2d9cfef93f3c0bd09780247e68e147022f8d641bd1b33920cf31b20377df",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\duplicates\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.c031507f559f4221983b83f5e7ff02c7.absent.txt": "f5fcb9fa6517b556dbd7d7ab4489680cafdaaadebd97468a0181e6e12c36e8f9",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\excel_locked\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "bfce15a968c6823dfbdae1f1b7765b70eece6b6665e19d0cf75561836c8eff04",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\fill\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "6c23be76eb5970cbacec98e3093b654be7143cd0bbc80b79c5603a2fa07d79ae",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\fill\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.a1440d367f3948d68516bb31eeacd13b.xlsx": "4086d3ed2f0bd5703f80b2229816dec7da72f3b1be2265475fdd9f359a60d513",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\gui\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "f6b76e22b4332f27039a98ba6d7cac92cffcc28b8ec454048f633f63027c81fa",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\gui\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.07ddae25ac804c6f8f35ccd525c8b0cb.xlsx": "c58991dfe26be554c6e98cccd84a39bc88fdecc100509d7735fc7d6e3584f431",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\gui_final_eb09fd1d\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "85cb58085e8e8683e79f529cb15266d0cbea674d91d1d882a97fdd758276f87c",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\gui_final_eb09fd1d\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.f2e0957547b548a8a4516e1149baf0d5.xlsx": "a09a6aa32582e500cc6c6fd4c83337c4ec566227c1e03a70df4a489794409ab4",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\literal_text\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "323b251c9d083bfb1c13e49c390ca2e30a19ab352d0a4190b37c72f73a5561c2",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\literal_text\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.45898c25231042618a3a0832cfdd11c3.absent.txt": "f5fcb9fa6517b556dbd7d7ab4489680cafdaaadebd97468a0181e6e12c36e8f9",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\locked\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "bfce15a968c6823dfbdae1f1b7765b70eece6b6665e19d0cf75561836c8eff04",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\native_manual_final_eb09fd1d\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "9c9162153f07d61a28c820b9e8fc4f4c0b85549b49c8d0d51f314d734842e3de",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\native_manual_final_eb09fd1d\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.906efeab21964621ab44de66f6fd6258.xlsx": "6c33eb428069f37ebec271701d0311b7e2e39651847428704f63c34e62882bec",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\normalization\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "24955a645776eb64422d0c2550f7cfd9cd5d52f37b5af96b2d501f15615ffdd3",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\normalization\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.e484e623ab364cefba606e860028847a.xlsx": "02c58751b22fbcc2355f03527cd8eee63cdf3d730786b4b40f205152a432c94f",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\preview\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "d05f81959670f8544d029f188b446a163b9e415832c240092c074ffc04af195e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\registry_changed\\Документы\\Гараж казахстан\\registry_copy.xlsx": "dae86dfcd547127c6714dc7a3e28e60fcd109c8f89ecda215fe7b744ba6897b5",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\safe_failure\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "70c8d9c931a86350fd6b83327082ffa22922260abd288b14a6821655d3e6dbe5",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\safe_failure\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.6d0e6dc1d77d4bdaa9799693ffaf4c50.xlsx": "70c8d9c931a86350fd6b83327082ffa22922260abd288b14a6821655d3e6dbe5",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\safe_failure\\Документы\\Гараж казахстан\\.stage3-backups\\Справочник марок.d12d8664035f4f408928ac8ead473f2b.xlsx": "70c8d9c931a86350fd6b83327082ffa22922260abd288b14a6821655d3e6dbe5",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\same\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "d05f81959670f8544d029f188b446a163b9e415832c240092c074ffc04af195e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\schema\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "3f4f920428c4e12afde796876e9520e4abb5667232e5837638418f71655800ef",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\stage3_reject_before_after_mismatch\\targeted_results.json": "611a1c3894f3f6b6b791f6931e9ef6a76b0452111445c007642d62e08ad843d4",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\stage3_reject_missing_product_path\\targeted_results.json": "63b297b4b08bfb65f7ec956325cf7d121c017d773998e201fe78db8061739b82",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\stage3_reject_stale_tested_hash\\targeted_results.json": "2a9a3174cd846deb646c76a1ff5023e136cfd9410c9a6b9e46594ce484cd34ee",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\stale\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "65f87de05f90d461d528436f2a12af6ac422fc1088e80a50b280fa869a2a3ac9",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\validation\\stage3_B1_M1_final_20261006_125437\\writer_lock_final_eb09fd1d\\Документы\\Гараж казахстан\\Справочник марок.xlsx": "6ad2d643e3a875d300598b9493ef655e3be78ab9dbd5509df5c4b30d47d3f21a",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\__init__.py": "c46f2b41d1e1ce6eb23dde5c373d79212d7cdf3026d29a530805defdf5844ecb",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\appendix.py": "bd22041c3812a4554b91bf42478827aa1e03f3533f2015c70e78546b042b0253",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\checks.py": "aecaefd7bc8c681369b08f7786fd06200464c7de640206ace05540dd979bc05e",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\config.py": "8166b2ecf6ee67a0b91fe95c977950b7efcb5565a1e738e613a3df1e84edde18",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\excel.py": "bd827aab831d340a7c51841c6c824ee8271712218784df107c7026ffdbf967c6",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\gui.py": "67b14a4737e19a414519acbe980b829be8f7788f4a659a08eacb9f38dad8aa12",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\registry.py": "57790da20da1931baa83be8ea7647a50fd0690aacf3f9ed47775e7d894faa577",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\service.py": "dc05ffc96cf9e9f26f83725a80af797ec7eb398e603827a9adb81e0376be1881",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\tables.py": "7e01165c6c54f6d321a62486936952b30a958c84b40816c4c02cf42305cf9702",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\vom.py": "c63bbd362763ba99f85de1610c01622ac230f3303b7a1e297345d02259ea954f",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\finalize_evidence.py": "13a430abd4fcdb7953b481f59ff016bac507b88c78323e110bdf1a72c0cc7dd3",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\gui_smoke.py": "4849c0d86ceca3ebec7570db3ea732c559cecd0aa9022231d7ea3f4370e58225",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\safety_extra.py": "c7c62b4b0eccb5dc709a1c6bbeb3687ee0efd13590954f222cbe96830f28ade1",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\targeted_m1_m2.py": "ac1670775f3a524eedf8f22ead842b38947e9a786e0f21957d05aed069fe179b",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\validate_real.py": "f53dbcddff87ba8f9c05068df72c24f7ff3433d4f8c1d8ed4e047cb7ccdf4d62",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\render_excel.mjs": "b9a601f577d27ce0e775c07a3a278864ec0c193c4cfec3dd58499ac1a626c388",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\main.py": "dab4f03df1ef0fb9c6b5a744630bf6bfd5974f47ed879549f06c56283b2c4fdd",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\Запустить.ps1": "4ce83a59e8ebf8cd0facc8735ba16b5c71b894088d6e7d04156c43bae217cfc1",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\requirements.txt": "b98d62fc4dd957bdbe7a66ade8d5f6675bae6237c80065d5ddc191b3d06c0ba8",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\README.txt": "fd74cd92366f3c0977d2aeafc612bb4e35f8512c80860a55061718f247d8105f",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\passport_app\\vik.py": "9f8f1e487e7e8ba60b298ffbf14926c9db2c407f0949c43712ecd9ff7d0c5a2d",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\stage2.py": "fe28cd750596e7fc8849fc7afd35952211b3992d83aa73fcccc68a5600c90fe1",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage2_audit.py": "028c8b5041f100ae46c5644ed700f6daf86089961ec315660cd6570e9a3f8a8d",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage2_validate.py": "9f329cbe2b7b3780e2c61a63a893ea4a90df8fb58488344cf240fa82785b7f39",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage2_remaining.py": "46c80a3fbf9022dc7f3d0f9acc5728edb454a14a464d216cc0f0118f8547baa0",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\render_word_pages.ps1": "1f6c32deed3c5a6b2a3e06e290604bd49314c27f9824a68dd7afdc091b893676",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\STAGE2_CHECKPOINT.json": "ecfdd8be42274e440557fed9738270b30273f553297d4f8f6f459d06ddf457fa",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\STAGE2_REPORT.txt": "7f4008a0c3e968d8a9180503cf8060b1d7dc3b785b3bc7358b3c97e52bc36c85",
+    "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\tests\\stage2_discovery_M1_M2.py": "b96794a34fe8b027a40eb5cfa51f04a893e25ca9f5d539fb320a5d0d43f00540"
+  },
+  "settings": {
+    "documents_root": "Документы",
+    "registry_path": "ВЗМК_DEV.xlsx",
+    "projects": {
+      "Гараж Казахстан": {
+        "passport_root": "Гараж казахстан/Паспорт"
+      }
+    }
+  },
+  "settings_sha256": "00c10d7b9c7304e2b9b378352bae2ec493bbc61b810b9f6449f8fdc39642262c",
+  "apply": "NOT_RUN",
+  "runtime_state_policy": "E2E only; Python isolated mode and bytecode disabled",
+  "production_hash_gate": false,
+  "auto_sync_with_production": false,
+  "history_path": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\.history\\dev_switch_20261006_103302",
+  "gui_input_preview_fix": {
+    "manifest_path": "C:\\Users\\arara\\Desktop\\ВЗМК рабочий стол\\Работа\\Документы\\Pasport\\e2e_user_stage3\\.state\\gui_input_preview_fix\\GUI_INPUT_PREVIEW_REVIEW_MANIFEST.json",
+    "manifest_sha256": "01186cd97894127a435165bd85c8d61321f384de0c5375949cb96840fda845fd",
+    "current_gui_sha256": "82812ca3770d4c424ba8cffda278f01686157dd9a0ff5651a3cf832861da2ee8",
+    "targeted_rereview": "NOT_RUN_REQUIRED"
+  }
+}

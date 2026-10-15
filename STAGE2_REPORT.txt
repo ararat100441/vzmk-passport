@@ -1,0 +1,90 @@
+1. ACTUAL STATE
+Stage 1 ACCEPTED: independent review PASS and user E2E PASS. Original code and
+REVIEW_MANIFEST.json are unchanged. New production checkpoint explicitly
+accepted by the user: b0ece2f9e5cbb1db73a0487da320c4e69c0c8fd815345a417bd9482fd7029b0a.
+STAGE2_CHECKPOINT.json preserves previous hash and the forensic transition reason.
+Stage 2 validation is complete on separate copies. No production VIK was generated.
+
+2. CHANGED FILES AFTER RESUME
+Added STAGE2_CHECKPOINT.json, tests/stage2_remaining.py, STAGE2_REPORT.txt,
+STAGE2_REVIEW_MANIFEST.json, validation/stage2_resume_20261006_090547 and
+validation/stage2_visual_resume. Changed passport_app/vik.py only in package_layout().
+stage2.py and the pre-existing Stage 2 tests are unchanged.
+
+3. IMPLEMENTATION STATUS
+Existing project-template generation, header-based current-row reading, native
+Excel formula recalculation, native Word replacement and safe temporary save
+were reused. Generation is restricted to a separate Pasport/validation copy.
+The current registry is never saved: a private snapshot is recalculated and read.
+VOM is not an input to VIK generation. Source templates remain read only.
+
+Targeted PRODUCT DEFECT fixed: Word adds 11 empty sdtEndPr elements when saving
+the general template. The verifier incorrectly treated them as formatting changes.
+It now considers absent and empty end properties equivalent, with one entry per
+content control. Actual nonempty formatting remains protected. The rejection test
+for a real nonempty end-property change passed. Fallback and saved project output
+were verified after the fix. No GUI or Stage 1 redesign.
+
+TEST DEFECT corrected only in the new test runner: whole-sheet ElementTree
+serialization removed namespace declarations named by mc:Ignorable. Date fixtures
+now patch only M400 formula bytes, preserving the original namespace declarations.
+The failed fixture-open attempt is not counted as a VIK-date safety PASS.
+
+4. TARGETED VALIDATION
+Project document reused from stage2_20261006_084159:
+first act 9/2026; second act 9/2026-1; both dates 29.09.2026, calculated from
+the existing Excel formula. Contract, object, KMD code and steel match row 400.
+Connections are exactly Балка from that row. Saved project DOCX hash remains
+3bfb09516f34bc78b41b55f4fdaca45cc3764a1167b936cd99f1818a06dcc065.
+Ordinary readonly Word reopen and final verification after the fix: PASS.
+Two pages, eight tables, one section; constant text and layout properties: PASS.
+Project visual page 1 and page 2: PASS, based on Word native print-layout metafiles.
+No clipping, overlap or extra pages; intended shorter Connections text fits its cell.
+
+Negative checks: 6/6 PASS.
+Missing project and fallback; current row missing; blank formula result;
+Excel formula error; existing output preserved; final verifier refusal after actual
+native Excel/Word processing, save and reopen prevents publication and clears the
+invocation-owned temporary DOCX. The last check injects the verifier refusal;
+it is not evidence of a real Word crash or corrupt-file recovery.
+
+Fallback: PASS using a copy of the existing production Шаблоны/ВИК.docx.
+No project template exists in that case. Native generation, normal reopen,
+required fields, constant content, layout and two pages verified. No placeholders
+remain. Both fallback pages visually inspected: PASS. Template and registry hashes
+unchanged. General-template constant wording is preserved, including differences
+from the project's historical template.
+
+Minimal Stage 1 smoke: unchanged validate() on copies, PASS.
+First 1/2026, last 8/2026, next 9/2026; VOM 32 rows, 50 products, 15071.44 kg,
+477.749 square metres, Балка. Inputs unchanged; no Stage 1 generation or full regression.
+
+Protected source/evidence hashes checked before, between cases and after validation:
+PASS. Production registry remains at the new accepted checkpoint. Control VOM,
+first appendix, first project VIK, general VIK and accepted Stage 1 evidence unchanged.
+The recorded targeted vik.py fix is the sole allowed pre-existing source-code change.
+
+5. REGRESSION IMPACT
+Stage 1 code, GUI, paths, numbering, VOM, appendix and transaction logic unchanged.
+The Stage 2 change only removes a false formatting mismatch for empty Word end
+properties. Nonempty end formatting, paragraphs, tables, sections and opaque parts
+are still compared. Existing project output was checked without rewriting it.
+
+6. NOT_RUN
+Production generation; full 103-check regression; all-project acceptance; live-user
+locked Word output; actual Word/Excel crash, power-loss and filesystem race injection;
+independent Work review; user Stage 2 E2E. No PDF, exe, deploy or Stage 3.
+
+7. REVIEW EVIDENCE
+STAGE2_REVIEW_MANIFEST.json lists absolute paths and SHA-256 for implementation,
+test runner, evidence, outputs, protected sources and native page renders.
+Historical pre-STOP evidence is preserved and reused; its old production-hash
+failure is not relabelled as PASS. Resume evidence uses the explicitly accepted hash.
+Project output: validation/stage2_20261006_084159/project_e2e/Документы/
+Гараж казахстан/Паспорт/9-2026 от 06.10.2026/9_2026 - ВИК.docx.
+Remaining checks: validation/stage2_resume_20261006_090547/remaining_results.json.
+Visual evidence: validation/stage2_visual_resume/project-page-1.png,
+project-page-2.png, fallback-page-1.png, fallback-page-2.png and native EMF sources.
+
+8. READY FOR INDEPENDENT REVIEW — YES
+Stop here. No production generation and no Stage 3.

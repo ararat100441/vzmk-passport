@@ -1,0 +1,4 @@
+# Separate Stage 5 dependencies; accepted requirements.txt is unchanged.
+openpyxl>=3.1,<4
+pywin32>=306
+lxml>=5,<7

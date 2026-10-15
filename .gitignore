@@ -1,0 +1,103 @@
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+htmlcov/
+*.egg-info/
+.eggs/
+
+# Build products (keep the existing PyInstaller .spec files)
+build/
+dist/
+/stage9_build*/
+/stage9_dist*/
+*.exe
+*.dll
+*.pyd
+*.msi
+
+# Dependencies, editor state, indexes and operating-system files
+node_modules*/
+.codebase-index*/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Credentials and private local configuration
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+credentials*.json
+*service-account*.json
+*service_account*.json
+secrets.*
+*.secret
+.netrc
+.npmrc
+settings.local.*
+
+# Temporary files, Office locks, journals and backups
+~$*
+*.tmp
+*.temp
+*.bak
+*.old
+*.log
+*.swp
+*.swo
+*.orig
+*.dmp
+backups/
+.pasport-transactions*/
+.baseline*/
+.history/
+.state/
+runtime/
+Резервные копии*/
+/DEV/*_Выход*/
+
+# Local validation results; retain all existing validation source scripts
+**/validation/**
+!**/validation/**/
+!**/validation/**/*.py
+!**/validation/**/*.ps1
+!**/validation/**/*.cmd
+!**/validation/**/*.mjs
+!**/validation/**/*.js
+# This accepted input preview is required by stage9_app/workspace.py
+!/validation/stage6_fix_r1_r2_20261009_094707/current_preview.json
+/validation/*CURRENT*.txt
+
+# Local inventory and E2E execution reports
+/audit/*.json
+**/E2E_RESULT*.json
+**/E2E_PREFLIGHT*.json
+**/E2E_SAFETY_REPORT*.json
+
+# Keep cache/dependency exclusions stronger than validation-source exceptions
+node_modules*/
+__pycache__/
+.venv/
+venv/
+.codebase-index*/
+backups/
+*.py[cod]

@@ -1,0 +1,9 @@
+{
+  "documents_root": "Документы",
+  "registry_path": "ВЗМК_DEV.xlsx",
+  "projects": {
+    "Гараж Казахстан": {
+      "passport_root": "Гараж казахстан/Паспорт"
+    }
+  }
+}
