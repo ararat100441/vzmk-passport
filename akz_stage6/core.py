@@ -375,7 +375,6 @@ def matching(vom, assignments):
                     f'{f.upper()}_CONFLICT_STOP: row {r["row"]}: unit * qty != shipment total')
         selected.append({**r, 'catalog_row': assignment['row']})
     require(selected, 'NO_AKZ_ZERO_ROWS: пустое назначение не означает 0')
-    require(len(selected) <= 17, 'TEMPLATE_CAPACITY_STOP: Part 1 поддерживает до 17 строк №0')
     totals = {f: sum((r[f] for r in selected), Decimal(0))
               for f in ('quantity', 'mass_total', 'area_total')}
     return selected, excluded, totals
@@ -458,43 +457,55 @@ def write_act(app, path, p):
         b.Close(SaveChanges=False)
 
 def write_application(app, path, p):
+    """Resize the AKZ-0 appendix to the exact number of selected VOM rows.
+
+    Only the OUTPUT workbook is edited; the pinned template is never changed.
+    A physical Excel row insert/delete moves the styled 'Итого' row.
+    """
     b=native_open(app,path,read_only=False)
     try:
         s=b.Worksheets('Приложение АКЗ'); data=p.payload
+        count=len(data['selected'])
+        require(count>=1 and 4+count<=1048576,'AKZ_APPLICATION_EXCEL_ROW_LIMIT')
+        first,last,original_total=4,20,21
+        total=first+count
+        if total>original_total:
+            s.Rows(f'{original_total}:{total-1}').Insert()
+            # New rows inherit the exact accepted body-row formatting.
+            s.Range(f'A{last}:G{last}').Copy()
+            s.Range(f'A{last+1}:G{total-1}').PasteSpecial(Paste=-4122)
+            app.CutCopyMode=False
+            s.Rows(f'{last+1}:{total-1}').RowHeight=s.Rows(last).RowHeight
+        elif total<original_total:
+            s.Rows(f'{total}:{last}').Delete()
+        s.Rows(f'1:{total}').Hidden=False
         s.Range('A1').Value2 = ('ТЕСТ / ЧЕРНОВИК' + (' — SYNTHETIC' if data['synthetic'] else '') + '\n'
             + f'Приложение № {data["act_number"]} к акту АКЗ № {data["act_number"]} от '
             + date.fromisoformat(data['date']).strftime('%d.%m.%Y') + ' г.')
         s.Range('A1').WrapText=True; s.Rows(1).RowHeight=38
-        s.Range('A4:G20').ClearContents()
-        count = len(data['selected'])
-        require(1 <= count <= 17, 'TEMPLATE_CAPACITY_STOP: Part 1 поддерживает до 17 строк №0')
-        s.Rows('1:21').Hidden = False
-        if count < 17:
-            s.Rows(f'{4+count}:20').Hidden = True
+        s.Range(f'A{first}:G{total-1}').ClearContents()
         fields=('mark','name','quantity','mass_unit','mass_total','area_unit','area_total')
-        for rn,r in enumerate(data['selected'],4):
+        for rn,r in enumerate(data['selected'],first):
             s.Range(f'A{rn}:G{rn}').Value2 = (tuple(float(r[f]) if isinstance(r[f],Decimal) else r[f] for f in fields),)
-        # Show the actual Decimal precision supplied by this VOM, without
-        # rounding area to the historical application's two-decimal display.
         for col,field in [('C','quantity'),('D','mass_unit'),('E','mass_total'),('F','area_unit'),('G','area_total')]:
             values=[r[field] for r in data['selected']]
             if field in data['totals']:values.append(data['totals'][field])
             places=0 if field=='quantity' else max(max(0,-v.as_tuple().exponent) for v in values)
-            # Excel COM here uses the application's locale. NumberFormatLocal
-            # receives its actual separator; the saved XLSX stores invariant codes.
             separator=str(app.DecimalSeparator)
-            s.Range(f'{col}4:{col}21').NumberFormatLocal='0'+(separator+'0'*places if places else '')
-        for c in ('C','E','G'):
-            s.Range(c+'21').Formula=f'=SUM({c}4:{c}20)'
-        s.PageSetup.CenterHeader = 'ТЕСТ / ЧЕРНОВИК'
-        s.PageSetup.CenterFooter = 'ACT-ID ' + p.seal[:16] + ' | ' + data['date']
-        s.PageSetup.PrintArea='$A$1:$G$21'
-        s.PageSetup.FitToPagesWide=1; s.PageSetup.FitToPagesTall=1; s.PageSetup.Zoom=False
+            s.Range(f'{col}{first}:{col}{total}').NumberFormatLocal='0'+(separator+'0'*places if places else '')
+        for col in ('C','E','G'):
+            s.Range(f'{col}{total}').Formula=f'=SUM({col}{first}:{col}{total-1})'
+        require(s.Range(f'A{total}').Value2=='Итого','AKZ_TOTAL_ROW_NOT_PRESERVED')
+        s.PageSetup.CenterHeader='ТЕСТ / ЧЕРНОВИК'
+        s.PageSetup.CenterFooter='ACT-ID ' + p.seal[:16] + ' | ' + data['date']
+        s.PageSetup.PrintArea=f'$A$1:$G${total}'
+        s.PageSetup.PrintTitleRows='$1:$3'
+        s.PageSetup.FitToPagesWide=1; s.PageSetup.FitToPagesTall=False; s.PageSetup.Zoom=False
         s.Calculate()
-        for c,f in [('C','quantity'),('E','mass_total'),('G','area_total')]:
-            require(abs(Decimal(str(s.Range(c+'21').Value2))-data['totals'][f]) <= Decimal('0.00000001'),
+        for col,field in [('C','quantity'),('E','mass_total'),('G','area_total')]:
+            require(abs(Decimal(str(s.Range(f'{col}{total}').Value2))-data['totals'][field])<=Decimal('0.00000001'),
                     'NATIVE_TOTALS_MISMATCH')
-        native_save(b, path)
+        native_save(b,path)
     finally:
         b.Close(SaveChanges=False)
 
@@ -669,12 +680,19 @@ def validate_saved_pair(app, act, application, p):
             for f,x in zip(fields,actual):
                 require(abs(Decimal(str(x))-row[f])<=Decimal('0.00000001') if isinstance(row[f],Decimal)
                         else x==row[f], 'SAVED_APPLICATION_ROW_STOP')
-        require(all(t.Cells(r,col).Value2 is None for r in range(4+len(data['selected']),21) for col in range(1,8)),
-                'SAVED_HISTORICAL_ROWS_STOP')
-        require(all(bool(t.Rows(r).Hidden) == (4+len(data['selected']) <= r <= 20)
-                    for r in range(1,22)), 'SAVED_APPLICATION_ROW_VISIBILITY_STOP')
+        total=4+len(data['selected'])
+        require(t.Range(f'A{total}').Value2=='Итого' and
+                all(not bool(t.Rows(r).Hidden) for r in range(1,total+1)),
+                'SAVED_DYNAMIC_TOTAL_POSITION_STOP')
+        require(str(t.PageSetup.PrintArea).replace('
+    finally:
+        if b is not None:b.Close(SaveChanges=False)
+        a.Close(SaveChanges=False)
+,'').upper().endswith(f'G{total}') and
+                int(t.PageSetup.Pages.Count)>=1, 'SAVED_DYNAMIC_PRINT_AREA_STOP')
         for col,f in [('C','quantity'),('E','mass_total'),('G','area_total')]:
-            require(abs(Decimal(str(t.Range(col+'21').Value2))-data['totals'][f])<=Decimal('0.00000001'),
+            require(t.Range(f'{col}{total}').Formula==f'=SUM({col}4:{col}{total-1})' and
+                    abs(Decimal(str(t.Range(f'{col}{total}').Value2))-data['totals'][f])<=Decimal('0.00000001'),
                     'SAVED_APPLICATION_TOTALS_STOP')
     finally:
         if b is not None:b.Close(SaveChanges=False)
