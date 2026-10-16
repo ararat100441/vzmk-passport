@@ -38,7 +38,7 @@ def main():
           'project':'Гараж Казахстан','inputs':inputs,'test_purpose':'AKZ_ONLY_GUI_STARTUP'}
     save(root/'STAGE9_WORKSPACE.json',meta|{'seal':S.digest(meta)})
     env=dict(os.environ);env['LOCALAPPDATA']=str(out/'appdata')
-    env['PATH']=str(Path(env['SystemRoot'])/'System32')
+    env['PATH']=str(Path(os.environ['SystemRoot'])/'System32')
     completed=subprocess.run([str(args.exe.resolve()),'--task','smoke','--workspace',str(root),
                               '--result',str(out/'RESULT.json')],env=env,timeout=90)
     result=json.loads((out/'RESULT.json').read_text(encoding='utf8'))
