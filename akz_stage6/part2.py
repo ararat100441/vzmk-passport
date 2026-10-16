@@ -94,7 +94,6 @@ def matching(vom, assignments, variant):
         one,_,_=c.matching({'rows':[row]}, {row['mark']:{'assignment':0,'row':assignment['row']}})
         selected.extend(one)
     c.require(selected, f'NO_VARIANT_ROWS: №{variant}')
-    c.require(len(selected)<=spec.capacity, f'CAPACITY_STOP: №{variant}: {len(selected)} > {spec.capacity}')
     totals={f:sum((r[f] for r in selected),Decimal(0)) for f in ('quantity','mass_total','area_total')}
     return selected,excluded,totals
 
@@ -197,28 +196,44 @@ def write_act(app, path, p):
     finally:b.Close(SaveChanges=False)
 
 def write_application(app,path,p):
+    """Grow/shrink only the output appendix; keep the pinned source untouched."""
     data=p.payload;spec=layout(data['variant']);b=c.native_open(app,path,read_only=False)
     try:
         s=b.Worksheets('Приложение №1');count=len(data['selected'])
-        c.require(1<=count<=spec.capacity,'CAPACITY_STOP')
+        c.require(count>=1 and 5+count<=1048576,'AKZ_APPLICATION_EXCEL_ROW_LIMIT')
+        first,total=5,5+count
+        if total>spec.total:
+            s.Rows(f'{spec.total}:{total-1}').Insert()
+            s.Range(f'A{spec.last}:G{spec.last}').Copy()
+            s.Range(f'A{spec.last+1}:G{total-1}').PasteSpecial(Paste=-4122)
+            app.CutCopyMode=False
+            s.Rows(f'{spec.last+1}:{total-1}').RowHeight=s.Rows(spec.last).RowHeight
+        elif total<spec.total:
+            s.Rows(f'{total}:{spec.last}').Delete()
+        s.Rows(f'1:{total}').Hidden=False
         s.Range('A1').Value2=header(data);s.Range('A1').WrapText=True;s.Rows(1).RowHeight=max(s.Rows(1).RowHeight,38)
         s.Range('A2').Value2='Объект: '+data['passport']['object']
-        s.Range(f'A5:G{spec.last}').ClearContents()
-        s.Rows(f'1:{spec.total}').Hidden=False
-        if count<spec.capacity:s.Rows(f'{5+count}:{spec.last}').Hidden=True
-        for rn,row in enumerate(data['selected'],5):
+        s.Range(f'A{first}:G{total-1}').ClearContents()
+        for rn,row in enumerate(data['selected'],first):
             s.Range(f'A{rn}:G{rn}').Value2=(tuple(float(row[f]) if isinstance(row[f],Decimal) else row[f] for f in FIELDS),)
         for col,field in zip('CDEFG',FIELDS[2:]):
             values=[r[field] for r in data['selected']]
             if field in data['totals']:values.append(data['totals'][field])
             places=0 if field=='quantity' else max(max(0,-v.as_tuple().exponent) for v in values)
-            s.Range(f'{col}5:{col}{spec.total}').NumberFormatLocal='0'+(str(app.DecimalSeparator)+'0'*places if places else '')
-        # Preserve original formulas, merged ranges, print area/title rows and
-        # pagination settings. ClearContents above never touches the total row.
+            s.Range(f'{col}{first}:{col}{total}').NumberFormatLocal='0'+(str(app.DecimalSeparator)+'0'*places if places else '')
+        for col in 'CEG':s.Range(f'{col}{total}').Formula=f'=SUM({col}{first}:{col}{total-1})'
+        c.require(s.Range(f'A{total}').Value2=='Итого','AKZ_TOTAL_ROW_NOT_PRESERVED')
         s.PageSetup.CenterHeader='ТЕСТ / ЧЕРНОВИК'
         s.PageSetup.CenterFooter='ACT-ID '+p.seal[:16]+' | '+data['date']
+        s.PageSetup.PrintArea=f'$A$1:$G${total}'
+        s.PageSetup.PrintTitleRows='$1:$4'
+        s.PageSetup.FitToPagesWide=1;s.PageSetup.FitToPagesTall=False;s.PageSetup.Zoom=False
         s.Activate();app.ActiveWindow.ScrollRow=1;app.ActiveWindow.ScrollColumn=1;s.Range('A1').Select()
-        s.Calculate();c.native_save(b,path)
+        s.Calculate()
+        for col,field in [('C','quantity'),('E','mass_total'),('G','area_total')]:
+            c.require(abs(Decimal(str(s.Range(f'{col}{total}').Value2))-data['totals'][field])<=Decimal('0.00000001'),
+                      'NATIVE_TOTALS_MISMATCH')
+        c.native_save(b,path)
     finally:b.Close(SaveChanges=False)
 
 def validate_saved_pair(app,act,application,p):
@@ -229,9 +244,15 @@ def validate_saved_pair(app,act,application,p):
         s=a['4'];t=b.active
         c.require(all(sheet.sheet_view.selection[0].activeCell=='A1' for sheet in (s,t))
                   and (t.sheet_view.pane is None or t.sheet_view.pane.topLeftCell=='A5'),'SAVED_INITIAL_VIEW_STOP')
+        from openpyxl.utils.cell import range_boundaries
+        def header_merge(mapping,limit):
+            return sorted(x for x in mapping if range_boundaries(x)[3]<limit)
         c.require(sorted(str(x) for x in s.merged_cells.ranges)==tdata['act_merges']
-                  and sorted(str(x) for x in t.merged_cells.ranges)==tdata['application_merges'],'SAVED_MERGES_STOP')
-        c.require(str(s.print_area)==tdata['act_print_area'] and str(t.print_area)==tdata['application_print_area']
+                  and header_merge([str(x) for x in t.merged_cells.ranges],5)==header_merge(tdata['application_merges'],5),
+                  'SAVED_MERGES_STOP')
+        total=5+len(data['selected'])
+        c.require(str(s.print_area)==tdata['act_print_area']
+                  and str(t.print_area).replace('$','').upper().endswith(f'G{total}')
                   and t.print_title_rows=='$1:$4','SAVED_PRINT_AREA_STOP')
         for cell in factual_cells(spec):
             c.require(s[cell].value==('?' if cell in ('G11','E15','G37') else MISSING),'SAVED_HISTORICAL_FACT_STOP: '+cell)
@@ -239,7 +260,8 @@ def validate_saved_pair(app,act,application,p):
             for row in sheet:
                 for cell in row:
                     if cell.data_type=='f':c.require(sheet.title=='4' and cell.coordinate in ('G8','I8'),'SAVED_UNAPPROVED_FORMULA_STOP')
-        for col in 'CEG':c.require(t[f'{col}{spec.total}'].value==f'=SUM({col}5:{col}{spec.last})','SAVED_TOTAL_FORMULA_STOP')
+        c.require(t[f'A{total}'].value=='Итого','SAVED_DYNAMIC_TOTAL_POSITION_STOP')
+        for col in 'CEG':c.require(t[f'{col}{total}'].value==f'=SUM({col}5:{col}{total-1})','SAVED_TOTAL_FORMULA_STOP')
         if spec.variant==2:
             c.require(a['Лист1'].sheet_state=='veryHidden' and a['Лист1']['A1'].value=='СЛУЖЕБНЫЙ ЛИСТ / '+MISSING,'SAVED_SERVICE_SHEET_STOP')
         # Whole-book assertion, including hidden cells, names, headers/footers.
@@ -276,11 +298,17 @@ def validate_saved_pair(app,act,application,p):
             for field,value in zip(FIELDS,t.Range(f'A{rn}:G{rn}').Value2[0]):
                 c.require(abs(Decimal(str(value))-row[field])<=Decimal('0.00000001') if isinstance(row[field],Decimal)
                           else value==row[field],'SAVED_VOM_ROW_STOP')
-        count=len(data['selected'])
-        c.require(all(t.Cells(r,col).Value2 is None for r in range(5+count,spec.last+1) for col in range(1,8)),'SAVED_OLD_ROWS_STOP')
-        c.require(all(bool(t.Rows(r).Hidden)==(5+count<=r<=spec.last) for r in range(1,spec.total+1)),'SAVED_ROW_VISIBILITY_STOP')
+        total=5+len(data['selected'])
+        c.require(t.Range(f'A{total}').Value2=='Итого' and
+                  all(not bool(t.Rows(r).Hidden) for r in range(1,total+1)),
+                  'SAVED_DYNAMIC_TOTAL_POSITION_STOP')
+        # Excel exposes the same area in A1 or R1C1 according to ReferenceStyle.
+        c.require(str(t.PageSetup.PrintArea) in (f'$A$1:$G${total}',f'R1C1:R{total}C7') and
+                  int(t.PageSetup.Pages.Count)>=1,'SAVED_DYNAMIC_PRINT_AREA_STOP')
         for col,field in [('C','quantity'),('E','mass_total'),('G','area_total')]:
-            c.require(abs(Decimal(str(t.Range(f'{col}{spec.total}').Value2))-data['totals'][field])<=Decimal('0.00000001'),'SAVED_TOTAL_STOP')
+            c.require(t.Range(f'{col}{total}').Formula==f'=SUM({col}5:{col}{total-1})' and
+                      abs(Decimal(str(t.Range(f'{col}{total}').Value2))-data['totals'][field])<=Decimal('0.00000001'),
+                      'SAVED_TOTAL_STOP')
         c.require(int(s.PageSetup.Pages.Count)==1,'SAVED_ACT_PAGES_STOP')
         if spec.variant==2:c.require(b is not None and a.Worksheets('Лист1').Visible==2,'SAVED_SERVICE_PRINT_STOP')
         return {'act_pages':int(s.PageSetup.Pages.Count),'application_pages':int(t.PageSetup.Pages.Count),
@@ -341,7 +369,7 @@ def recover_pending():
 def generate(p,output_name,*,mode='TEST'):
     c.require(mode=='TEST','OFFICIAL_MODE_STOP');c.verify_preview(p)
     data=p.payload;spec=layout(data['variant']);names=filenames(data['passport']['number'],spec.variant)
-    c.require(1<=len(data['selected'])<=spec.capacity,'CAPACITY_STOP')
+    c.require(1<=len(data['selected']) and 5+len(data['selected'])<=1048576,'AKZ_APPLICATION_EXCEL_ROW_LIMIT')
     c.require(bool(output_name) and Path(output_name).name==output_name and output_name not in ('.','..')
               and not any(x in output_name for x in '<>:"/\\|?*'),'OUTPUT_NAME_INVALID')
     OUTPUT.mkdir(parents=True,exist_ok=True);target=OUTPUT/output_name
