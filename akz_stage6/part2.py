@@ -219,7 +219,8 @@ def write_application(app,path,p):
         for col,field in zip('CDEFG',FIELDS[2:]):
             values=[r[field] for r in data['selected']]
             if field in data['totals']:values.append(data['totals'][field])
-            places=0 if field=='quantity' else max(max(0,-v.as_tuple().exponent) for v in values)
+            # Only E/G totals: two display decimals. Retain full numeric precision.
+            places=2 if col in ('E','G') else (0 if field=='quantity' else max(max(0,-v.as_tuple().exponent) for v in values))
             s.Range(f'{col}{first}:{col}{total}').NumberFormatLocal='0'+(str(app.DecimalSeparator)+'0'*places if places else '')
         for col in 'CEG':s.Range(f'{col}{total}').Formula=f'=SUM({col}{first}:{col}{total-1})'
         c.require(s.Range(f'A{total}').Value2=='Итого','AKZ_TOTAL_ROW_NOT_PRESERVED')

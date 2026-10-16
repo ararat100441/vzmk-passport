@@ -490,7 +490,8 @@ def write_application(app, path, p):
         for col,field in [('C','quantity'),('D','mass_unit'),('E','mass_total'),('F','area_unit'),('G','area_total')]:
             values=[r[field] for r in data['selected']]
             if field in data['totals']:values.append(data['totals'][field])
-            places=0 if field=='quantity' else max(max(0,-v.as_tuple().exponent) for v in values)
+            # Only E/G totals: two display decimals. Retain full numeric precision.
+            places=2 if col in ('E','G') else (0 if field=='quantity' else max(max(0,-v.as_tuple().exponent) for v in values))
             separator=str(app.DecimalSeparator)
             s.Range(f'{col}{first}:{col}{total}').NumberFormatLocal='0'+(separator+'0'*places if places else '')
         for col in ('C','E','G'):
