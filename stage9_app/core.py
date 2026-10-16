@@ -219,7 +219,11 @@ def _generate_existing(plan,root,run):
     with excel_session(diagnostics=run/'office') as excel:
         generate_appendix(excel,appendix,project,v,{'number':d['number'],'date':datetime.strptime(f['end_date'],'%d.%m.%Y').date(),'object':f['object']})
     from passport_app.vik import generate_vik
+    from .test_word import mark_vik, annotate_uzk
     vik=generate_vik(cfg,d['project'],d['number'],test_root=run)
+    # Stage 2 audits the original Word file. Stage 9 then labels only its
+    # freshly generated DEV/TEST copy and retains the audited original.
+    save(run/'VIK_TEST_MARKING.json',mark_vik(vik['output'],run))
     records=[]
     def record(kind,path,number=None,day=None,**extra):
         records.append({'type':kind,'path':str(path),'sha256':S.sha(path),'number':number or d['number'],
@@ -232,7 +236,11 @@ def _generate_existing(plan,root,run):
         uzk=folder/(d['number'].replace('/','_')+' - УЗК ТЕСТ.docx')
         data={'kind':'TEST/DRAFT','project_root':str(first.parent),'template':str(first/'1_2026 - УЗК.docx'),
             'passport':{'project':d['project'],'number':d['number'],'date':f['uzk_date'],'object':f['object'],'cipher':f['cipher']},'marks':plan['marks']}
-        write_test_document(data,uzk);record('UZK',uzk,day=f['uzk_date'])
+        write_test_document(data,uzk)
+        # Display the exact UZK selection quantity from Stage 5, not a
+        # measured result. Keep the original sample and template untouched.
+        save(run/'UZK_TEST_LAYOUT.json',annotate_uzk(uzk,run,plan['marks'],int(d['uzk_units'])))
+        record('UZK',uzk,day=f['uzk_date'])
     from akz_stage6 import part2
     if d['variants']:
         if d.get('akz_auto'):
