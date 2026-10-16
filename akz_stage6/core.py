@@ -684,7 +684,8 @@ def validate_saved_pair(app, act, application, p):
         require(t.Range(f'A{total}').Value2=='Итого' and
                 all(not bool(t.Rows(r).Hidden) for r in range(1,total+1)),
                 'SAVED_DYNAMIC_TOTAL_POSITION_STOP')
-        require(str(t.PageSetup.PrintArea).replace('$','').upper().endswith(f'G{total}') and
+        # Excel exposes the same area in A1 or R1C1 according to ReferenceStyle.
+        require(str(t.PageSetup.PrintArea) in (f'$A$1:$G${total}',f'R1C1:R{total}C7') and
                 int(t.PageSetup.Pages.Count)>=1,'SAVED_DYNAMIC_PRINT_AREA_STOP')
         for col,f in [('C','quantity'),('E','mass_total'),('G','area_total')]:
             require(t.Range(f'{col}{total}').Formula==f'=SUM({col}4:{col}{total-1})' and

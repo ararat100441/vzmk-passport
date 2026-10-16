@@ -4,6 +4,7 @@ Project-bound sample forms supply coating systems, never historical measurements
 Settings and immutable daily climates live outside templates and registries.
 """
 from contextlib import contextmanager
+from copy import copy
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_CEILING
 from pathlib import Path
@@ -314,8 +315,8 @@ def validate_pair(app,act,application,p,proof,source_shape,application_shape):
             for col in 'ABCDEFG':
                 before=template_sheet[f'{col}{original_total}']
                 after=sheet[f'{col}{total}']
-                require(before.font==after.font and before.fill==after.fill and
-                        before.border==after.border,'AKZ_TOTAL_ROW_STYLE_CHANGED: '+col)
+                require(copy(before.font)==copy(after.font) and copy(before.fill)==copy(after.fill) and
+                        copy(before.border)==copy(after.border),'AKZ_TOTAL_ROW_STYLE_CHANGED: '+col)
         finally:original.close()
         for book in (a,values,b,bv):
             for sheet in book:
@@ -334,7 +335,7 @@ def validate_pair(app,act,application,p,proof,source_shape,application_shape):
         require(values['4']['H4'].value.date().isoformat()==d['date'],'AKZ_CURRENT_DATE_STOP')
         if n==2:require(a['4']['I27'].number_format=='0','AKZ_THICKNESS_CURRENCY_FORMAT_STOP')
         for col,key in [('C','quantity'),('E','mass_total'),('G','area_total')]:
-            require(sheet[f'{col}{total}'].value==f'=SUM({col}{first}:{col}{last})','AKZ_TOTAL_FORMULA_CHANGED')
+            require(b.active[f'{col}{total}'].value==f'=SUM({col}{first}:{col}{last})','AKZ_TOTAL_FORMULA_CHANGED')
             require(abs(Decimal(str(cached[f'{col}{total}'].value))-d['totals'][key])<=Decimal('.00000001'),'AKZ_VISIBLE_VOM_TOTAL_STOP')
         for index,col in enumerate(proof['columns']):
             layerday=values['4'][col+'22'].value.date().isoformat()

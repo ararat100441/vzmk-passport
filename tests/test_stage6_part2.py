@@ -1,4 +1,4 @@
-"""Variant isolation, source numerics, fixed-capacity and batch-publication boundaries."""
+"""Variant isolation, source numerics, dynamic rows and batch-publication boundaries."""
 import copy
 from decimal import Decimal
 from pathlib import Path
@@ -45,9 +45,13 @@ class Part2Boundaries(unittest.TestCase):
             self.assertEqual(selected[0]['mass_unit'],Decimal('3.25'));self.assertEqual(selected[0]['area_unit'],Decimal('1.25'))
     def test_all_capacity_boundaries(self):
         for n,cap in [(1,61),(2,47),(3,94)]:
-            self.assertEqual(len(self.match(n,[self.row(rn=i) for i in range(cap)])[0]),cap)
-            with self.assertRaisesRegex(c.Stage6Error,'CAPACITY_STOP'):
-                self.match(n,[self.row(rn=i) for i in range(cap+1)])
+            for count in (1,7,17,18,104,200,cap,cap+1):
+                with self.subTest(variant=n,count=count):
+                    rows=[self.row(rn=i+5) for i in range(count)]
+                    selected,_,totals=self.match(n,rows)
+                    self.assertEqual([r['row'] for r in selected],[r['row'] for r in rows])
+                    self.assertEqual(totals,dict(quantity=Decimal(2*count),
+                        mass_total=Decimal('6.5')*count,area_total=Decimal('2.5')*count))
     def test_missing_or_disputed_area_blocks_only_its_group(self):
         for n in (1,2,3):
             for field,value,code in [('area_unit',None,'NUMBER_MISSING'),('area_total',None,'NUMBER_MISSING'),('area_total',3,'AREA_CONFLICT_STOP')]:
