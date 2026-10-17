@@ -107,20 +107,24 @@ def supervise(arguments):
             for r in records:
                 if event['worker_pid']==child.pid and event['data']['pid']==r['pid'] and event['data']['creation_time']==r['creation_time']:
                     r['normal_window_close_requested']=event['data']['normal_window_close_requested']
-        if not normal or data.get('status')!='PASS':
-            for r in records:
-                h=handles.get(r['pid'])
-                if r.get('quit_returned'):continue
-                if h is None or win32event.WaitForSingleObject(h,0)==win32con.WAIT_OBJECT_0:continue
-                from stage8_closure.storage import digest
-                plan=base/('cleanup_'+str(r['pid'])+'.json')
-                payload={'record':r,'parent_pid':os.getpid(),'parent_creation_time':win32process.GetProcessTimes(win32api.GetCurrentProcess())['CreationTime'].isoformat()}
-                save(plan,payload|{'seal':digest(payload)})
-                helper=subprocess.Popen(prefix+['--office-cleanup',str(plan)],creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-                try:helper.wait(timeout=60)
-                except subprocess.TimeoutExpired:helper.terminate();helper.wait(timeout=10);r['cleanup_helper_timeout']=True
-                report=plan.with_suffix('.result.json')
-                r['crash_cleanup']=json.loads(report.read_text(encoding='utf8')) if report.exists() else {'status':'FAIL','helper_returncode':helper.returncode}
+        # An owned Office child may remain unbound (no *_START record or
+        # QUIT_RETURNED) even when the document worker reports PASS. Always
+        # recover such a proven child after the worker has exited, using the
+        # existing sealed plan and native COM cleanup helper. Never touch
+        # pre-existing Office instances or skip the identity/exit checks.
+        for r in records:
+            h=handles.get(r['pid'])
+            if r.get('quit_returned'):continue
+            if h is None or win32event.WaitForSingleObject(h,0)==win32con.WAIT_OBJECT_0:continue
+            from stage8_closure.storage import digest
+            plan=base/('cleanup_'+str(r['pid'])+'.json')
+            payload={'record':r,'parent_pid':os.getpid(),'parent_creation_time':win32process.GetProcessTimes(win32api.GetCurrentProcess())['CreationTime'].isoformat()}
+            save(plan,payload|{'seal':digest(payload)})
+            helper=subprocess.Popen(prefix+['--office-cleanup',str(plan)],creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            try:helper.wait(timeout=60)
+            except subprocess.TimeoutExpired:helper.terminate();helper.wait(timeout=10);r['cleanup_helper_timeout']=True
+            report=plan.with_suffix('.result.json')
+            r['crash_cleanup']=json.loads(report.read_text(encoding='utf8')) if report.exists() else {'status':'FAIL','helper_returncode':helper.returncode}
         deadline=time.monotonic()+120;sample_at=ended+2;window_samples=[]
         while time.monotonic()<deadline and any(win32event.WaitForSingleObject(h,0)!=win32con.WAIT_OBJECT_0 for h in handles.values()):
             if time.monotonic()>=sample_at:
@@ -145,12 +149,24 @@ def supervise(arguments):
                 win32event.WaitForSingleObject(h,10000)
             r['exit_code']=win32process.GetExitCodeProcess(h);r['still_running']=win32event.WaitForSingleObject(h,0)!=win32con.WAIT_OBJECT_0
             r['cleanup']='GRACEFUL_EXIT' if r['exit_code']==0 and not r.get('forced_termination_attempted') and not r['still_running'] else 'ABNORMAL_OR_FORCED_EXIT' if not r['still_running'] else 'STOP_OWNED_OFFICE_STILL_RUNNING'
+        # Helper success is meaningful only if it observed the verified owned
+        # process exit normally before returning from its own live COM apartment.
+        unbound_cleanup_failed=any(
+            'crash_cleanup' in r and (
+                r['crash_cleanup'].get('status')!='PASS'
+                or r['crash_cleanup'].get('exit_code')!=0
+                or r['crash_cleanup'].get('exit_observed_while_sta_alive') is not True)
+            for r in records)
         summary={'schema':'STAGE9_SUPERVISOR_V1','worker_pid':child.pid,'worker_returncode':code,
             'wait_seconds_after_worker':time.monotonic()-ended,'instances':records,'ownership_errors':ownership_errors,
-            'owned_orphans':sum(r.get('still_running',False) for r in records),'normal_result':normal,'wait_window_samples':window_samples}
+            'owned_orphans':sum(r.get('still_running',False) for r in records),'normal_result':normal,'wait_window_samples':window_samples,
+            'owned_unbound_gracefully_recovered':sum(
+                'crash_cleanup' in r and r['crash_cleanup'].get('status')=='PASS' and r['crash_cleanup'].get('exit_code')==0
+                for r in records)}
         save(base/'SUPERVISOR.json',summary)
         if ownership_errors or summary['owned_orphans'] or code!=0:data={'status':'FAIL','error':data.get('error','OFFICE_SUPERVISOR_STOP'),'worker_returncode':code,'worker_result':data}
         elif normal and any(r.get('forced_termination_attempted') for r in records):data={'status':'FAIL','error':'OFFICE_GRACEFUL_EXIT_TIMEOUT','worker_result':data}
+        elif unbound_cleanup_failed:data={'status':'FAIL','error':'OFFICE_OWNED_UNBOUND_CLEANUP_FAILED','worker_result':data}
         elif any(r.get('exit_code')!=0 for r in records):data={'status':'FAIL','error':'OFFICE_ABNORMAL_EXIT','worker_result':data}
         data['office_supervisor']=str(base/'SUPERVISOR.json');published=base/'published_result.json';save(published,data)
         if target is not None:target.parent.mkdir(parents=True,exist_ok=True);os.rename(published,target)
