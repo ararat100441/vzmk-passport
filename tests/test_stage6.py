@@ -47,9 +47,14 @@ class Stage6Boundaries(unittest.TestCase):
         rows=[self.row(),{**self.row(),'mark':'OTHER','area_total':None}]
         selected,excluded,_=self.match(rows)
         self.assertEqual(len(selected),1);self.assertEqual(excluded[0]['reason'],'NO_ASSIGNMENT')
-    def test_capacity_stop_no_truncation(self):
-        with self.assertRaisesRegex(c.Stage6Error,'TEMPLATE_CAPACITY_STOP'):
-            self.match([self.row() for _ in range(18)])
+    def test_dynamic_application_counts_no_truncation(self):
+        for count in (1,7,17,18,104,200):
+            with self.subTest(count=count):
+                rows=[{**self.row(),'row':i+4} for i in range(count)]
+                selected,_,totals=self.match(rows)
+                self.assertEqual([r['row'] for r in selected],[r['row'] for r in rows])
+                self.assertEqual(totals,dict(quantity=Decimal(2*count),
+                    mass_total=Decimal('6.5')*count,area_total=Decimal('2.5')*count))
     def test_numeric_rejects_bool_nan_negative_and_text(self):
         for v in (True,float('nan'),-1,'0'):
             with self.subTest(value=v),self.assertRaises(c.Stage6Error):c.number(v,'TEST')
