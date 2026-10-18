@@ -32,7 +32,7 @@ def cleanup_entry(path):
     finally:handle.Close()
     return 0 if result['status']=='PASS' else 1
 
-def supervise(arguments):
+def supervise(arguments, *, entrypoint=None):
     import win32api,win32process,win32con,win32event,win32gui
     base=Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'VZMKPassport/diagnostics'/('job_'+uuid4().hex)
     base.mkdir(parents=True);args=list(arguments);target=None
@@ -42,7 +42,7 @@ def supervise(arguments):
         n=args.index('--result');target=Path(args[n+1]);del args[n:n+2]
         if target.exists():raise RuntimeError('RESULT_ALREADY_EXISTS')
     result=base/'worker_result.json';diagnostic=base/'office.json'
-    prefix=[sys.executable] if getattr(sys,'frozen',False) else [sys.executable,'-B',str(Path(__file__).resolve().parents[1]/'stage9.py')]
+    prefix=[sys.executable] if getattr(sys,'frozen',False) else [sys.executable,'-B',str(entrypoint or Path(__file__).resolve().parents[1]/'stage9.py')]
     before=set(win32process.EnumProcesses());handles={};records=[];seen=set();launched=set();office_children=[];ownership_errors=[]
     child=subprocess.Popen(prefix+args+['--result',str(result),'--office-worker',str(diagnostic)],
         creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -173,4 +173,8 @@ def supervise(arguments):
         elif sys.stdout:print(json.dumps(data,ensure_ascii=False,indent=2))
         return 0 if data['status']=='PASS' else 1
     finally:
-        for handle in handles.values():handle.Close()
+        # Popen owns these same handles. Cache the observed return code before
+        # closing an exited child's handle; otherwise Popen.__del__ polls a
+        # closed handle (WinError 6). A still-live child retains its Popen handle.
+        for office in office_children:
+            if office.poll() is not None:office._handle.Close()
