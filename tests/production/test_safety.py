@@ -1,5 +1,6 @@
 """Safety/refusal and native Windows recovery tests on disposable files."""
 import copy,json,os,tempfile,unittest,subprocess
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -18,10 +19,13 @@ class Safety(unittest.TestCase):
             n,s,y=model.parse_number(value);self.assertEqual(model.number(n,s,y),value)
         for value in ('1-1/2026','0/1/2026','1/0/2026','1/1/26','1/2026/1','1/1/2026/2'):
             with self.subTest(value=value),self.assertRaises(Stop):model.parse_number(value)
-    def test_mixed_series_stop_before_read_or_write(self):
+    def test_incomplete_approved_legacy_pair_stops_before_read_or_write(self):
+        # Missing row 407 must NOT be silently accepted as the approved
+        # exceptional case for rows 401 and 407.
         r=SimpleNamespace(projects={'ТЭМПО 1':[{'number':'1/1/2026','row':342},{'number':'10/2026','row':401}]})
         with patch('production_app.model.load_book') as load:
-            with self.assertRaisesRegex(Stop,'КОНФЛИКТ СЕРИИ'):model.select(r,'ТЭМПО 1')
+            with self.assertRaisesRegex(Stop,'подтверждённые опечатки номеров не совпали со строками 401/407'):
+                model.select(r,'ТЭМПО 1')
             load.assert_not_called()
     def tempo_registry_fixture(self):
         from datetime import datetime
