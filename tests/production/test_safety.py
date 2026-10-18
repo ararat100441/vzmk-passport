@@ -42,16 +42,34 @@ class Safety(unittest.TestCase):
             def close(self):pass
         return registry,fields,Book()
 
-    def test_tempo1_approved_legacy_aliases_compute_12_without_editing_sources(self):
+    def test_tempo1_approved_legacy_aliases_use_full_registry_max(self):
+        # Synthetic extension: rows 412-418 are test fixture rows, NOT claimed
+        # real registry row numbers. The user confirms latest passport 18/1/2026.
         registry,fields,book=self.tempo_registry_fixture()
+        for n in range(12,19):
+            row=400+n
+            registry.projects['ТЭМПО 1'].append(
+                {'row':row,'number':f'{n}/1/2026',
+                 'date':datetime(2026,9,12),'object':'ТЭМПО 1 объект'})
+            fields[row]={1:'МК-3465 от 05.05.2026',2:'АО КЗМК ТЭМПО',
+                         3:'ТЭМПО 1 объект',4:'SKL-VD-(L3-41-030)-N-ZX 2511.3.135.021'}
         before=copy.deepcopy(registry.projects)
         with patch('production_app.model.columns',return_value={'CONTRACT':1,'CUSTOMER':2,'OBJECT':3,'CIPHER':4}),patch('production_app.model.load_book',return_value=book):
             p=model.select(registry,'ТЭМПО 1')
         self.assertEqual(p.first_number,'1/1/2026')
-        self.assertEqual(p.last_number,'11/2026')  # historical source remains literal
-        self.assertEqual(p.next_number,'12/1/2026')
+        self.assertEqual(p.last_number,'18/1/2026')
+        self.assertEqual(p.next_number,'19/1/2026')
         self.assertEqual(registry.projects,before)
-        self.assertEqual([x['number'] for x in registry.projects['ТЭМПО 1'][-2:]],['10/2026','11/2026'])
+        self.assertEqual([registry.projects['ТЭМПО 1'][i]['number'] for i in (9,10)],
+                         ['10/2026','11/2026'])
+
+    def test_tempo1_approved_legacy_aliases_subset_still_monotonic(self):
+        # When only eleven passports are present, the general max+1 rule
+        # yields 12/1/2026; that must NOT be hardcoded for the real registry.
+        registry,fields,book=self.tempo_registry_fixture()
+        with patch('production_app.model.columns',return_value={'CONTRACT':1,'CUSTOMER':2,'OBJECT':3,'CIPHER':4}),patch('production_app.model.load_book',return_value=book):
+            p=model.select(registry,'ТЭМПО 1')
+        self.assertEqual(p.next_number,'12/1/2026')
 
     def test_tempo1_legacy_aliases_refuse_dev_kazakhstan_requisites(self):
         registry,fields,book=self.tempo_registry_fixture()
