@@ -1,5 +1,6 @@
 """Safety/refusal and native Windows recovery tests on disposable files."""
 import copy,json,os,tempfile,unittest,subprocess
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -18,11 +19,104 @@ class Safety(unittest.TestCase):
             n,s,y=model.parse_number(value);self.assertEqual(model.number(n,s,y),value)
         for value in ('1-1/2026','0/1/2026','1/0/2026','1/1/26','1/2026/1','1/1/2026/2'):
             with self.subTest(value=value),self.assertRaises(Stop):model.parse_number(value)
-    def test_mixed_series_stop_before_read_or_write(self):
+    def test_incomplete_approved_legacy_pair_stops_before_read_or_write(self):
+        # Missing row 407 must NOT be silently accepted as the approved
+        # exceptional case for rows 401 and 407.
         r=SimpleNamespace(projects={'ТЭМПО 1':[{'number':'1/1/2026','row':342},{'number':'10/2026','row':401}]})
         with patch('production_app.model.load_book') as load:
-            with self.assertRaisesRegex(Stop,'КОНФЛИКТ СЕРИИ'):model.select(r,'ТЭМПО 1')
+            with self.assertRaisesRegex(Stop,'подтверждённые опечатки номеров не совпали со строками 401/407'):
+                model.select(r,'ТЭМПО 1')
             load.assert_not_called()
+    def tempo_registry_fixture(self):
+        from datetime import datetime
+        rows=[342,351,355,366,370,378,380,388,394,401,407]
+        nums=[f'{n}/1/2026' for n in range(1,10)]+['10/2026','11/2026']
+        entries=[{'row':row,'number':value,'date':datetime(2026,9,12),
+                  'object':'ТЭМПО 1 объект'}
+                 for row,value in zip(rows,nums)]
+        registry=SimpleNamespace(projects={'ТЭМПО 1':entries},path=self.root/'registry.xlsx',
+                                 sheet='Паспорт качества')
+        fields={r:{1:'МК-3465 от 05.05.2026',2:'АО КЗМК ТЭМПО',
+                    3:'ТЭМПО 1 объект',4:'SKL-VD-(L3-41-030)-N-ZX 2511.3.135.021'}
+                for r in rows}
+        class Sheet:
+            def cell(self,row,col):return SimpleNamespace(value=fields[row][col])
+        class Book:
+            def __getitem__(self,name):return Sheet()
+            def close(self):pass
+        return registry,fields,Book()
+
+    def test_tempo1_approved_legacy_aliases_use_full_registry_max(self):
+        # Synthetic extension: rows 412-418 are test fixture rows, NOT claimed
+        # real registry row numbers. The user confirms latest passport 18/1/2026.
+        registry,fields,book=self.tempo_registry_fixture()
+        for n in range(12,19):
+            row=400+n
+            registry.projects['ТЭМПО 1'].append(
+                {'row':row,'number':f'{n}/1/2026',
+                 'date':datetime(2026,9,12),'object':'ТЭМПО 1 объект'})
+            fields[row]={1:'МК-3465 от 05.05.2026',2:'АО КЗМК ТЭМПО',
+                         3:'ТЭМПО 1 объект',4:'SKL-VD-(L3-41-030)-N-ZX 2511.3.135.021'}
+        before=copy.deepcopy(registry.projects)
+        with patch('production_app.model.columns',return_value={'CONTRACT':1,'CUSTOMER':2,'OBJECT':3,'CIPHER':4}),patch('production_app.model.load_book',return_value=book):
+            p=model.select(registry,'ТЭМПО 1')
+        self.assertEqual(p.first_number,'1/1/2026')
+        self.assertEqual(p.last_number,'18/1/2026')
+        self.assertEqual(p.next_number,'19/1/2026')
+        self.assertEqual(registry.projects,before)
+        self.assertEqual([registry.projects['ТЭМПО 1'][i]['number'] for i in (9,10)],
+                         ['10/2026','11/2026'])
+
+    def test_tempo1_approved_legacy_aliases_subset_still_monotonic(self):
+        # When only eleven passports are present, the general max+1 rule
+        # yields 12/1/2026; that must NOT be hardcoded for the real registry.
+        registry,fields,book=self.tempo_registry_fixture()
+        with patch('production_app.model.columns',return_value={'CONTRACT':1,'CUSTOMER':2,'OBJECT':3,'CIPHER':4}),patch('production_app.model.load_book',return_value=book):
+            p=model.select(registry,'ТЭМПО 1')
+        self.assertEqual(p.next_number,'12/1/2026')
+
+    def test_tempo1_legacy_aliases_refuse_dev_kazakhstan_requisites(self):
+        registry,fields,book=self.tempo_registry_fixture()
+        fields[401][1]='06/26 от 03.06.2026'
+        fields[401][4]='WAA0007144-AC2-КМД'
+        with patch('production_app.model.columns',return_value={'CONTRACT':1,'CUSTOMER':2,'OBJECT':3,'CIPHER':4}),patch('production_app.model.load_book',return_value=book):
+            with self.assertRaisesRegex(Stop,'КОНФЛИКТ РЕКВИЗИТОВ'):model.select(registry,'ТЭМПО 1')
+
+    def test_tempo1_extra_mixed_series_does_not_bypass_stop(self):
+        registry,fields,book=self.tempo_registry_fixture()
+        registry.projects['ТЭМПО 1'].append({'row':411,'number':'12/2026'})
+        with patch('production_app.model.load_book') as load:
+            with self.assertRaisesRegex(Stop,'КОНФЛИКТ СЕРИИ'):model.select(registry,'ТЭМПО 1')
+            load.assert_not_called()
+
+    def test_tempo1_duplicate_normalized_number_is_refused(self):
+        registry,fields,book=self.tempo_registry_fixture()
+        registry.projects['ТЭМПО 1'].append({'row':409,'number':'10/1/2026'})
+        with patch('production_app.model.load_book') as load:
+            with self.assertRaisesRegex(Stop,'Дубли номеров с учётом'):model.select(registry,'ТЭМПО 1')
+            load.assert_not_called()
+
+    def test_tempo1_legacy_aliases_require_exact_rows_and_first(self):
+        registry,fields,book=self.tempo_registry_fixture()
+        registry.projects['ТЭМПО 1'][0]['row']=340
+        with patch('production_app.model.load_book') as load:
+            with self.assertRaisesRegex(Stop,'не совпали со строками'):model.select(registry,'ТЭМПО 1')
+            load.assert_not_called()
+
+    def test_tempo1_one_corrected_number_is_still_safe(self):
+        registry,fields,book=self.tempo_registry_fixture()
+        registry.projects['ТЭМПО 1'][-1]['number']='11/1/2026'
+        with patch('production_app.model.columns',return_value={'CONTRACT':1,'CUSTOMER':2,'OBJECT':3,'CIPHER':4}),patch('production_app.model.load_book',return_value=book):
+            p=model.select(registry,'ТЭМПО 1')
+        self.assertEqual(p.next_number,'12/1/2026')
+
+    def test_tempo2_mixed_series_is_not_authorized(self):
+        registry,fields,book=self.tempo_registry_fixture()
+        registry.projects={'ТЭМПО 2':registry.projects['ТЭМПО 1']}
+        with patch('production_app.model.load_book') as load:
+            with self.assertRaisesRegex(Stop,'КОНФЛИКТ СЕРИИ'):model.select(registry,'ТЭМПО 2')
+            load.assert_not_called()
+
     def test_training_cannot_target_real_registry(self):
         registry=self.root/'ВЗМК.xlsx';registry.write_bytes(b'original')
         with self.assertRaises((Stop,FileNotFoundError)):core.training_guard({'training':True,'registry':str(registry),'output':str(self.root)})

@@ -31,12 +31,37 @@ def parse_number(value):
 def number(n,series,year):return f'{n}/'+(series+'/' if series else '')+year
 def filename(value):parse_number(value);return value.replace('/','_')
 
+# User-approved READ-ONLY interpretation of exactly two historical source cells.
+# Never rewrite source values, generated document numbers or existing filenames.
+TEMPO1_LEGACY_ALIASES = {
+    (401, '10/2026'): '10/1/2026',
+    (407, '11/2026'): '11/1/2026',
+}
+
+def approved_legacy_aliases(name, entries):
+    if name != 'ТЭМПО 1':
+        return []
+    return [(e, TEMPO1_LEGACY_ALIASES[(e['row'], str(e['number']))])
+            for e in entries if (e['row'], str(e['number'])) in TEMPO1_LEGACY_ALIASES]
+
 def select(registry,name):
     if any(c in name for c in '<>:"/\\|?*') or name in ('.','..') or name.endswith((' ','.')):raise Stop('Имя объекта небезопасно для папки результата.')
     entries=registry.projects.get(name,[])
     if not entries:raise Stop('Объект не найден в реестре: '+name)
-    parsed=[(parse_number(e['number']),e) for e in entries]
+    aliases=approved_legacy_aliases(name,entries)
+    if aliases:
+        # Fail closed if the documented first passport or either historical
+        # source row is missing, moved, or contains an unexpected number.
+        by_row={e['row']:str(e['number']) for e in entries}
+        if (by_row.get(342)!='1/1/2026'
+            or any(by_row.get(row) not in (raw,normalized)
+                   for (row,raw),normalized in TEMPO1_LEGACY_ALIASES.items())):
+            raise Stop('ТЭМПО 1: подтверждённые опечатки номеров не совпали со строками 401/407. Реестр не изменён.')
+    normalized={(e['row'],str(e['number'])):alias for e,alias in aliases}
+    parsed=[(parse_number(normalized.get((e['row'],str(e['number'])),e['number'])),e) for e in entries]
     if len({str(e['number']) for e in entries})!=len(entries):raise Stop('Дубли номеров у объекта '+name)
+    if len({number(*p) for p,e in parsed})!=len(parsed):
+        raise Stop('Дубли номеров с учётом подтверждённых опечаток у объекта '+name)
     groups={(p[1],p[2]) for p,e in parsed}
     if len(groups)!=1:
         detail='; '.join(f"строка {e['row']}: {e['number']}" for _,e in parsed)
@@ -57,6 +82,9 @@ def select(registry,name):
             values[0]=re.sub(r'^\s*№\s*','',str(values[0]))
             return values
         baseline=requisites(start['row'])
+        if aliases and (baseline[0]!='МК-3465 от 05.05.2026'
+                        or baseline[3]!='SKL-VD-(L3-41-030)-N-ZX 2511.3.135.021'):
+            raise Stop('ТЭМПО 1: опечатки нельзя учитывать — договор/шифр первого паспорта не совпали с подтверждённым объектом.')
         for _,e in parsed:
             if requisites(e['row'])!=baseline:
                 raise Stop(f"КОНФЛИКТ РЕКВИЗИТОВ: {name}, строка {e['row']}; договор/заказчик/объект/шифр отличаются от первого паспорта.")

@@ -107,6 +107,12 @@ class App:
             p=model.select(r,name)
             if self.new.get():self.numbers['values']=[p.next_number];self.number.set(p.next_number)
             self.write(f'{name}: первый {p.first_number}; последний {p.last_number}; следующий {p.next_number}')
+            aliases=model.approved_legacy_aliases(name,entries)
+            if aliases:
+                self.write('ВНИМАНИЕ: в реестре есть подтверждённые опечатки: '
+                           +'; '.join(f"строка {e['row']}: {e['number']} (для расчёта серии {alias})"
+                                     for e,alias in aliases)
+                           +'. Исходные записи НЕ изменяются.')
         except Exception as exc:self.error(exc)
 
     def profile(self):
