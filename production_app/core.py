@@ -315,10 +315,10 @@ def complete(journal,readback_result):
         if hashlib.sha256(current).hexdigest()!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после проверки.')
         for name,h in s['output_hashes'].items():
             if sha(safe(s['target'])/name)!=h:raise Stop('Документ изменился после проверки.')
+        print_name=Path(s['target']).name+'.pdf'
+        if print_name not in s['output_hashes']:
+            raise Stop('Не найден проверенный сводный PDF. Завершение запрещено.')
         s['phase']='COMPLETE';journal_write(journal,s)
-    print_name=Path(s['target']).name+'.pdf'
-    if print_name not in s['output_hashes']:
-        raise Stop('В завершённом комплекте отсутствует сводный PDF.')
     return {'status':'PASS','state':'ГОТОВО','folder':s['target'],'journal':str(journal),
             'backup':s['backup'],'print_pdf':str(Path(s['target'])/print_name)}
 
