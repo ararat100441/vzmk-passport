@@ -81,6 +81,11 @@ def word_table(doc,token,headers,rows):
         for c,value in enumerate(row,1):table.Cell(n,c).Range.Text=str(value)
 
 def tokens_excel(sheet,values):
+    # Preserve number types in Excel when a cell contains a single numeric
+    # placeholder, especially climate and coating-range bounds used by formulas.
+    numeric_keys={'AIR','SURFACE','HUMIDITY','DEW','THICKNESS'}
+    numeric_keys.update('LAYER_'+str(n)+'_'+edge
+                        for n in (1,2,3) for edge in ('MIN','MAX'))
     used=sheet.UsedRange
     for row in range(used.Row,used.Row+used.Rows.Count):
         for col in range(used.Column,used.Column+used.Columns.Count):
@@ -88,6 +93,13 @@ def tokens_excel(sheet,values):
             if cell.HasFormula:continue
             v=cell.Value2
             if isinstance(v,str) and '{{' in v:
+                key=v[2:-2] if v.startswith('{{') and v.endswith('}}') else ''
+                if key in numeric_keys and key in values:
+                    numeric_value=Decimal(str(values[key]).replace(',','.'))
+                    if not numeric_value.is_finite():
+                        raise Stop('Некорректное числовое поле Excel: '+key)
+                    cell.Value2=float(numeric_value)
+                    continue
                 for key,value in values.items():v=v.replace('{{'+key+'}}',str(value))
                 cell.Value2=v
 
