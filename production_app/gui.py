@@ -241,7 +241,7 @@ class App:
         defaults=presets['variants']
         for n in range(4):
             fresh=prev.get(n)
-            cached=defaults.get(str(n),{}).get('climate',{})
+            cached=(defaults.get(str(n)) or presets.get('latest',{})).get('climate',{})
             values=(fresh if fresh is not None else cached)
             climates.insert('','end',values=[n]+[values.get(c,'') if c in akz_presets.CLIMATE_FIELDS or fresh is not None else '' for c in ccols[1:]])
         ttk.Label(d,text='ДИАПАЗОН ТОЛЩИНЫ ПО СЛОЯМ, мкм: отдельно минимум и максимум каждого из 3 слоёв. Сохранённые диапазоны — не результаты новых замеров.').pack(pady=6)
@@ -256,7 +256,7 @@ class App:
         self.editable(layers_grid,immutable={0,1})
         for n in range(4):
             current={int(x['layer']):x for x in prev.get(n,{}).get('layers',[])}
-            cached={int(x['layer']):x for x in defaults.get(str(n),{}).get('layers',[])}
+            cached={int(x['layer']):x for x in (defaults.get(str(n)) or presets.get('latest',{})).get('layers',[])}
             for layer in (1,2,3):
                 value=current.get(layer,cached.get(layer,{}))
                 layers_grid.insert('','end',values=(n,layer,value.get('min',''),value.get('max','')))
