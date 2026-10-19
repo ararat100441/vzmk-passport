@@ -45,6 +45,19 @@ def validate(profile,project,variants,training=False):
                 finally:book.close()
                 required={'NUMBER','OBJECT','AKZ_DATE','AKZ_MARKS'} if role.startswith('akz_appendix') else AKZ_REQUIRED
                 provided = set(TOKEN.findall(text))
+                # An approved three-layer act may display ranges instead of
+                # the old single THICKNESS field. Never accept a partial set
+                # of layer placeholders or substitute one layer for another.
+                if role.startswith('akz') and not role.startswith('akz_appendix'):
+                    layer_tokens={key for key in provided if key.startswith('LAYER_')}
+                    if layer_tokens:
+                        expected={f'LAYER_{n}_RANGE' for n in (1,2,3)}
+                        numeric={f'LAYER_{n}_{edge}' for n in (1,2,3) for edge in ('MIN','MAX')}
+                        if not (expected.issubset(provided) or numeric.issubset(provided)):
+                            raise Stop('Форма трёхслойного АКЗ должна содержать диапазоны всех трёх слоёв.')
+                        if layer_tokens-(expected|numeric):
+                            raise Stop('Неподдержанное поле диапазона слоя АКЗ.')
+                        required = AKZ_REQUIRED-{'THICKNESS'}
             missing=required-provided
             if missing:raise Stop('Нет полей '+', '.join('{{'+k+'}}' for k in sorted(missing))+'. Оформленный исторический акт не является пустой формой для новых результатов.')
         except Exception as exc:errors.append(role+' — '+str(path)+'\n'+str(exc))
