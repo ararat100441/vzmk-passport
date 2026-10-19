@@ -112,7 +112,7 @@ def akz_values(climate):
     measurements and their primary protocols.
     """
     values={str(key).upper():value for key,value in climate.items()
-            if key not in ('variant','layers')}
+            if key not in ('variant','layers','dry_averages')}
     if climate.get('layers'):
         checked=validate_dry_averages(climate['layers'],climate.get('dry_averages'))
         for entry in validate_layer_ranges(climate['layers']):
