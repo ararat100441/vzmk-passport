@@ -78,6 +78,24 @@ def main():
     assert complete['state']=='ГОТОВО'
     assert read(committed['journal'])['phase']=='COMPLETE'
     assert sha(committed['backup'])==initial_sha
+    # Final print-ready PDF must be in the SAME new folder, have the exact
+    # directory name, include every section in the approved print order,
+    # and be sealed by the issued manifest. No standalone PDF fragments.
+    from pypdf import PdfReader
+    target=Path(complete['folder'])
+    print_pdf=Path(complete['print_pdf'])
+    assert print_pdf.parent==target and print_pdf.name==target.name+'.pdf'
+    assert print_pdf.is_file()
+    issued=read(target/'ISSUE.json')
+    assert issued['files'][print_pdf.name]==sha(print_pdf)
+    release=read(Path(plan).parent/'release.json')
+    print_spec=release['print_pdf']
+    assert print_spec['sha256']==sha(print_pdf)
+    assert len(PdfReader(str(print_pdf)).pages)==print_spec['pages']>0
+    assert [entry['role'] for entry in print_spec['sections']] == [
+        'quality','appendix','vik','uzk','akz0','akz_appendix0'
+    ]
+    assert {p.name for p in target.iterdir() if p.suffix.lower()=='.pdf'}=={print_pdf.name}
     run('check',request,expected='FAIL') # changed registry / duplicate number
     run('catalog',{'vom':str(vom),'target':str(out/'Черновик справочника.xlsx')})
     from openpyxl import load_workbook
