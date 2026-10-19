@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from production_app.akz_presets import last_for_project, remember
-from production_app.facts import validate_layer_ranges
+from production_app.facts import validate_layer_ranges, validate_dry_averages
 from production_app.office import akz_values
 from production_app.storage import Stop
 
@@ -14,6 +14,9 @@ CLIMATE = {'variant': 0, 'air': '24.5', 'surface': '27.3',
            'material': 'SYNTHETIC', 'basis': 'TEST ONLY'}
 LAYERS = [{'layer': n, 'min': str(70 + n * 10),
            'max': str(100 + n * 20)} for n in (1, 2, 3)]
+DRY_AVERAGES = [{'layer':1,'average':'100'},
+                {'layer':2,'average':'210'},
+                {'layer':3,'average':'350'}]
 
 
 class Presets(unittest.TestCase):
@@ -54,9 +57,9 @@ class Presets(unittest.TestCase):
         self.assertEqual(last_for_project('P-B', self.folder)['variants']['0']['climate']['air'], '19.2')
 
     def test_only_climate_and_ranges_saved_not_actual_facts(self):
-        remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
+        remember('P-A', [dict(CLIMATE, layers=LAYERS, dry_averages=DRY_AVERAGES)], '2026-10-19', self.folder)
         raw = (self.folder / 'akz_presets.json').read_text('utf8')
-        for forbidden in ('SYNTHETIC', 'TEST ONLY', '"thickness"', '"basis"',
+        for forbidden in ('SYNTHETIC', 'TEST ONLY', '"thickness"', '"dry_averages"', '"basis"',
                           '"material"', '"confirmed"', '"responsible"'):
             self.assertNotIn(forbidden, raw)
         self.assertIn('"air"', raw)
@@ -110,11 +113,16 @@ class Presets(unittest.TestCase):
         self.assertIn('OTHER', target.read_text())
 
     def test_excel_tokens_share_one_daily_climate(self):
-        fields = akz_values(dict(CLIMATE, layers=LAYERS))
+        fields = akz_values(dict(CLIMATE, layers=LAYERS, dry_averages=DRY_AVERAGES))
         self.assertEqual(fields['AIR'], '24.5')
         self.assertEqual(fields['LAYER_1_RANGE'], '80–120')
         self.assertEqual(fields['LAYER_2_RANGE'], '90–140')
         self.assertEqual(fields['LAYER_3_RANGE'], '100–160')
+        self.assertEqual(fields['LAYER_1_DRY_AVG'], '100')
+        self.assertEqual(fields['LAYER_2_DRY_AVG'], '210')
+        self.assertEqual(fields['LAYER_3_DRY_AVG'], '350')
+        self.assertEqual(fields['LAYER_3_TOTAL_MIN'], '270')
+        self.assertEqual(fields['LAYER_3_TOTAL_MAX'], '420')
         self.assertNotIn('LAYERS', fields)
 
     def test_full_training_fact_validation_accepts_three_ranges(self):
@@ -133,7 +141,7 @@ class Presets(unittest.TestCase):
             'marks':[{'mark':'M1','profile':'','paint':'SYNTHETIC',
                       'akz':0,'uzk_quantity':'0','uzk_result':'НЕ ТРЕБУЕТСЯ',
                       'basis':'SYNTHETIC BASIS'}],
-            'climates':[dict(CLIMATE,layers=[dict(row) for row in LAYERS],material='SYNTHETIC',basis='SYNTHETIC BASIS')],
+            'climates':[dict(CLIMATE,layers=[dict(row) for row in LAYERS],dry_averages=[dict(row) for row in DRY_AVERAGES],material='SYNTHETIC',basis='SYNTHETIC BASIS')],
             'evidence':[{'path':str(proof),'sha256':sha(proof)}]
         }
         vom = SimpleNamespace(rows=(('M1','Part',Decimal(1),Decimal(1),
@@ -142,6 +150,23 @@ class Presets(unittest.TestCase):
         facts['climates'][0]['layers'][0]['max']='50'
         with self.assertRaises(Stop):
             validate(facts,vom,'P-A','1/2026',training=True)
+
+    def test_measured_dry_averages_checked_against_cumulative_ranges(self):
+        values = validate_dry_averages(LAYERS, DRY_AVERAGES)
+        self.assertEqual([row['average'] for row in values], ['100','210','350'])
+        self.assertEqual([row['required_total_min'] for row in values], ['80','170','270'])
+
+    def test_average_outside_range_fails_even_if_prior_layers_passed(self):
+        bad = [dict(row) for row in DRY_AVERAGES]
+        bad[1]['average'] = '270'  # allowed cumulative upper limit is 260
+        with self.assertRaisesRegex(Stop, 'выходит за суммарный диапазон'):
+            validate_dry_averages(LAYERS, bad)
+
+    def test_partial_averages_refused_not_replaced_by_range_midpoints(self):
+        with self.assertRaisesRegex(Stop, 'после каждого'):
+            validate_dry_averages(LAYERS, DRY_AVERAGES[:2])
+        with self.assertRaisesRegex(Stop, 'после каждого'):
+            akz_values(dict(CLIMATE, layers=LAYERS))
 
     def test_old_template_without_ranges_remains_supported(self):
         fields = akz_values(CLIMATE)
