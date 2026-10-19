@@ -117,6 +117,32 @@ class Presets(unittest.TestCase):
         self.assertEqual(fields['LAYER_3_RANGE'], '100–160')
         self.assertNotIn('LAYERS', fields)
 
+    def test_full_training_fact_validation_accepts_three_ranges(self):
+        from decimal import Decimal
+        from types import SimpleNamespace
+        from production_app.facts import validate
+        from production_app.storage import sha
+        proof = self.folder / 'example.txt'
+        proof.write_text('SYNTHETIC TRAINING ONLY', encoding='utf8')
+        facts = {
+            'project':'P-A','number':'1/2026','kind':'TRAINING',
+            'confirmed':True,'authorized':True,'forms_approved':True,
+            'responsible':'SYNTHETIC',
+            'start_date':'2026-10-18','date':'2026-10-19',
+            'vik_date':'2026-10-18','uzk_date':'2026-10-18','akz_date':'2026-10-19',
+            'marks':[{'mark':'M1','profile':'','paint':'SYNTHETIC',
+                      'akz':0,'uzk_quantity':'0','uzk_result':'НЕ ТРЕБУЕТСЯ',
+                      'basis':'SYNTHETIC BASIS'}],
+            'climates':[dict(CLIMATE,layers=LAYERS,material='SYNTHETIC',basis='SYNTHETIC BASIS')],
+            'evidence':[{'path':str(proof),'sha256':sha(proof)}]
+        }
+        vom = SimpleNamespace(rows=(('M1','Part',Decimal(1),Decimal(1),
+                                      Decimal(1),Decimal(1),Decimal(1)),))
+        self.assertEqual(validate(facts,vom,'P-A','1/2026',training=True),[0])
+        facts['climates'][0]['layers'][0]['max']='50'
+        with self.assertRaises(Stop):
+            validate(facts,vom,'P-A','1/2026',training=True)
+
     def test_old_template_without_ranges_remains_supported(self):
         fields = akz_values(CLIMATE)
         self.assertIn('THICKNESS', fields)
