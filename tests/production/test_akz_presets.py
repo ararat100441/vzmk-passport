@@ -1,0 +1,102 @@
+"""Project-local АКЗ defaults. Synthetic scenarios only; no real registry."""
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from production_app.akz_presets import last_for_project, remember
+from production_app.facts import validate_layer_ranges
+from production_app.office import akz_values
+from production_app.storage import Stop
+
+CLIMATE = {'variant': 0, 'air': '24.5', 'surface': '27.3',
+           'humidity': '54', 'dew': '14.8', 'thickness': '335',
+           'material': 'SYNTHETIC', 'basis': 'TEST ONLY'}
+LAYERS = [{'layer': n, 'min': str(70 + n * 10),
+           'max': str(100 + n * 20)} for n in (1, 2, 3)]
+
+
+class Presets(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.folder = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_missing_project_starts_blank(self):
+        self.assertEqual(last_for_project('P-NEW', self.folder)['variants'], {})
+        self.assertFalse((self.folder / 'akz_presets.json').exists())
+
+    def test_saved_per_project_with_three_ranges(self):
+        item = dict(CLIMATE, layers=LAYERS)
+        self.assertTrue(remember('P-A', [item], '2026-10-19', self.folder))
+        result = last_for_project('P-A', self.folder)
+        self.assertEqual(result['variants']['0']['climate']['air'], '24.5')
+        self.assertEqual(result['variants']['0']['layers'], LAYERS)
+        self.assertEqual(result['variants']['0']['last_akz_date'], '2026-10-19')
+        self.assertEqual(last_for_project('P-B', self.folder)['variants'], {})
+
+    def test_other_project_does_not_mutate_first(self):
+        remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
+        other = dict(CLIMATE, air='19.2', layers=[
+            {'layer': n, 'min': '100', 'max': '150'} for n in (1, 2, 3)])
+        remember('P-B', [other], '2026-10-20', self.folder)
+        self.assertEqual(last_for_project('P-A', self.folder)['variants']['0']['climate']['air'], '24.5')
+        self.assertEqual(last_for_project('P-B', self.folder)['variants']['0']['climate']['air'], '19.2')
+
+    def test_only_climate_and_ranges_saved_not_actual_facts(self):
+        remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
+        raw = (self.folder / 'akz_presets.json').read_text('utf8')
+        for forbidden in ('SYNTHETIC', 'TEST ONLY', '"thickness"', '"basis"',
+                          '"material"', '"confirmed"', '"responsible"'):
+            self.assertNotIn(forbidden, raw)
+        self.assertIn('"air"', raw)
+
+    def test_latest_values_override_only_same_project(self):
+        remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
+        new = dict(CLIMATE, air='18.7', layers=[
+            {'layer': n, 'min': '80', 'max': '110'} for n in (1, 2, 3)])
+        remember('P-A', [new], '2026-10-20', self.folder)
+        saved = last_for_project('P-A', self.folder)['variants']['0']
+        self.assertEqual(saved['climate']['air'], '18.7')
+        self.assertEqual(saved['layers'][0]['min'], '80')
+
+    def test_partial_layer_ranges_refused_without_cache_mutation(self):
+        remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
+        before = (self.folder / 'akz_presets.json').read_bytes()
+        with self.assertRaises(Stop):
+            remember('P-A', [dict(CLIMATE, layers=LAYERS[:1])], '2026-10-20', self.folder)
+        self.assertEqual((self.folder / 'akz_presets.json').read_bytes(), before)
+
+    def test_invalid_range_refused(self):
+        with self.assertRaisesRegex(Stop, 'Минимальная'):
+            validate_layer_ranges([
+                {'layer': 1, 'min': '150', 'max': '120'},
+                *LAYERS[1:]])
+        with self.assertRaisesRegex(Stop, 'уникальные'):
+            validate_layer_ranges([LAYERS[0], LAYERS[0], LAYERS[1]])
+
+    def test_bad_schema_refused_without_overwrite(self):
+        target = self.folder / 'akz_presets.json'
+        target.write_text(json.dumps({'schema': 'OTHER', 'projects': {}}))
+        with self.assertRaisesRegex(Stop, 'формат'):
+            remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
+        self.assertIn('OTHER', target.read_text())
+
+    def test_excel_tokens_share_one_daily_climate(self):
+        fields = akz_values(dict(CLIMATE, layers=LAYERS))
+        self.assertEqual(fields['AIR'], '24.5')
+        self.assertEqual(fields['LAYER_1_RANGE'], '80–120')
+        self.assertEqual(fields['LAYER_2_RANGE'], '90–140')
+        self.assertEqual(fields['LAYER_3_RANGE'], '100–160')
+        self.assertNotIn('LAYERS', fields)
+
+    def test_old_template_without_ranges_remains_supported(self):
+        fields = akz_values(CLIMATE)
+        self.assertIn('THICKNESS', fields)
+        self.assertNotIn('LAYER_1_RANGE', fields)
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
