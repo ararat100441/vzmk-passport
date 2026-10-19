@@ -227,7 +227,7 @@ class App:
             except Exception as exc:self.error(exc)
         cols_tuple=cols
         ttk.Button(d,text='Импортировать подтверждённые назначения из справочника',command=import_assignments).pack(pady=3)
-        ttk.Label(d,text='АКЗ: один набор климата на все три слоя в пределах одного дня и варианта акта; фактическая средняя толщина, материал и протокол вводятся для нового контроля.').pack(pady=6)
+        ttk.Label(d,text='АКЗ: один набор климата на три слоя в день. Для трёхслойного акта средние значения сухой толщины вводятся ниже, по этапам 1/2/3.').pack(pady=6)
         if presets['variants']:
             ttk.Label(d,text='Предзаполнены ПОСЛЕДНИЕ показатели выбранного объекта. Дата прежнего контроля: '+
                       ', '.join(sorted({v.get('last_akz_date','') for v in presets['variants'].values() if v.get('last_akz_date')}))+
@@ -235,7 +235,7 @@ class App:
         ccols=('variant','air','surface','humidity','dew','thickness','material','basis')
         climates=ttk.Treeview(d,columns=ccols,show='headings',height=4)
         for c in ccols:
-            climates.heading(c,text={'variant':'№ АКЗ','air':'Воздух °C','surface':'Поверхн. °C','humidity':'Влажность %','dew':'Роса °C','thickness':'Фактическая толщина, мкм','material':'Материал','basis':'Послойный протокол'}[c]);climates.column(c,width=130)
+            climates.heading(c,text={'variant':'№ АКЗ','air':'Воздух °C','surface':'Поверхн. °C','humidity':'Влажность %','dew':'Роса °C','thickness':'Толщина (старый формат), мкм','material':'Материал','basis':'Послойный протокол'}[c]);climates.column(c,width=130)
         climates.pack(fill='x',padx=10);self.editable(climates,immutable={0})
         prev={int(c['variant']):c for c in self.facts.get('climates',[])}
         defaults=presets['variants']
