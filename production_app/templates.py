@@ -1,13 +1,13 @@
 """Read-only preflight. Historical issued facts are never used as blank forms."""
-import re,zipfile
+import re
 from pathlib import Path
-from xml.etree import ElementTree as E
 from passport_app.appendix import inspect_template
 from passport_app.excel import load_book
 from .storage import Stop
+from .word_controls import inspect_word_fields
 
 WORD_REQUIRED={
-    'vik':{'NUMBER','CONTRACT','OBJECT','CIPHER','VIK_DATE','RESPONSIBLE','EVIDENCE','VIK_TABLE'},
+    'vik':{'NUMBER','CONTRACT','OBJECT','CIPHER','VIK_DATE','RESPONSIBLE','EVIDENCE'},
     'uzk':{'NUMBER','OBJECT','CIPHER','UZK_DATE','RESPONSIBLE','EVIDENCE','UZK_TABLE'},
     'quality':{'NUMBER','CONTRACT','CUSTOMER','OBJECT','CIPHER','MASS','STEEL','KM','KMD_COMPANY','RESPONSIBLE','EVIDENCE'},
 }
@@ -26,10 +26,13 @@ def validate(profile,project,variants,training=False):
                 inspect_template(path,project);continue
             if role in WORD_REQUIRED:
                 if path.suffix.lower()!='.docx':raise Stop('Нужна форма DOCX.')
-                with zipfile.ZipFile(path) as z:
-                    root=E.fromstring(z.read('word/document.xml'))
-                    text=''.join(root.itertext())
-                required=WORD_REQUIRED[role]-({'VIK_TABLE'} if training else set())
+                tokens, controls = inspect_word_fields(path)
+                # Historical approved VIK layouts refer to the appendix and protocols
+                # rather than including a per-mark table. If an explicit {{VIK_TABLE}}
+                # marker exists, the renderer still adds one; otherwise no new table
+                # is imposed on the approved two-act form.
+                required=WORD_REQUIRED[role]
+                provided = tokens | controls
             else:
                 if path.suffix.lower()!='.xlsx':raise Stop('Нужна форма XLSX.')
                 book=load_book(path)
@@ -41,7 +44,25 @@ def validate(profile,project,variants,training=False):
                         if len(markers)!=1 or markers[0].column!=1 or sheet.cell(markers[0].row+1,1).value!='Итого':raise Stop('Нужна одна строка {{AKZ_MARKS}} в A и следующая строка «Итого».')
                 finally:book.close()
                 required={'NUMBER','OBJECT','AKZ_DATE','AKZ_MARKS'} if role.startswith('akz_appendix') else AKZ_REQUIRED
-            missing=required-set(TOKEN.findall(text))
+                provided = set(TOKEN.findall(text))
+                # An approved three-layer act may display ranges instead of
+                # the old single THICKNESS field. Never accept a partial set
+                # of layer placeholders or substitute one layer for another.
+                if role.startswith('akz') and not role.startswith('akz_appendix'):
+                    layer_tokens={key for key in provided if key.startswith('LAYER_')}
+                    if layer_tokens:
+                        expected={f'LAYER_{n}_RANGE' for n in (1,2,3)}
+                        numeric={f'LAYER_{n}_{edge}' for n in (1,2,3) for edge in ('MIN','MAX')}
+                        means={f'LAYER_{n}_DRY_AVG' for n in (1,2,3)}
+                        totals={f'LAYER_{n}_{edge}' for n in (1,2,3) for edge in ('TOTAL_MIN','TOTAL_MAX')}
+                        if not (expected.issubset(provided) or numeric.issubset(provided)):
+                            raise Stop('Форма трёхслойного АКЗ должна содержать диапазоны всех трёх слоёв.')
+                        if not means.issubset(provided):
+                            raise Stop('Форма трёхслойного АКЗ должна содержать среднюю сухую толщину после всех трёх слоёв.')
+                        if layer_tokens-(expected|numeric|means|totals):
+                            raise Stop('Неподдержанное поле трёхслойного АКЗ.')
+                        required = (AKZ_REQUIRED-{'THICKNESS'})|means
+            missing=required-provided
             if missing:raise Stop('Нет полей '+', '.join('{{'+k+'}}' for k in sorted(missing))+'. Оформленный исторический акт не является пустой формой для новых результатов.')
         except Exception as exc:errors.append(role+' — '+str(path)+'\n'+str(exc))
     if errors:raise Stop('Формы объекта не готовы для выпуска:\n\n'+'\n\n'.join(errors))

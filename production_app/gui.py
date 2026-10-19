@@ -4,7 +4,7 @@ from uuid import uuid4
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 from .storage import local_root,read,save,sha,Stop
-from . import model,core,VERSION
+from . import model,core,akz_presets,VERSION
 
 class App:
     def __init__(self,root):
@@ -173,6 +173,12 @@ class App:
         if self.active:return
         try:v=model.visible_vom(self.vom.get())
         except Exception as exc:self.error(exc);return
+        presets={'saved_at':'','variants':{}}
+        if not self.cfg.get('training'):
+            try:presets=akz_presets.last_for_project(self.project.get())
+            except Stop as exc:
+                # A damaged optional cache must never block new ACTUAL data.
+                self.write('Подсказки АКЗ не загружены (ввод доступен вручную): '+str(exc))
         d=tk.Toplevel(self.root);d.title('Фактические результаты — '+self.project.get()+' '+self.number.get());self.fit(d,1160,760)
         d.transient(self.root);d.grab_set()
         window=d;window.bind('<Escape>',lambda e:window.destroy());d=self.scroll_content(window)
@@ -221,14 +227,42 @@ class App:
             except Exception as exc:self.error(exc)
         cols_tuple=cols
         ttk.Button(d,text='Импортировать подтверждённые назначения из справочника',command=import_assignments).pack(pady=3)
-        ttk.Label(d,text='Измерения АКЗ по каждому использованному варианту: воздух / поверхность / влажность / роса / толщина; материал и ссылка на послойные протоколы.').pack(pady=6)
+        ttk.Label(d,text='АКЗ: один набор климата на три слоя в день. Для трёхслойного акта средние значения сухой толщины вводятся ниже, по этапам 1/2/3.').pack(pady=6)
+        if presets['variants']:
+            ttk.Label(d,text='Предзаполнены ПОСЛЕДНИЕ показатели выбранного объекта. Дата прежнего контроля: '+
+                      ', '.join(sorted({v.get('last_akz_date','') for v in presets['variants'].values() if v.get('last_akz_date')}))+
+                      '. Это подсказки: перед новым выпуском сверьте их с фактическими измерениями.',wraplength=1080).pack(pady=4)
         ccols=('variant','air','surface','humidity','dew','thickness','material','basis')
         climates=ttk.Treeview(d,columns=ccols,show='headings',height=4)
         for c in ccols:
-            climates.heading(c,text={'variant':'№ АКЗ','air':'Воздух °C','surface':'Поверхн. °C','humidity':'Влажность %','dew':'Роса °C','thickness':'Толщина мкм','material':'Материал','basis':'Послойный протокол'}[c]);climates.column(c,width=130)
+            climates.heading(c,text={'variant':'№ АКЗ','air':'Воздух °C','surface':'Поверхн. °C','humidity':'Влажность %','dew':'Роса °C','thickness':'Толщина (старый формат), мкм','material':'Материал','basis':'Послойный протокол'}[c]);climates.column(c,width=130)
         climates.pack(fill='x',padx=10);self.editable(climates,immutable={0})
-        prev={c['variant']:c for c in self.facts.get('climates',[])}
-        for n in range(4):climates.insert('','end',values=[n]+[prev.get(n,{}).get(c,'') for c in ccols[1:]])
+        prev={int(c['variant']):c for c in self.facts.get('climates',[])}
+        defaults=presets['variants']
+        for n in range(4):
+            fresh=prev.get(n)
+            cached=(defaults.get(str(n)) or presets.get('latest',{})).get('climate',{})
+            values=(fresh if fresh is not None else cached)
+            climates.insert('','end',values=[n]+[values.get(c,'') if c in akz_presets.CLIMATE_FIELDS or fresh is not None else '' for c in ccols[1:]])
+        ttk.Label(d,text='АКЗ: допустимый диапазон каждого слоя и фактически измеренная СРЕДНЯЯ СУХАЯ ТОЛЩИНА после слоя (нарастающим итогом). Минимальные и максимальные фактические замеры НЕ требуются.',wraplength=1070).pack(pady=6)
+        lcols=('variant','layer','min','max','average')
+        layer_frame=ttk.Frame(d);layer_frame.pack(fill='x',padx=10)
+        layers_grid=ttk.Treeview(layer_frame,columns=lcols,show='headings',height=7)
+        for col,label,width in [('variant','№ АКЗ',80),('layer','Слой',80),('min','От, мкм',160),('max','До, мкм',160),('average','Средняя сухая после слоя, мкм',250)]:
+            layers_grid.heading(col,text=label);layers_grid.column(col,width=width)
+        layer_scroll=ttk.Scrollbar(layer_frame,orient='vertical',command=layers_grid.yview)
+        layers_grid.configure(yscrollcommand=layer_scroll.set)
+        layer_scroll.pack(side='right',fill='y');layers_grid.pack(fill='x')
+        self.editable(layers_grid,immutable={0,1})
+        for n in range(4):
+            current={int(x['layer']):x for x in prev.get(n,{}).get('layers',[])}
+            observed={int(x['layer']):x for x in prev.get(n,{}).get('dry_averages',[])}
+            cached={int(x['layer']):x for x in (defaults.get(str(n)) or presets.get('latest',{})).get('layers',[])}
+            for layer in (1,2,3):
+                value=current.get(layer,cached.get(layer,{}))
+                # Measured averages are NEVER loaded from old project presets.
+                layers_grid.insert('','end',values=(n,layer,value.get('min',''),value.get('max',''),
+                                                   observed.get(layer,{}).get('average','')))
         proofs=list(self.facts.get('evidence',[]));proof_label=ttk.Label(d,text='Протоколов: '+str(len(proofs)));proof_label.pack()
         def add():
             for f in filedialog.askopenfilenames(title='Первичные протоколы фактического контроля'):
@@ -243,9 +277,24 @@ class App:
                 for item in grid.get_children():
                     row=dict(zip(cols,grid.item(item,'values')))
                     row['akz']=int(row['akz']) if row['akz']!='' else None;data['marks'].append(row)
+                ranges_by_variant={n:[] for n in range(4)}
+                averages_by_variant={n:[] for n in range(4)}
+                for item in layers_grid.get_children():
+                    row=dict(zip(lcols,layers_grid.item(item,'values')))
+                    if any(str(row[k]).strip() for k in ('min','max','average')):
+                        n=int(row['variant'])
+                        ranges_by_variant[n].append({'layer':int(row['layer']),'min':row['min'],'max':row['max']})
+                        averages_by_variant[n].append({'layer':int(row['layer']),'average':row['average']})
+                used={r['akz'] for r in data['marks'] if r['akz'] is not None}
                 for item in climates.get_children():
                     row=dict(zip(ccols,climates.item(item,'values')))
-                    if any(row[k] for k in ccols[1:]):row['variant']=int(row['variant']);data['climates'].append(row)
+                    n=int(row['variant'])
+                    if n not in used:continue
+                    row['variant']=n
+                    if ranges_by_variant[n]:
+                        row['layers']=ranges_by_variant[n]
+                        row['dry_averages']=averages_by_variant[n]
+                    data['climates'].append(row)
                 from .facts import validate
                 validate(data,v,self.project.get(),self.number.get(),self.cfg.get('training',False))
                 self.facts=data;self.invalidate();window.destroy();self.write('Фактические данные сохранены локально в текущей заявке. Исходники не изменены.')
@@ -294,7 +343,17 @@ class App:
     def released(self,r):self.run('commit',{'path':self.plan,'release_result':self.result_path},self.committed)
     def committed(self,r):self.run('readback',{'journal':r['journal']},lambda v:self.run('complete',{'journal':r['journal'],'readback_result':self.result_path},self.completed))
     def completed(self,r):
-        self.write('ГОТОВО. '+str(r));messagebox.showinfo('Проверенный результат',str(r));self.invalidate();self.refresh()
+        self.write('ГОТОВО. '+str(r))
+        # Store preferences only for an actually completed production issue.
+        # Old protocols, measurement thicknesses, dates and approvals never
+        # become facts of the next passport.
+        if r.get('state')=='ГОТОВО' and not self.cfg.get('training') and self.facts.get('kind')=='ACTUAL':
+            try:
+                if akz_presets.remember(self.project.get(),self.facts.get('climates',[]),self.facts.get('akz_date')):
+                    self.write('Последние климатические показатели и диапазоны слоёв сохранены только для объекта '+self.project.get()+'.')
+            except Exception as exc:
+                self.write('Выпуск завершён, но сохранить подсказки АКЗ не удалось: '+str(exc))
+        messagebox.showinfo('Проверенный результат',str(r));self.invalidate();self.refresh()
     def recovery(self):
         if self.active:return
         try:

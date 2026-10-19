@@ -8,6 +8,8 @@ from passport_app.vik import word_session,open_word
 from passport_app.appendix import generate_appendix
 from .storage import Stop,sha
 from .model import filename,columns
+from .word_controls import fill_word_controls
+from .facts import validate_layer_ranges,validate_dry_averages
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
@@ -79,6 +81,11 @@ def word_table(doc,token,headers,rows):
         for c,value in enumerate(row,1):table.Cell(n,c).Range.Text=str(value)
 
 def tokens_excel(sheet,values):
+    # Preserve number types in Excel when a cell contains a single numeric
+    # placeholder, especially climate and coating-range bounds used by formulas.
+    numeric_keys={'AIR','SURFACE','HUMIDITY','DEW','THICKNESS'}
+    numeric_keys.update('LAYER_'+str(n)+'_'+edge
+                        for n in (1,2,3) for edge in ('MIN','MAX','DRY_AVG','TOTAL_MIN','TOTAL_MAX'))
     used=sheet.UsedRange
     for row in range(used.Row,used.Row+used.Rows.Count):
         for col in range(used.Column,used.Column+used.Columns.Count):
@@ -86,8 +93,40 @@ def tokens_excel(sheet,values):
             if cell.HasFormula:continue
             v=cell.Value2
             if isinstance(v,str) and '{{' in v:
+                key=v[2:-2] if v.startswith('{{') and v.endswith('}}') else ''
+                if key in numeric_keys and key in values:
+                    numeric_value=Decimal(str(values[key]).replace(',','.'))
+                    if not numeric_value.is_finite():
+                        raise Stop('Некорректное числовое поле Excel: '+key)
+                    cell.Value2=float(numeric_value)
+                    continue
                 for key,value in values.items():v=v.replace('{{'+key+'}}',str(value))
                 cell.Value2=v
+
+def akz_values(climate):
+    """One daily climate set shared by all three coating layers.
+
+    Range tokens can be placed on an approved 3-layer Excel form:
+    {{LAYER_1_MIN}}, {{LAYER_1_MAX}}, {{LAYER_1_RANGE}}, etc.
+    A range is a specification, never a replacement for actual wet/dry
+    measurements and their primary protocols.
+    """
+    values={str(key).upper():value for key,value in climate.items()
+            if key not in ('variant','layers','dry_averages')}
+    if climate.get('layers'):
+        checked=validate_dry_averages(climate['layers'],climate.get('dry_averages'))
+        for entry in validate_layer_ranges(climate['layers']):
+            prefix='LAYER_'+str(entry['layer'])+'_'
+            values[prefix+'MIN']=entry['min']
+            values[prefix+'MAX']=entry['max']
+            values[prefix+'RANGE']=entry['min']+'–'+entry['max']
+        for entry in checked:
+            prefix='LAYER_'+str(entry['layer'])+'_'
+            values[prefix+'DRY_AVG']=entry['average']
+            values[prefix+'TOTAL_MIN']=entry['required_total_min']
+            values[prefix+'TOTAL_MAX']=entry['required_total_max']
+    return values
+
 
 def akz_rows(sheet,rows):
     marker=sheet.UsedRange.Find(What='{{AKZ_MARKS}}',LookAt=1)
@@ -137,7 +176,7 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                     if role.startswith('akz_appendix'):
                         selected=[r for r in vom.rows if by_mark[str(r[0])]['akz']==variant]
                         akz_rows(s,selected)
-                    native_values=values|{str(k).upper():v for k,v in climate.items()}
+                    native_values=values|akz_values(climate)
                     tokens_excel(s,native_values)
                     app.CalculateFull();b.Save()
                 finally:b.Close(SaveChanges=False)
@@ -155,8 +194,11 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
             ref=profile['templates'][role];target=folder/(filename(facts['number'])+' - '+role+'.docx')
             shutil.copyfile(ref['path'],target);doc=open_word(app,target,readonly=False)
             try:
-                # Current approved forms must carry an explicit number token.
-                if '{{NUMBER}}' not in doc.Content.Text:raise Stop('Нужна утверждённая форма с {{NUMBER}}: '+ref['path'])
+                # Native tagged Word fields are allowed only when still blank.
+                has_number_token = '{{NUMBER}}' in doc.Content.Text
+                bound_controls = fill_word_controls(doc, values)
+                if not has_number_token and 'NUMBER' not in bound_controls:
+                    raise Stop('Нужна утверждённая форма с {{NUMBER}} или пустым полем PASSPORT_NO/NUMBER: '+ref['path'])
                 if role=='uzk':
                     rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
                     word_table(doc,'{{UZK_TABLE}}',('Марка','ВОМ, шт','УЗК, шт','Результат','Основание'),rows)
