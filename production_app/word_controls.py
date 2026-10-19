@@ -12,7 +12,8 @@ from .storage import Stop
 
 W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
 TOKEN = re.compile(r'\{\{([A-Z_0-9]+)\}\}')
-TAG_ALIASES = {'PASSPORT_NO': 'NUMBER'}
+TAG_ALIASES = {'PASSPORT_NO': 'NUMBER', 'DOGOVOR_NO': 'CONTRACT',
+               'KMD_CODE': 'CIPHER', 'STEEL_MARK': 'STEEL'}
 BINDABLE_FIELDS = frozenset({
     'NUMBER', 'CONTRACT', 'CUSTOMER', 'OBJECT', 'CIPHER', 'MASS',
     'START_DATE', 'END_DATE', 'KM', 'KMD_COMPANY', 'STEEL',
