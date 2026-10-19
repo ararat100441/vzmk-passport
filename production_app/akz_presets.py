@@ -107,11 +107,9 @@ def remember(project, climates, akz_date, directory=None):
         raise Stop('Повреждена история АКЗ объекта. Перезапись запрещена.')
     project_data = deepcopy(project_data)
     for variant, item in candidate.items():
-        # Retain the last approved range if an older form did not have layer
-        # ranges. The UI still requires the user to reconfirm each reused range.
-        old = project_data['variants'].get(variant, {})
-        if 'layers' not in item and isinstance(old, dict) and old.get('layers'):
-            item['layers'] = validate_layer_ranges(old['layers'])
+        # Replace the selected variant's previous defaults, including any old
+        # layer ranges. Do not silently retain an older coating specification
+        # if the latest issued document had none.
         project_data['variants'][variant] = item
     project_data['saved_at'] = datetime.now(timezone.utc).isoformat(timespec='seconds')
     data['projects'][project] = project_data
