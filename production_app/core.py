@@ -204,8 +204,19 @@ def release(path):
     output=run/'release';output.mkdir(exist_ok=False)
     files=office.release_copies(prepared['outputs'],output,d['cfg'].get('training',False))
     office.verify_documents(files,d['number'],d['cfg'].get('training',False),draft=False)
-    save(run/'release.json',{'plan_seal':d['seal'],'outputs':files,'fingerprints':pins([o['path'] for o in files])})
-    return {'status':'PASS','plan':str(path),'task':'release'}
+    # Only the FINAL, unwatermarked release copies enter the printable PDF.
+    # A failed native Office export stops before any registry modification.
+    from .print_pdf import create_print_pdf, verify_package_print
+    printed=create_print_pdf(files,output,Path(d['target']).name)
+    files.append(printed['output'])
+    result={'plan_seal':d['seal'],'outputs':files,
+            'fingerprints':pins([o['path'] for o in files]),
+            'print_pdf':printed['manifest']}
+    verify_package_print(result,Path(d['target']).name)
+    save(run/'release.json',result)
+    return {'status':'PASS','plan':str(path),'task':'release',
+            'print_pdf':printed['manifest']['filename'],
+            'print_pdf_pages':printed['manifest']['pages']}
 
 def commit(path,release_result):
     d=load_plan(path);run=Path(d['run']);registry=safe(d['registry']);target=safe(d['target'])
@@ -214,6 +225,8 @@ def commit(path,release_result):
     released=read(run/'release.json')
     if released['plan_seal']!=d['seal']:raise Stop('Другой выпуск.')
     verify_pins(released['fingerprints'])
+    from .print_pdf import verify_package_print
+    verify_package_print(released,target.name)
     if confirmation['plan_seal']!=d['seal'] or confirmation['verified_sha256']!=sha(run/'verified.json') or not confirmation['reviewed']:raise Stop('Нет действительного подтверждения выпуска.')
     verify_pins(verified['fingerprints']);v=model.visible_vom(d['vom'])
     factual.validate(d['facts']|{'documents_reviewed':True},v,d['project'],d['number'],d['cfg'].get('training',False),True)
@@ -281,9 +294,18 @@ def readback(journal):
             found=[e for e in r.projects[d['project']] if e['number']==d['number']]
             if len(found)!=1 or b.Worksheets(r.sheet).Cells(found[0]['row'],r.columns['number']).Value2!=d['number']:raise Stop('Excel: новая строка не подтверждена.')
         finally:b.Close(SaveChanges=False)
-    docs=[{'path':str(target/name),'role':name.rsplit(' - ',1)[-1].rsplit('.',1)[0]} for name in s['output_hashes']]
+    released=read(Path(s['plan']).parent/'release.json')
+    from .print_pdf import verify_package_print,verify_print_pdf
+    print_manifest=verify_package_print(released,target.name)
+    name=print_manifest['filename']
+    if name not in s['output_hashes'] or s['output_hashes'][name]!=print_manifest['sha256']:
+        raise Stop('Сводный PDF не совпадает с манифестом выпуска.')
+    verify_print_pdf(target/name,expected_pages=print_manifest['pages'])
+    docs=[{'path':str(target/name),'role':name.rsplit(' - ',1)[-1].rsplit('.',1)[0]}
+          for name in s['output_hashes'] if not name.lower().endswith('.pdf')]
     office.verify_documents(docs,d['number'],d['cfg'].get('training',False),False)
-    return {'status':'PASS','task':'readback','plan':s['plan'],'journal':str(journal)}
+    return {'status':'PASS','task':'readback','plan':s['plan'],'journal':str(journal),
+            'print_pdf_pages':print_manifest['pages']}
 
 def complete(journal,readback_result):
     journal=safe(journal);s=journal_read(journal);registry=safe(s['registry'])
@@ -294,7 +316,11 @@ def complete(journal,readback_result):
         for name,h in s['output_hashes'].items():
             if sha(safe(s['target'])/name)!=h:raise Stop('Документ изменился после проверки.')
         s['phase']='COMPLETE';journal_write(journal,s)
-    return {'status':'PASS','state':'ГОТОВО','folder':s['target'],'journal':str(journal),'backup':s['backup']}
+    print_name=Path(s['target']).name+'.pdf'
+    if print_name not in s['output_hashes']:
+        raise Stop('В завершённом комплекте отсутствует сводный PDF.')
+    return {'status':'PASS','state':'ГОТОВО','folder':s['target'],'journal':str(journal),
+            'backup':s['backup'],'print_pdf':str(Path(s['target'])/print_name)}
 
 def recover(journal):
     journal=safe(journal);s=journal_read(journal);registry=safe(s['registry'])
