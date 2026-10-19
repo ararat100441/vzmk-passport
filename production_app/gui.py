@@ -171,11 +171,14 @@ class App:
 
     def fact_dialog(self):
         if self.active:return
-        try:
-            v=model.visible_vom(self.vom.get())
-            presets=({'saved_at':'','variants':{}} if self.cfg.get('training')
-                     else akz_presets.last_for_project(self.project.get()))
+        try:v=model.visible_vom(self.vom.get())
         except Exception as exc:self.error(exc);return
+        presets={'saved_at':'','variants':{}}
+        if not self.cfg.get('training'):
+            try:presets=akz_presets.last_for_project(self.project.get())
+            except Stop as exc:
+                # A damaged optional cache must never block new ACTUAL data.
+                self.write('Подсказки АКЗ не загружены (ввод доступен вручную): '+str(exc))
         d=tk.Toplevel(self.root);d.title('Фактические результаты — '+self.project.get()+' '+self.number.get());self.fit(d,1160,760)
         d.transient(self.root);d.grab_set()
         window=d;window.bind('<Escape>',lambda e:window.destroy());d=self.scroll_content(window)
@@ -228,7 +231,7 @@ class App:
         if presets['variants']:
             ttk.Label(d,text='Предзаполнены ПОСЛЕДНИЕ показатели выбранного объекта. Дата прежнего контроля: '+
                       ', '.join(sorted({v.get('last_akz_date','') for v in presets['variants'].values() if v.get('last_akz_date')}))+
-                      '. Это подсказки: перед новым выпуском сверьте их с фактическими измерениями.').pack(pady=4)
+                      '. Это подсказки: перед новым выпуском сверьте их с фактическими измерениями.',wraplength=1080).pack(pady=4)
         ccols=('variant','air','surface','humidity','dew','thickness','material','basis')
         climates=ttk.Treeview(d,columns=ccols,show='headings',height=4)
         for c in ccols:
