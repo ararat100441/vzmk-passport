@@ -37,6 +37,14 @@ class Presets(unittest.TestCase):
         self.assertEqual(result['variants']['0']['last_akz_date'], '2026-10-19')
         self.assertEqual(last_for_project('P-B', self.folder)['variants'], {})
 
+    def test_project_latest_fallback_available_to_new_variant(self):
+        remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
+        loaded = last_for_project('P-A', self.folder)
+        self.assertEqual(loaded['latest']['climate']['air'], '24.5')
+        self.assertEqual(loaded['latest']['layers'], LAYERS)
+        self.assertNotIn('1', loaded['variants'])
+        self.assertEqual(last_for_project('P-B', self.folder)['latest'], {})
+
     def test_other_project_does_not_mutate_first(self):
         remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
         other = dict(CLIMATE, air='19.2', layers=[
