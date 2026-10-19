@@ -9,6 +9,7 @@ from passport_app.appendix import generate_appendix
 from .storage import Stop,sha
 from .model import filename,columns
 from .word_controls import fill_word_controls
+from .facts import validate_layer_ranges
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
@@ -90,6 +91,25 @@ def tokens_excel(sheet,values):
                 for key,value in values.items():v=v.replace('{{'+key+'}}',str(value))
                 cell.Value2=v
 
+def akz_values(climate):
+    """One daily climate set shared by all three coating layers.
+
+    Range tokens can be placed on an approved 3-layer Excel form:
+    {{LAYER_1_MIN}}, {{LAYER_1_MAX}}, {{LAYER_1_RANGE}}, etc.
+    A range is a specification, never a replacement for actual wet/dry
+    measurements and their primary protocols.
+    """
+    values={str(key).upper():value for key,value in climate.items()
+            if key not in ('variant','layers')}
+    if climate.get('layers'):
+        for entry in validate_layer_ranges(climate['layers']):
+            prefix='LAYER_'+str(entry['layer'])+'_'
+            values[prefix+'MIN']=entry['min']
+            values[prefix+'MAX']=entry['max']
+            values[prefix+'RANGE']=entry['min']+'–'+entry['max']
+    return values
+
+
 def akz_rows(sheet,rows):
     marker=sheet.UsedRange.Find(What='{{AKZ_MARKS}}',LookAt=1)
     if marker is None:raise Stop('Шаблон приложения АКЗ не содержит {{AKZ_MARKS}}.')
@@ -138,7 +158,7 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                     if role.startswith('akz_appendix'):
                         selected=[r for r in vom.rows if by_mark[str(r[0])]['akz']==variant]
                         akz_rows(s,selected)
-                    native_values=values|{str(k).upper():v for k,v in climate.items()}
+                    native_values=values|akz_values(climate)
                     tokens_excel(s,native_values)
                     app.CalculateFull();b.Save()
                 finally:b.Close(SaveChanges=False)
