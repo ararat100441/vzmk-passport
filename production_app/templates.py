@@ -7,7 +7,7 @@ from .storage import Stop
 from .word_controls import inspect_word_fields
 
 WORD_REQUIRED={
-    'vik':{'NUMBER','CONTRACT','OBJECT','CIPHER','VIK_DATE','RESPONSIBLE','EVIDENCE','VIK_TABLE'},
+    'vik':{'NUMBER','CONTRACT','OBJECT','CIPHER','VIK_DATE','RESPONSIBLE','EVIDENCE'},
     'uzk':{'NUMBER','OBJECT','CIPHER','UZK_DATE','RESPONSIBLE','EVIDENCE','UZK_TABLE'},
     'quality':{'NUMBER','CONTRACT','CUSTOMER','OBJECT','CIPHER','MASS','STEEL','KM','KMD_COMPANY','RESPONSIBLE','EVIDENCE'},
 }
@@ -27,7 +27,11 @@ def validate(profile,project,variants,training=False):
             if role in WORD_REQUIRED:
                 if path.suffix.lower()!='.docx':raise Stop('Нужна форма DOCX.')
                 tokens, controls = inspect_word_fields(path)
-                required=WORD_REQUIRED[role]-({'VIK_TABLE'} if training else set())
+                # Historical approved VIK layouts refer to the appendix and protocols
+                # rather than including a per-mark table. If an explicit {{VIK_TABLE}}
+                # marker exists, the renderer still adds one; otherwise no new table
+                # is imposed on the approved two-act form.
+                required=WORD_REQUIRED[role]
                 provided = tokens | controls
             else:
                 if path.suffix.lower()!='.xlsx':raise Stop('Нужна форма XLSX.')
