@@ -62,6 +62,23 @@ class Presets(unittest.TestCase):
         self.assertEqual(saved['climate']['air'], '18.7')
         self.assertEqual(saved['layers'][0]['min'], '80')
 
+    def test_missing_ranges_in_latest_issue_clears_old_ranges(self):
+        remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
+        remember('P-A', [dict(CLIMATE, air='22.0')], '2026-10-20', self.folder)
+        saved = last_for_project('P-A', self.folder)['variants']['0']
+        self.assertNotIn('layers', saved)
+        self.assertEqual(saved['climate']['air'], '22.0')
+
+    def test_other_variants_of_same_project_stay_separate(self):
+        item0 = dict(CLIMATE, layers=LAYERS)
+        item1 = dict(CLIMATE, variant=1, air='22', layers=[
+            {'layer': n, 'min': '50', 'max': '85'} for n in (1, 2, 3)])
+        remember('P-A', [item0, item1], '2026-10-19', self.folder)
+        saved = last_for_project('P-A', self.folder)['variants']
+        self.assertEqual(saved['0']['climate']['air'], '24.5')
+        self.assertEqual(saved['1']['climate']['air'], '22')
+        self.assertNotEqual(saved['0']['layers'], saved['1']['layers'])
+
     def test_partial_layer_ranges_refused_without_cache_mutation(self):
         remember('P-A', [dict(CLIMATE, layers=LAYERS)], '2026-10-19', self.folder)
         before = (self.folder / 'akz_presets.json').read_bytes()
