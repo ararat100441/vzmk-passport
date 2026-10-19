@@ -34,6 +34,43 @@ def validate_layer_ranges(layers):
     return [result[n] for n in (1, 2, 3)]
 
 
+def validate_dry_averages(layers, averages):
+    """Compare measured mean dry coating after each layer with cumulative limits.
+
+    The three measurements are cumulative as in the supplied issued Excel act:
+    average after coat 1, average after coats 1+2, and average after 1+2+3.
+    Ranges are allowed specifications, not measured min/max observations.
+    """
+    limits = validate_layer_ranges(layers)
+    if not isinstance(averages, list) or len(averages) != 3:
+        raise Stop('Укажите среднюю толщину сухого покрытия после каждого из трёх слоёв.')
+    raw = {}
+    for item in averages:
+        if not isinstance(item, dict) or type(item.get('layer')) is not int:
+            raise Stop('Неверный номер этапа измерения средней толщины АКЗ.')
+        n = item['layer']
+        if n not in (1, 2, 3) or n in raw:
+            raise Stop('Средние толщины АКЗ должны соответствовать слоям 1, 2 и 3 без повторов.')
+        raw[n] = numeric(item.get('average'), 'средняя сухая толщина после слоя '+str(n), Decimal('0.001'))
+    low = high = previous = Decimal(0)
+    results = []
+    for layer in limits:
+        n = layer['layer']
+        low += Decimal(layer['min'])
+        high += Decimal(layer['max'])
+        measured = raw[n]
+        if measured < previous:
+            raise Stop('Средняя сухая толщина после слоя '+str(n)+' меньше предыдущего этапа.')
+        if not low <= measured <= high:
+            raise Stop('Средняя сухая толщина после слоя '+str(n)+
+                       ' выходит за суммарный диапазон '+format(low,'f')+'–'+format(high,'f')+' мкм.')
+        results.append({'layer':n, 'average':format(measured,'f'),
+                        'required_total_min':format(low,'f'),
+                        'required_total_max':format(high,'f')})
+        previous = measured
+    return results
+
+
 def validate(facts,vom,project,number,training=False,require_review=False):
     if facts.get('project')!=project or facts.get('number')!=number:raise Stop('Результаты контроля относятся к другому объекту/паспорту.')
     if facts.get('confirmed') is not True or not isinstance(facts.get('responsible'),str) or not facts['responsible'].strip() or facts.get('authorized') is not True:raise Stop('Нет подтверждения фактических результатов и полномочий ответственного.')
@@ -76,9 +113,12 @@ def validate(facts,vom,project,number,training=False,require_review=False):
         surface=numeric(c.get('surface'),'Температура поверхности',-60,100)
         dew=numeric(c.get('dew'),'Точка росы',-80,80)
         numeric(c.get('humidity'),'Влажность',0,100)
-        numeric(c.get('thickness'),'Толщина',Decimal('0.001'))
-        if 'layers' in c:
-            validate_layer_ranges(c['layers'])
+        if c.get('layers'):
+            # For three coats, the official act records MEASURED mean dry
+            # thickness after each successive coat, not measured min/max.
+            validate_dry_averages(c['layers'],c.get('dry_averages'))
+        else:
+            numeric(c.get('thickness'),'Средняя толщина',Decimal('0.001'))
         if surface<dew+3:raise Stop('Температура поверхности менее чем на 3°C выше точки росы. Выпуск заблокирован.')
         if not str(c.get('material','')).strip() or not str(c.get('basis','')).strip():raise Stop('Нет материала/протокола послойных измерений АКЗ.')
     proofs=facts.get('evidence',[])
