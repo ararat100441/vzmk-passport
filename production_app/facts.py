@@ -11,6 +11,29 @@ def numeric(value,label,minimum=None,maximum=None):
     if not v.is_finite() or minimum is not None and v<minimum or maximum is not None and v>maximum:raise Stop('Недопустимое значение: '+label)
     return v
 
+def validate_layer_ranges(layers):
+    """Exactly three positive per-layer ranges, in micrometres.
+
+    Ranges are reusable specifications/preferences, not evidence of measured
+    dry/wet coating thickness on a newly manufactured structure.
+    """
+    if not isinstance(layers, list) or len(layers) != 3:
+        raise Stop('Для трёхслойного АКЗ задайте диапазоны толщины всех трёх слоёв.')
+    result = {}
+    for entry in layers:
+        if not isinstance(entry, dict) or type(entry.get('layer')) is not int:
+            raise Stop('Неверный номер слоя АКЗ.')
+        n = entry['layer']
+        if n not in (1, 2, 3) or n in result:
+            raise Stop('Слои АКЗ должны иметь уникальные номера 1, 2, 3.')
+        low = numeric(entry.get('min'), 'минимальная толщина слоя '+str(n), Decimal('0.001'))
+        high = numeric(entry.get('max'), 'максимальная толщина слоя '+str(n), Decimal('0.001'))
+        if low > high:
+            raise Stop('Минимальная толщина превышает максимальную: слой '+str(n))
+        result[n] = {'layer': n, 'min': format(low, 'f'), 'max': format(high, 'f')}
+    return [result[n] for n in (1, 2, 3)]
+
+
 def validate(facts,vom,project,number,training=False,require_review=False):
     if facts.get('project')!=project or facts.get('number')!=number:raise Stop('Результаты контроля относятся к другому объекту/паспорту.')
     if facts.get('confirmed') is not True or not isinstance(facts.get('responsible'),str) or not facts['responsible'].strip() or facts.get('authorized') is not True:raise Stop('Нет подтверждения фактических результатов и полномочий ответственного.')
@@ -54,6 +77,8 @@ def validate(facts,vom,project,number,training=False,require_review=False):
         dew=numeric(c.get('dew'),'Точка росы',-80,80)
         numeric(c.get('humidity'),'Влажность',0,100)
         numeric(c.get('thickness'),'Толщина',Decimal('0.001'))
+        if 'layers' in c:
+            validate_layer_ranges(c['layers'])
         if surface<dew+3:raise Stop('Температура поверхности менее чем на 3°C выше точки росы. Выпуск заблокирован.')
         if not str(c.get('material','')).strip() or not str(c.get('basis','')).strip():raise Stop('Нет материала/протокола послойных измерений АКЗ.')
     proofs=facts.get('evidence',[])
