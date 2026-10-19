@@ -8,6 +8,7 @@ from passport_app.vik import word_session,open_word
 from passport_app.appendix import generate_appendix
 from .storage import Stop,sha
 from .model import filename,columns
+from .word_controls import fill_word_controls
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
@@ -155,8 +156,11 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
             ref=profile['templates'][role];target=folder/(filename(facts['number'])+' - '+role+'.docx')
             shutil.copyfile(ref['path'],target);doc=open_word(app,target,readonly=False)
             try:
-                # Current approved forms must carry an explicit number token.
-                if '{{NUMBER}}' not in doc.Content.Text:raise Stop('Нужна утверждённая форма с {{NUMBER}}: '+ref['path'])
+                # Native tagged Word fields are allowed only when still blank.
+                has_number_token = '{{NUMBER}}' in doc.Content.Text
+                bound_controls = fill_word_controls(doc, values)
+                if not has_number_token and 'NUMBER' not in bound_controls:
+                    raise Stop('Нужна утверждённая форма с {{NUMBER}} или пустым полем PASSPORT_NO/NUMBER: '+ref['path'])
                 if role=='uzk':
                     rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
                     word_table(doc,'{{UZK_TABLE}}',('Марка','ВОМ, шт','УЗК, шт','Результат','Основание'),rows)
