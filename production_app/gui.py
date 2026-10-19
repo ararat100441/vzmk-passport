@@ -244,11 +244,11 @@ class App:
             cached=(defaults.get(str(n)) or presets.get('latest',{})).get('climate',{})
             values=(fresh if fresh is not None else cached)
             climates.insert('','end',values=[n]+[values.get(c,'') if c in akz_presets.CLIMATE_FIELDS or fresh is not None else '' for c in ccols[1:]])
-        ttk.Label(d,text='ДИАПАЗОН ТОЛЩИНЫ ПО СЛОЯМ, мкм: отдельно минимум и максимум каждого из 3 слоёв. Сохранённые диапазоны — не результаты новых замеров.').pack(pady=6)
-        lcols=('variant','layer','min','max')
+        ttk.Label(d,text='АКЗ: допустимый диапазон каждого слоя и фактически измеренная СРЕДНЯЯ СУХАЯ ТОЛЩИНА после слоя (нарастающим итогом). Минимальные и максимальные фактические замеры НЕ требуются.',wraplength=1070).pack(pady=6)
+        lcols=('variant','layer','min','max','average')
         layer_frame=ttk.Frame(d);layer_frame.pack(fill='x',padx=10)
         layers_grid=ttk.Treeview(layer_frame,columns=lcols,show='headings',height=7)
-        for col,label,width in [('variant','№ АКЗ',80),('layer','Слой',80),('min','От, мкм',180),('max','До, мкм',180)]:
+        for col,label,width in [('variant','№ АКЗ',80),('layer','Слой',80),('min','От, мкм',160),('max','До, мкм',160),('average','Средняя сухая после слоя, мкм',250)]:
             layers_grid.heading(col,text=label);layers_grid.column(col,width=width)
         layer_scroll=ttk.Scrollbar(layer_frame,orient='vertical',command=layers_grid.yview)
         layers_grid.configure(yscrollcommand=layer_scroll.set)
@@ -256,10 +256,13 @@ class App:
         self.editable(layers_grid,immutable={0,1})
         for n in range(4):
             current={int(x['layer']):x for x in prev.get(n,{}).get('layers',[])}
+            observed={int(x['layer']):x for x in prev.get(n,{}).get('dry_averages',[])}
             cached={int(x['layer']):x for x in (defaults.get(str(n)) or presets.get('latest',{})).get('layers',[])}
             for layer in (1,2,3):
                 value=current.get(layer,cached.get(layer,{}))
-                layers_grid.insert('','end',values=(n,layer,value.get('min',''),value.get('max','')))
+                # Measured averages are NEVER loaded from old project presets.
+                layers_grid.insert('','end',values=(n,layer,value.get('min',''),value.get('max',''),
+                                                   observed.get(layer,{}).get('average','')))
         proofs=list(self.facts.get('evidence',[]));proof_label=ttk.Label(d,text='Протоколов: '+str(len(proofs)));proof_label.pack()
         def add():
             for f in filedialog.askopenfilenames(title='Первичные протоколы фактического контроля'):
@@ -275,18 +278,22 @@ class App:
                     row=dict(zip(cols,grid.item(item,'values')))
                     row['akz']=int(row['akz']) if row['akz']!='' else None;data['marks'].append(row)
                 ranges_by_variant={n:[] for n in range(4)}
+                averages_by_variant={n:[] for n in range(4)}
                 for item in layers_grid.get_children():
                     row=dict(zip(lcols,layers_grid.item(item,'values')))
-                    if str(row['min']).strip() or str(row['max']).strip():
+                    if any(str(row[k]).strip() for k in ('min','max','average')):
                         n=int(row['variant'])
                         ranges_by_variant[n].append({'layer':int(row['layer']),'min':row['min'],'max':row['max']})
+                        averages_by_variant[n].append({'layer':int(row['layer']),'average':row['average']})
                 used={r['akz'] for r in data['marks'] if r['akz'] is not None}
                 for item in climates.get_children():
                     row=dict(zip(ccols,climates.item(item,'values')))
                     n=int(row['variant'])
                     if n not in used:continue
                     row['variant']=n
-                    if ranges_by_variant[n]:row['layers']=ranges_by_variant[n]
+                    if ranges_by_variant[n]:
+                        row['layers']=ranges_by_variant[n]
+                        row['dry_averages']=averages_by_variant[n]
                     data['climates'].append(row)
                 from .facts import validate
                 validate(data,v,self.project.get(),self.number.get(),self.cfg.get('training',False))
