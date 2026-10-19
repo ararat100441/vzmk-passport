@@ -53,11 +53,15 @@ def validate(profile,project,variants,training=False):
                     if layer_tokens:
                         expected={f'LAYER_{n}_RANGE' for n in (1,2,3)}
                         numeric={f'LAYER_{n}_{edge}' for n in (1,2,3) for edge in ('MIN','MAX')}
+                        means={f'LAYER_{n}_DRY_AVG' for n in (1,2,3)}
+                        totals={f'LAYER_{n}_{edge}' for n in (1,2,3) for edge in ('TOTAL_MIN','TOTAL_MAX')}
                         if not (expected.issubset(provided) or numeric.issubset(provided)):
                             raise Stop('Форма трёхслойного АКЗ должна содержать диапазоны всех трёх слоёв.')
-                        if layer_tokens-(expected|numeric):
-                            raise Stop('Неподдержанное поле диапазона слоя АКЗ.')
-                        required = AKZ_REQUIRED-{'THICKNESS'}
+                        if not means.issubset(provided):
+                            raise Stop('Форма трёхслойного АКЗ должна содержать среднюю сухую толщину после всех трёх слоёв.')
+                        if layer_tokens-(expected|numeric|means|totals):
+                            raise Stop('Неподдержанное поле трёхслойного АКЗ.')
+                        required = (AKZ_REQUIRED-{'THICKNESS'})|means
             missing=required-provided
             if missing:raise Stop('Нет полей '+', '.join('{{'+k+'}}' for k in sorted(missing))+'. Оформленный исторический акт не является пустой формой для новых результатов.')
         except Exception as exc:errors.append(role+' — '+str(path)+'\n'+str(exc))
