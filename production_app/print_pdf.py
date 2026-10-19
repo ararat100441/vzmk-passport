@@ -131,6 +131,48 @@ def verify_print_pdf(path, *, expected_pages=None):
     return pages
 
 
+
+def verify_package_print(released, package_folder_name):
+    """Validate the print manifest, order, pages and hash before registry commit."""
+    if not isinstance(released, dict):
+        raise Stop('Отсутствует проверенный манифест выпускных документов.')
+    outputs = released.get('outputs')
+    if not isinstance(outputs, list):
+        raise Stop('Отсутствует список готовых документов.')
+    pdf_items = [item for item in outputs if item.get('role') == 'print_pdf']
+    if len(pdf_items) != 1:
+        raise Stop('В выпуске должен быть ровно один сводный PDF.')
+    ordered = ordered_sources([item for item in outputs if item.get('role') != 'print_pdf'])
+    path = Path(pdf_items[0]['path'])
+    manifest = released.get('print_pdf')
+    name = package_folder_name + '.pdf'
+    if (not isinstance(manifest, dict) or path.name != name or
+            manifest.get('filename') != name):
+        raise Stop('Название сводного PDF не совпадает с папкой паспорта.')
+    if any(item['path'].parent.resolve() != path.parent.resolve() for item in ordered):
+        raise Stop('Документы для печати и сводный PDF должны находиться в одной папке.')
+
+    sections = manifest.get('sections')
+    if not isinstance(sections, list) or len(sections) != len(ordered):
+        raise Stop('Неполный список разделов сводного PDF.')
+    expected_start = 1
+    for item, section in zip(ordered, sections):
+        if not isinstance(section, dict) or section.get('role') != item['role']:
+            raise Stop('Неверный порядок документов в сводном PDF.')
+        count = section.get('pages')
+        if (type(count) is not int or count < 1 or
+                section.get('start_page') != expected_start):
+            raise Stop('Неверная нумерация/количество страниц сводного PDF.')
+        expected_start += count
+    expected_count = expected_start - 1
+    if manifest.get('pages') != expected_count:
+        raise Stop('Не совпало количество страниц разделов PDF.')
+    if sha(path) != manifest.get('sha256'):
+        raise Stop('Сводный PDF изменился после формирования.')
+    verify_print_pdf(path, expected_pages=expected_count)
+    return manifest
+
+
 def create_print_pdf(outputs, release_folder, package_folder_name):
     """Return PDF output record + section manifest; no other files published.
 
