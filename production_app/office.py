@@ -9,7 +9,7 @@ from passport_app.appendix import generate_appendix
 from .storage import Stop,sha
 from .model import filename,columns
 from .word_controls import fill_word_controls
-from .facts import validate_layer_ranges
+from .facts import validate_layer_ranges,validate_dry_averages
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
@@ -85,7 +85,7 @@ def tokens_excel(sheet,values):
     # placeholder, especially climate and coating-range bounds used by formulas.
     numeric_keys={'AIR','SURFACE','HUMIDITY','DEW','THICKNESS'}
     numeric_keys.update('LAYER_'+str(n)+'_'+edge
-                        for n in (1,2,3) for edge in ('MIN','MAX'))
+                        for n in (1,2,3) for edge in ('MIN','MAX','DRY_AVG','TOTAL_MIN','TOTAL_MAX'))
     used=sheet.UsedRange
     for row in range(used.Row,used.Row+used.Rows.Count):
         for col in range(used.Column,used.Column+used.Columns.Count):
@@ -114,11 +114,17 @@ def akz_values(climate):
     values={str(key).upper():value for key,value in climate.items()
             if key not in ('variant','layers')}
     if climate.get('layers'):
+        checked=validate_dry_averages(climate['layers'],climate.get('dry_averages'))
         for entry in validate_layer_ranges(climate['layers']):
             prefix='LAYER_'+str(entry['layer'])+'_'
             values[prefix+'MIN']=entry['min']
             values[prefix+'MAX']=entry['max']
             values[prefix+'RANGE']=entry['min']+'–'+entry['max']
+        for entry in checked:
+            prefix='LAYER_'+str(entry['layer'])+'_'
+            values[prefix+'DRY_AVG']=entry['average']
+            values[prefix+'TOTAL_MIN']=entry['required_total_min']
+            values[prefix+'TOTAL_MAX']=entry['required_total_max']
     return values
 
 
