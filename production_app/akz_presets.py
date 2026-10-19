@@ -58,10 +58,10 @@ def last_for_project(project, directory=None):
     project = _project(project)
     data = _read_all(directory)['projects'].get(project)
     if data is None:
-        return {'saved_at': '', 'variants': {}}
+        return {'saved_at': '', 'variants': {}, 'latest': {}}
     if not isinstance(data, dict) or not isinstance(data.get('variants'), dict):
         raise Stop('Повреждены сохранённые показатели объекта: ' + project)
-    result = {'saved_at': str(data.get('saved_at', '')), 'variants': {}}
+    result = {'saved_at': str(data.get('saved_at', '')), 'variants': {}, 'latest': {}}
     for key, values in data['variants'].items():
         if key not in ('0', '1', '2', '3') or not isinstance(values, dict):
             raise Stop('Повреждена запись варианта АКЗ в параметрах объекта.')
@@ -70,6 +70,16 @@ def last_for_project(project, directory=None):
             item['layers'] = validate_layer_ranges(values['layers'])
         item['last_akz_date'] = str(values.get('last_akz_date', ''))
         result['variants'][key] = item
+    recent = data.get('latest')
+    if recent is None and result['variants']:
+        recent = result['variants'].get('0') or next(iter(result['variants'].values()))
+    if recent:
+        if not isinstance(recent, dict):
+            raise Stop('Повреждены общие последние настройки объекта.')
+        result['latest'] = {'climate': _normalize_climate(recent.get('climate'))}
+        if 'layers' in recent:
+            result['latest']['layers'] = validate_layer_ranges(recent['layers'])
+        result['latest']['last_akz_date'] = str(recent.get('last_akz_date', ''))
     return deepcopy(result)
 
 
@@ -111,6 +121,10 @@ def remember(project, climates, akz_date, directory=None):
         # layer ranges. Do not silently retain an older coating specification
         # if the latest issued document had none.
         project_data['variants'][variant] = item
+    # Also provide the most recent project-level defaults for a variant that
+    # has no earlier history of its own. Variant 0 is the current-passport act;
+    # all such values remain unconfirmed hints on the next issuance.
+    project_data['latest'] = deepcopy(candidate.get('0') or next(iter(candidate.values())))
     project_data['saved_at'] = datetime.now(timezone.utc).isoformat(timespec='seconds')
     data['projects'][project] = project_data
     save(_file(directory), data)
