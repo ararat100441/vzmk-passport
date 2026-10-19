@@ -54,6 +54,20 @@ class WordControlContracts(unittest.TestCase):
         self.assertIn('NUMBER', controls)
         self.assertIn('VIK_TABLE', tokens)
 
+    def test_observed_vik_field_aliases(self):
+        from production_app.word_controls import normalized_tag
+        self.assertEqual(normalized_tag('PASSPORT_NO'), 'NUMBER')
+        self.assertEqual(normalized_tag('DOGOVOR_NO'), 'CONTRACT')
+        self.assertEqual(normalized_tag('KMD_CODE'), 'CIPHER')
+        self.assertEqual(normalized_tag('STEEL_MARK'), 'STEEL')
+        self.assertEqual(normalized_tag('VIK_DATE'), 'VIK_DATE')
+
+    def test_historical_vik_without_mark_table_is_accepted_by_contract(self):
+        from production_app.templates import WORD_REQUIRED
+        self.assertNotIn('VIK_TABLE', WORD_REQUIRED['vik'])
+        self.assertIn('EVIDENCE', WORD_REQUIRED['vik'])
+        self.assertIn('RESPONSIBLE', WORD_REQUIRED['vik'])
+
     def test_filled_historical_number_is_refused(self):
         with self.assertRaisesRegex(Stop, 'историческими данными'):
             inspect_word_fields(self.doc(tagged('PASSPORT_NO', '18/1/2026')))
