@@ -1,10 +1,10 @@
 """Read-only preflight. Historical issued facts are never used as blank forms."""
-import re,zipfile
+import re
 from pathlib import Path
-from xml.etree import ElementTree as E
 from passport_app.appendix import inspect_template
 from passport_app.excel import load_book
 from .storage import Stop
+from .word_controls import inspect_word_fields
 
 WORD_REQUIRED={
     'vik':{'NUMBER','CONTRACT','OBJECT','CIPHER','VIK_DATE','RESPONSIBLE','EVIDENCE','VIK_TABLE'},
@@ -26,10 +26,9 @@ def validate(profile,project,variants,training=False):
                 inspect_template(path,project);continue
             if role in WORD_REQUIRED:
                 if path.suffix.lower()!='.docx':raise Stop('Нужна форма DOCX.')
-                with zipfile.ZipFile(path) as z:
-                    root=E.fromstring(z.read('word/document.xml'))
-                    text=''.join(root.itertext())
+                tokens, controls = inspect_word_fields(path)
                 required=WORD_REQUIRED[role]-({'VIK_TABLE'} if training else set())
+                provided = tokens | controls
             else:
                 if path.suffix.lower()!='.xlsx':raise Stop('Нужна форма XLSX.')
                 book=load_book(path)
@@ -41,7 +40,8 @@ def validate(profile,project,variants,training=False):
                         if len(markers)!=1 or markers[0].column!=1 or sheet.cell(markers[0].row+1,1).value!='Итого':raise Stop('Нужна одна строка {{AKZ_MARKS}} в A и следующая строка «Итого».')
                 finally:book.close()
                 required={'NUMBER','OBJECT','AKZ_DATE','AKZ_MARKS'} if role.startswith('akz_appendix') else AKZ_REQUIRED
-            missing=required-set(TOKEN.findall(text))
+                provided = set(TOKEN.findall(text))
+            missing=required-provided
             if missing:raise Stop('Нет полей '+', '.join('{{'+k+'}}' for k in sorted(missing))+'. Оформленный исторический акт не является пустой формой для новых результатов.')
         except Exception as exc:errors.append(role+' — '+str(path)+'\n'+str(exc))
     if errors:raise Stop('Формы объекта не готовы для выпуска:\n\n'+'\n\n'.join(errors))
