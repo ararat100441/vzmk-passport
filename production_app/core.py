@@ -51,6 +51,8 @@ def plan(cfg,project,number,vom,facts,new):
     for n in variants:
         for role in (f'akz{n}',f'akz_appendix{n}'):
             if role not in profile['templates']:raise Stop('Нет собственного шаблона '+role)
+    from .templates import validate as validate_templates
+    validate_templates(profile,p,variants,cfg.get('training',False))
     inputs=[registry,v.path,*[t['path'] for t in profile['templates'].values()],*[e['path'] for e in facts['evidence']]]
     catalog=profile.get('catalog')
     if catalog and Path(catalog).is_file():inputs.append(catalog)
@@ -110,22 +112,37 @@ def _prepare(d):
             app.CalculateFullRebuild();b.Save()
         finally:b.Close(SaveChanges=False)
     staged=read_registry(snapshot)
-    if d['new']:verify_registry(registry,snapshot,d['project'],d['number'],v)
+    if d['new']:verify_registry(registry,snapshot,d['project'],d['number'],v,date.fromisoformat(d['date']))
     out=office.render(model.profile(d['cfg'],d['project']),p,staged,row,v,d['facts'],outputs,d['cfg'].get('training',False))
-    save(run/'prepared.json',{'plan_seal':d['seal'],'outputs':out,'registry':str(snapshot),'row':row,'snapshot_sha256':sha(snapshot)})
+    save(run/'prepared.json',{'plan_seal':d['seal'],'outputs':out,'output_fingerprints':pins([o['path'] for o in out]),'registry':str(snapshot),'row':row,'snapshot_sha256':sha(snapshot)})
     return {'status':'PASS','folder':str(outputs),'files':len(out)}
 
-def verify_registry(original,after,project,number,vom):
+def verify_registry(original,after,project,number,vom,expected_date=None):
     r0=read_registry(original);r1=read_registry(after)
     entries=[e for e in r1.projects[project] if e['number']==number]
     if len(entries)!=1 or sum(map(len,r1.projects.values()))!=sum(map(len,r0.projects.values()))+1:raise Stop('Реестр должен содержать ровно одну новую строку.')
     e=entries[0]
     if abs(Decimal(str(e['mass']))-vom.mass)>Decimal('.000001') or e['connections']!=vom.connections:raise Stop('Неверные масса/соединения новой строки.')
+    if expected_date is not None:
+        actual=e['date'].date() if isinstance(e['date'],datetime) else e['date']
+        if actual!=expected_date:raise Stop('Дата новой строки не совпала с подтверждённой датой паспорта.')
     a=load_book(original);b=load_book(after)
     try:
         if a.sheetnames!=b.sheetnames:raise Stop('Изменилась структура листов реестра.')
         for sa in a.worksheets:
             sb=b[sa.title]
+            def print_ranges(sheet,extend=False):
+                from openpyxl.worksheet.print_settings import PrintArea
+                ranges=[]
+                for area in PrintArea.from_string(str(sheet.print_area)).ranges if sheet.print_area else []:
+                    bounds=list(area.bounds)
+                    # Excel extends an existing print area ending at the last
+                    # table row when ListRows.Add inserts the single new row.
+                    if extend and sa.title==r0.sheet and bounds[3]==e['row']-1:bounds[3]+=1
+                    ranges.append(tuple(bounds))
+                return sorted(ranges)
+            if print_ranges(sa,True)!=print_ranges(sb) or sa.print_title_rows!=sb.print_title_rows or sa.print_title_cols!=sb.print_title_cols:
+                raise Stop('Изменилась область печати/повторяемые строки реестра: '+sa.title)
             for row in sa:
                 for ca in row:
                     # Insertion must not change any pre-existing cell's value/formula/style.
@@ -138,12 +155,24 @@ def verify_registry(original,after,project,number,vom):
             c=s0.cell(source.first_row,col);n=s1.cell(e['row'],col)
             if c.data_type=='f' and n.data_type!='f':raise Stop('Утрачена формула новой строки.')
         if len(b[r1.sheet].tables)!=len(a[r0.sheet].tables):raise Stop('Утрачена Excel-таблица.')
+        from openpyxl.utils.cell import range_boundaries
+        for sa in a.worksheets:
+            sb=b[sa.title]
+            if set(sa.tables)!=set(sb.tables):raise Stop('Изменён набор Excel-таблиц.')
+            for name,table in sa.tables.items():
+                old=sa.tables[name];new=sb.tables[name]
+                bounds=list(range_boundaries(old.ref))
+                if sa.title==r0.sheet and name==r0.table:bounds[3]+=1
+                if tuple(bounds)!=range_boundaries(new.ref) or old.tableStyleInfo!=new.tableStyleInfo:
+                    raise Stop('Неверное расширение/оформление Excel-таблицы: '+name)
     finally:a.close();b.close()
     return e['row']
 
 def verify(path):
     d=load_plan(path);run=Path(d['run']);prepared=read(run/'prepared.json')
     if prepared['plan_seal']!=d['seal'] or sha(prepared['registry'])!=prepared['snapshot_sha256']:raise Stop('Изменена подготовленная копия реестра.')
+    if not prepared.get('output_fingerprints'):raise Stop('Комплект подготовлен предыдущей версией. Повторите подготовку новой заявкой.')
+    verify_pins(prepared['output_fingerprints'])
     report=office.verify_documents(prepared['outputs'],d['number'],d['cfg'].get('training',False))
     hashes=pins([o['path'] for o in prepared['outputs']])
     save(run/'verified.json',{'plan_seal':d['seal'],'documents':report,'fingerprints':hashes})
@@ -216,7 +245,7 @@ def commit(path,release_result):
                 if d['new']:
                     shutil.copyfile(prepared['registry'],candidate)
                     if sha(candidate)!=prepared['snapshot_sha256']:raise Stop('Копия реестра изменилась.')
-                    verify_registry(backup,candidate,d['project'],d['number'],v)
+                    verify_registry(backup,candidate,d['project'],d['number'],v,date.fromisoformat(d['date']))
                     state['candidate_sha256']=sha(candidate)
                 save(private/'ISSUE.json',{'project':d['project'],'number':d['number'],'training':bool(d['cfg'].get('training')),
                     'facts':d['facts'],'files':state['output_hashes'],'source_registry_sha256':state['original_sha256']})
@@ -228,7 +257,7 @@ def commit(path,release_result):
                     state['phase']='REPLACE_INTENT';journal_write(journal,state)
                     atomic_replace(candidate,registry,backup=stage/'replaced_original.xlsx')
                     state['phase']='REGISTRY_REPLACED';journal_write(journal,state)
-            if d['new']:verify_registry(backup,registry,d['project'],d['number'],v)
+            if d['new']:verify_registry(backup,registry,d['project'],d['number'],v,date.fromisoformat(d['date']))
             elif sha(registry)!=state['original_sha256']:raise Stop('Изменился реестр существующего паспорта.')
             state['phase']='NEEDS_READBACK';journal_write(journal,state)
             return {'status':'PASS','state':'ТРЕБУЕТСЯ ПРОВЕРКА OFFICE','folder':str(target),'backup':str(backup),'journal':str(journal),'training':bool(d['cfg'].get('training'))}

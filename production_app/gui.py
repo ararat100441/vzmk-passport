@@ -8,15 +8,15 @@ from . import model,core,VERSION
 
 class App:
     def __init__(self,root):
-        self.root=root;root.title('ВЗМК — Паспорта '+VERSION);self.fit(root,1050,760);root.minsize(min(950,root.winfo_screenwidth()-40),min(650,root.winfo_screenheight()-80))
+        self.root=root;root.title('ВЗМК — Паспортизация '+VERSION);self.fit(root,1050,760);root.minsize(min(950,root.winfo_screenwidth()-40),min(650,root.winfo_screenheight()-80))
         config_error=None
         try:self.cfg=read(local_root()/'settings.json') if (local_root()/'settings.json').exists() else {'profiles':{}}
         except Exception as exc:self.cfg={'profiles':{}};config_error=str(exc)
         self.plan=None;self.facts={};self.active=None;self.result_path=None;self.buttons=[]
         self.project=tk.StringVar();self.number=tk.StringVar();self.vom=tk.StringVar();self.new=tk.BooleanVar(value=False)
-        self.project.trace_add('write',lambda *_:self.invalidate())
-        self.number.trace_add('write',lambda *_:self.invalidate())
-        self.vom.trace_add('write',lambda *_:self.invalidate())
+        self.project.trace_add('write',lambda *_:self.inputs_changed())
+        self.number.trace_add('write',lambda *_:self.inputs_changed())
+        self.vom.trace_add('write',lambda *_:self.inputs_changed())
         top=ttk.Frame(root,padding=12);top.pack(fill='x')
         ttk.Label(top,text='Паспорта металлоконструкций',font=('Segoe UI',17,'bold')).pack(side='left')
         ttk.Button(top,text='Настройки путей',command=self.settings).pack(side='right')
@@ -47,6 +47,17 @@ class App:
 
     def fit(self,window,width,height):window.geometry(f'{min(width,window.winfo_screenwidth()-40)}x{min(height,window.winfo_screenheight()-80)}')
 
+    def scroll_content(self,dialog):
+        outer=ttk.Frame(dialog);outer.pack(fill='both',expand=True)
+        canvas=tk.Canvas(outer,highlightthickness=0)
+        sy=ttk.Scrollbar(outer,orient='vertical',command=canvas.yview)
+        sx=ttk.Scrollbar(outer,orient='horizontal',command=canvas.xview)
+        canvas.configure(yscrollcommand=sy.set,xscrollcommand=sx.set)
+        sy.pack(side='right',fill='y');sx.pack(side='bottom',fill='x');canvas.pack(fill='both',expand=True)
+        body=ttk.Frame(canvas);canvas.create_window((0,0),window=body,anchor='nw')
+        body.bind('<Configure>',lambda e:canvas.configure(scrollregion=canvas.bbox('all')))
+        return body
+
     def close(self):
         if self.active and self.active.poll() is None:
             messagebox.showinfo('Операция Office','Дождитесь штатного завершения Office. Программа не будет принудительно закрывать процессы.');return
@@ -58,6 +69,9 @@ class App:
     def invalidate(self):
         self.plan=None
         for n,b in enumerate(self.buttons):b.configure(state='normal' if n==0 and not self.active else 'disabled')
+
+    def inputs_changed(self):
+        self.facts={};self.invalidate()
 
     def error(self,exc):self.write(str(exc));messagebox.showerror('Остановлено — исходники не исправляются автоматически',str(exc))
 
@@ -140,7 +154,12 @@ class App:
                         f=model.contained(var.get(),p['root']);p['templates'][role]={'path':str(f),'sha256':sha(f)}
                 if catalog.get():p['catalog']=str(model.contained(catalog.get(),p['root']));p['catalog_sha256']=sha(p['catalog'])
                 cfg=self.cfg|{'profiles':self.cfg.get('profiles',{})|{name:p}}
-                model.profile(cfg,name);self.cfg=cfg;save(local_root()/'settings.json',cfg);self.invalidate();d.destroy()
+                model.profile(cfg,name)
+                from .templates import validate
+                project=model.select(model.read_registry(cfg['registry']),name)
+                variants=sorted({int(role[-1]) for role in p['templates'] if role.startswith('akz')})
+                validate(p,project,variants,cfg.get('training',False))
+                self.cfg=cfg;save(local_root()/'settings.json',cfg);self.facts={};self.invalidate();d.destroy()
             except Exception as exc:self.error(exc)
         def forms():
             if not root.get():self.error('Сначала выберите папку объекта.');return
@@ -155,16 +174,19 @@ class App:
         try:v=model.visible_vom(self.vom.get())
         except Exception as exc:self.error(exc);return
         d=tk.Toplevel(self.root);d.title('Фактические результаты — '+self.project.get()+' '+self.number.get());self.fit(d,1160,760)
-        d.transient(self.root);d.grab_set();d.bind('<Escape>',lambda e:d.destroy())
+        d.transient(self.root);d.grab_set()
+        window=d;window.bind('<Escape>',lambda e:window.destroy());d=self.scroll_content(window)
         variables={k:tk.StringVar(value=self.facts.get(k,'')) for k in ('responsible','start_date','date','vik_date','uzk_date','akz_date')}
         top=ttk.Frame(d);top.pack(fill='x',padx=10,pady=8)
         for n,(key,label) in enumerate([('responsible','Ответственный'),('start_date','Начало YYYY-MM-DD'),('date','Окончание'),('vik_date','ВИК'),('uzk_date','УЗК'),('akz_date','АКЗ')]):
             ttk.Label(top,text=label).grid(row=0,column=n);ttk.Entry(top,textvariable=variables[key],width=25 if n==0 else 16).grid(row=1,column=n,padx=5)
         ttk.Label(d,text='Двойной щелчок по ячейке для ввода. Пустой АКЗ остаётся пустым. УЗК: ГОДЕН / НЕ ТРЕБУЕТСЯ; для исключений обязательно основание.').pack(pady=4)
-        cols=('mark','profile','paint','akz','uzk_quantity','uzk_result','basis')
-        grid=ttk.Treeview(d,columns=cols,show='headings',height=12)
-        for c in cols:grid.heading(c,text={'mark':'Марка','profile':'Профиль','paint':'Краска','akz':'№ АКЗ','uzk_quantity':'УЗК, шт','uzk_result':'Результат','basis':'Основание / протокол'}.get(c,c));grid.column(c,width=90 if c in ('akz','uzk_quantity') else 160)
-        grid.pack(fill='both',expand=True,padx=10)
+        cols=('mark','profile','paint','akz','uzk_quantity','uzk_result','basis','vik_result','vik_basis')
+        table_frame=ttk.Frame(d);table_frame.pack(fill='both',expand=True,padx=10)
+        grid=ttk.Treeview(table_frame,columns=cols,show='headings',height=12)
+        for c in cols:grid.heading(c,text={'mark':'Марка','profile':'Профиль','paint':'Краска','akz':'№ АКЗ','uzk_quantity':'УЗК, шт','uzk_result':'Результат УЗК','basis':'Основание / протокол УЗК','vik_result':'Результат ВИК','vik_basis':'Протокол ВИК'}.get(c,c));grid.column(c,width=90 if c in ('akz','uzk_quantity') else 160)
+        y=ttk.Scrollbar(table_frame,orient='vertical',command=grid.yview);grid.configure(yscrollcommand=y.set);y.pack(side='right',fill='y')
+        grid.pack(side='left',fill='both',expand=True)
         old={r['mark']:r for r in self.facts.get('marks',[])}
         for mark in dict.fromkeys(str(r[0]) for r in v.rows):grid.insert('', 'end',values=[mark]+[old.get(mark,{}).get(c,'') if old.get(mark,{}).get(c) is not None else '' for c in cols[1:]])
         self.editable(grid,immutable={0})
@@ -226,7 +248,7 @@ class App:
                     if any(row[k] for k in ccols[1:]):row['variant']=int(row['variant']);data['climates'].append(row)
                 from .facts import validate
                 validate(data,v,self.project.get(),self.number.get(),self.cfg.get('training',False))
-                self.facts=data;self.invalidate();d.destroy();self.write('Фактические данные сохранены локально в текущей заявке. Исходники не изменены.')
+                self.facts=data;self.invalidate();window.destroy();self.write('Фактические данные сохранены локально в текущей заявке. Исходники не изменены.')
             except Exception as exc:self.error(exc)
         ttk.Button(d,text='Проверить и принять введённые данные',command=store).pack(pady=10)
 
@@ -257,7 +279,7 @@ class App:
     def checked(self,result):
         self.plan=result['plan'];self.buttons[1].configure(state='normal');d=result['data']
         self.write(f"PASS. {d['project']} | {d['number']} | {d['marks']} марок / {d['quantity']} изделий / {d['mass_kg']} кг\nРеестр: {d['registry']}\nНовая папка: {d['target']}\nАКЗ: {d['variants']}. Источники закреплены SHA-256.")
-    def prepare(self):self.run('prepare',{'path':self.plan},lambda r:(self.write('Подготовлено файлов: '+str(r['files'])+'; '+r['folder']),self.buttons[2].configure(state='normal')))
+    def prepare(self):self.run('prepare',{'path':self.plan},lambda r:(self.write('Подготовлено файлов: '+str(r['files'])+'; '+r['folder']),self.buttons[1].configure(state='disabled'),self.buttons[2].configure(state='normal')))
     def verify(self):self.run('verify',{'path':self.plan},lambda r:(self.write('Комплект PASS. Просмотрите каждый файл перед подтверждением.\n'+str(r['documents'])),self.buttons[3].configure(state='normal')))
     def open_documents(self):
         if self.plan:

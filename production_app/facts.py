@@ -30,6 +30,9 @@ def validate(facts,vom,project,number,training=False,require_review=False):
     variants=set()
     for r in rows:
         mark=str(r['mark']);q=numeric(r.get('uzk_quantity'),mark,0,expected[mark])
+        if not training:
+            if r.get('vik_result')!='ГОДЕН' or not str(r.get('vik_basis','')).strip():
+                raise Stop('Нет подтверждённого результата ВИК и первичного протокола: '+mark)
         if q!=q.to_integral_value():raise Stop('Количество УЗК должно быть целым: '+mark)
         if r.get('uzk_result') not in ('ГОДЕН','НЕ ТРЕБУЕТСЯ'):raise Stop('Нет подтверждённого результата УЗК: '+mark)
         if r['uzk_result']=='НЕ ТРЕБУЕТСЯ' and (q!=0 or not str(r.get('basis','')).strip()):raise Stop('Укажите основание отсутствия УЗК: '+mark)
@@ -41,6 +44,8 @@ def validate(facts,vom,project,number,training=False,require_review=False):
         else:
             variants.add(variant)
             if not str(r.get('paint','')).strip():raise Stop('Не подтверждена краска: '+mark)
+        if not training and not str(r.get('basis','')).strip():
+            raise Stop('Нет первичного протокола/основания УЗК: '+mark)
     climates=facts.get('climates',[])
     if {r.get('variant') for r in climates}!=variants or len(climates)!=len(variants):raise Stop('Нет отдельного подтверждённого набора измерений для каждого выбранного АКЗ.')
     for c in climates:

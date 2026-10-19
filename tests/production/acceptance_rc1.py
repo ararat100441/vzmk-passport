@@ -63,39 +63,30 @@ def main():
     _,released=run('release',{'path':plan});assert sha(registry)==before
     journal=registry.parent/'.vzmk-operations'/data['id']/'journal.json'
     fault={'injected':False}
-    def shared_journal():
-        # Normal Python file reads can deny DELETE sharing on Windows and
-        # accidentally block the program's atomic journal replacement.
-        h=win32file.CreateFile(str(journal),win32con.GENERIC_READ,
-            win32con.FILE_SHARE_READ|win32con.FILE_SHARE_WRITE|win32con.FILE_SHARE_DELETE,None,win32con.OPEN_EXISTING,0,None)
-        try:
-            chunks=[]
-            while True:
-                _,b=win32file.ReadFile(h,1048576)
-                if not b:break
-                chunks.append(b)
-            return json.loads(b''.join(chunks).decode('utf8'))
-        finally:h.Close()
+    # Do not observe the atomically replaced journal. Even DELETE-sharing
+    # readers can briefly leave a replaced target pending deletion on Windows.
+    # Candidate creation proves commit already holds the original registry;
+    # the new registry becomes openable only after the native replacement.
+    candidate=journal.parent/'candidate.xlsx'
+    expected_candidate=read(Path(plan).parent/'prepared.json')['snapshot_sha256']
     def lock_after_replace(stop):
         handle=None
         try:
             while not stop.is_set():
-                if journal.exists():
-                    try:state=shared_journal()
-                    except (OSError,ValueError):time.sleep(.002);continue
-                    if state['phase'] in ('REPLACE_INTENT','REGISTRY_REPLACED'):
-                        try:handle=win32file.CreateFile(str(registry),win32con.GENERIC_READ,0,None,win32con.OPEN_EXISTING,0,None)
-                        except Exception:time.sleep(.001);continue
-                        chunks=[]
-                        while True:
-                            _,b=win32file.ReadFile(handle,1048576)
-                            if not b:break
-                            chunks.append(b)
-                        h=hashlib.sha256(b''.join(chunks)).hexdigest()
-                        if h==state.get('candidate_sha256'):
-                            fault.update(injected=True,phase=state['phase'],observed_sha256=h)
-                            stop.wait(60);break
-                        handle.Close();handle=None
+                if candidate.exists() or fault.get('candidate_seen'):
+                    fault['candidate_seen']=True
+                    try:handle=win32file.CreateFile(str(registry),win32con.GENERIC_READ,0,None,win32con.OPEN_EXISTING,0,None)
+                    except Exception:time.sleep(.001);continue
+                    chunks=[]
+                    while True:
+                        _,b=win32file.ReadFile(handle,1048576)
+                        if not b:break
+                        chunks.append(b)
+                    h=hashlib.sha256(b''.join(chunks)).hexdigest()
+                    if h==expected_candidate:
+                        fault.update(injected=True,phase='AFTER_REPLACEFILE',observed_sha256=h)
+                        stop.wait(60);break
+                    handle.Close();handle=None
                 time.sleep(.002)
         except BaseException as exc:fault['observer_error']=repr(exc)
         finally:

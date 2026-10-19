@@ -118,6 +118,17 @@ def profile(cfg,name):
 def visible_vom(path):
     # Native parser: remove only hidden/filter-excluded rows in the private copy.
     # Source is read without writing. Existing parser validates every numeric cell.
+    path=safe(path)
+    if path.suffix.lower()=='.xlsm':
+        # The existing XLSX parser reads an immutable byte copy. No macros,
+        # external refresh, saving or conversion through Office are involved.
+        import tempfile,hashlib
+        with tempfile.TemporaryDirectory(prefix='vzmk-vom-') as temp:
+            payload=path.read_bytes();h=hashlib.sha256(payload).hexdigest()
+            snapshot=Path(temp)/'read_only.xlsx';snapshot.write_bytes(payload)
+            v=visible_vom(snapshot)
+            if sha(path)!=h:raise Stop('ВОМ изменился во время чтения.')
+            return replace(v,path=path,digest=h)
     v=read_vom(path);w=load_book(path)
     try:hidden={r for r in v.source_rows if w[v.layout.sheet].row_dimensions[r].hidden}
     finally:w.close()

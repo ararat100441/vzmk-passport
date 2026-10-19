@@ -25,12 +25,12 @@ def create_forms(folder):
     folder=Path(folder);folder.mkdir(exist_ok=False)
     with word_session() as word:
         for role,title,body in (
-            ('vik','Акты визуального и измерительного контроля','ВИК: {{VIK_DATE}}\nСоединения: {{CONNECTIONS}}\nФактические результаты и подтверждение: {{RESPONSIBLE}}'),
+            ('vik','Акты визуального и измерительного контроля','ВИК: {{VIK_DATE}}\nСоединения: {{CONNECTIONS}}\n{{VIK_TABLE}}\nПервичные протоколы: {{EVIDENCE}}'),
             ('uzk','Заключение ультразвукового контроля','УЗК: {{UZK_DATE}}\n{{UZK_TABLE}}\nПротоколы: {{EVIDENCE}}'),
             ('quality','Документ о качестве','Масса: {{MASS}} кг\nСталь: {{STEEL}}\nКМ: {{KM}}\nКМД: {{KMD_COMPANY}}\nПриложение №1; акты ВИК, УЗК и АКЗ по комплекту.\n{{EVIDENCE}}')):
             doc=word.Documents.Add()
             try:
-                doc.Content.Text=title+' № {{NUMBER}}\rДоговор: {{CONTRACT}}\rЗаказчик: {{CUSTOMER}}\rОбъект: {{OBJECT}}\rШифр: {{CIPHER}}\r'+body.replace('\n','\r')+'\rОтветственное лицо: {{RESPONSIBLE}}\rПодпись: __________________\r'
+                doc.Content.Text=title+' № {{NUMBER}} от {{END_DATE}}\rДоговор: {{CONTRACT}}\rЗаказчик: {{CUSTOMER}}\rОбъект: {{OBJECT}}\rШифр: {{CIPHER}}\r'+body.replace('\n','\r')+'\rОтветственное лицо: {{RESPONSIBLE}}\rПодпись: __________________\r'
                 doc.Content.Font.Name='Times New Roman';doc.Content.Font.Size=11
                 doc.Paragraphs(1).Range.Font.Bold=True
                 doc.SaveAs2(str(folder/(role+'.docx')),FileFormat=16)
@@ -160,6 +160,9 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                 if role=='uzk':
                     rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
                     word_table(doc,'{{UZK_TABLE}}',('Марка','ВОМ, шт','УЗК, шт','Результат','Основание'),rows)
+                if role=='vik' and '{{VIK_TABLE}}' in doc.Content.Text:
+                    rows=[(m,totals[m],by_mark[m].get('vik_result','УЧЕБНЫЕ ДАННЫЕ'),by_mark[m].get('vik_basis','УЧЕБНЫЕ ДАННЫЕ')) for m in totals]
+                    word_table(doc,'{{VIK_TABLE}}',('Марка','ВОМ, шт','Результат ВИК','Первичный протокол'),rows)
                 replace_word(doc,values)
                 if TOKEN.search(doc.Content.Text):raise Stop('Незаполненные поля Word: '+role)
                 doc.Range(0,0).InsertBefore(prefix+'\r')

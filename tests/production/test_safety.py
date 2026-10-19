@@ -125,7 +125,7 @@ class Safety(unittest.TestCase):
         evidence=self.root/'protocol.txt';evidence.write_text('Подтверждено ответственным: фактический контроль выполнен.',encoding='utf8')
         f={'project':'P','number':'1/1/2026','kind':'ACTUAL','confirmed':True,'authorized':True,'forms_approved':True,'responsible':'Иванов',
             'start_date':'2026-10-01','date':'2026-10-18','vik_date':'2026-10-11','uzk_date':'2026-10-13','akz_date':'2026-10-17','evidence':[{'path':str(evidence),'sha256':sha(evidence)}],
-            'marks':[{'mark':'M1','profile':'Профиль','paint':'','akz':None,'uzk_quantity':1,'uzk_result':'ГОДЕН','basis':'Покрытие не требуется по проекту'}],'climates':[]}
+            'marks':[{'mark':'M1','profile':'Профиль','paint':'','akz':None,'uzk_quantity':1,'uzk_result':'ГОДЕН','basis':'Покрытие не требуется по проекту','vik_result':'ГОДЕН','vik_basis':'Первичный протокол ВИК'}],'climates':[]}
         v=SimpleNamespace(rows=(('M1','Балка',2,1,2,1,2),))
         return f,v
     def test_actual_requires_explicit_facts(self):
@@ -134,6 +134,31 @@ class Safety(unittest.TestCase):
         for key in ('confirmed','authorized','forms_approved','responsible'):
             bad=copy.deepcopy(f);bad[key]=False
             with self.subTest(key=key),self.assertRaises(Stop):facts.validate(bad,v,'P','1/1/2026')
+    def test_actual_vik_and_uzk_protocol_required(self):
+        f,v=self.valid_facts()
+        for key in ('vik_result','vik_basis','basis'):
+            bad=copy.deepcopy(f);bad['marks'][0][key]=''
+            with self.subTest(key=key),self.assertRaises(Stop):facts.validate(bad,v,'P','1/1/2026')
+    def test_xlsm_read_only_snapshot_preserves_source(self):
+        from openpyxl import Workbook
+        from decimal import Decimal
+        source=self.root/'shipping.xlsm';b=Workbook();b.save(source);b.close();before=sha(source)
+        fake=SimpleNamespace(rows=(('M1','Балка',Decimal(1),Decimal(1),Decimal(1),Decimal(1),Decimal(1)),),source_rows=(2,),layout=SimpleNamespace(sheet='Sheet'))
+        from dataclasses import make_dataclass
+        Record=make_dataclass('Record',[(k,object) for k in ('path','digest','rows','source_rows','layout','quantity','mass','area','connections')])
+        record=Record(source,before,fake.rows,fake.source_rows,fake.layout,1,1,1,'Балка')
+        with patch('production_app.model.read_vom',return_value=record) as parser:
+            v=model.visible_vom(source)
+        self.assertEqual(v.path,source);self.assertEqual(v.digest,before);self.assertEqual(sha(source),before)
+        self.assertEqual(parser.call_args.args[0].suffix,'.xlsx')
+        self.assertFalse(parser.call_args.args[0].exists())
+    def test_historical_akz_without_measurement_tokens_refused(self):
+        from openpyxl import Workbook
+        from production_app.templates import validate
+        x=self.root/'old_act.xlsx';b=Workbook();b.active['A1']='Акт АКЗ № 1/1/2026';b.active['A2']='Толщина: 100';b.save(x);b.close()
+        profile={'templates':{'akz0':{'path':str(x)}}}
+        with self.assertRaisesRegex(Stop,'AIR.*AKZ_DATE'):
+            validate(profile,SimpleNamespace(),[0])
     def test_test_results_cannot_be_actual(self):
         f,v=self.valid_facts()
         for kind in ('TRAINING','TEST','SAMPLE_ONLY'):
@@ -158,6 +183,15 @@ class Safety(unittest.TestCase):
     def test_office_proof_required(self):
         p=self.root/'fake.json';save(p,{'status':'PASS','task':'release','plan':'P'})
         with self.assertRaises((Stop,KeyError)):core.supervisor_proof(p,'release','P')
+    def test_edited_prepared_document_is_not_reapproved(self):
+        snapshot=self.root/'registry.xlsx';snapshot.write_bytes(b'REGISTRY')
+        doc=self.root/'document.docx';doc.write_bytes(b'GENERATED_VALUES')
+        save(self.root/'prepared.json',{'plan_seal':'S','registry':str(snapshot),'snapshot_sha256':sha(snapshot),
+             'outputs':[{'role':'vik','path':str(doc)}],'output_fingerprints':{str(doc):sha(doc)}})
+        doc.write_bytes(b'WRONG_MASS_OR_CONTROL_RESULT')
+        with patch('production_app.core.load_plan',return_value={'run':str(self.root),'seal':'S'}),patch('production_app.office.verify_documents') as office:
+            with self.assertRaisesRegex(Stop,'SHA-256 изменился'):core.verify('P')
+            office.assert_not_called()
     def crash_state(self,phase='REPLACE_INTENT',after_replace=True):
         # Arbitrary bytes intentionally isolate NTFS recovery from document logic.
         registry=self.root/'COPY_ВЗМК.xlsx';registry.write_bytes(b'ORIGINAL_REGISTRY_BYTES')
