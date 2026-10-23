@@ -58,6 +58,8 @@ def plan(cfg,project,number,vom,facts,new):
     from .real_forms import validate_uzk_details
     uzk_tokens,_=inspect_word_fields(profile['templates']['uzk']['path'])
     validate_uzk_details(facts,v,required='UZK_DETAILS_TABLE' in uzk_tokens)
+    from .real_forms import require_form_inputs
+    require_form_inputs(profile,facts)
     inputs=[registry,v.path,*[t['path'] for t in profile['templates'].values()],*[e['path'] for e in facts['evidence']]]
     catalog=profile.get('catalog')
     if catalog and Path(catalog).is_file():inputs.append(catalog)
