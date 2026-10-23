@@ -34,6 +34,53 @@ def validate_layer_ranges(layers):
     return [result[n] for n in (1, 2, 3)]
 
 
+
+LAYER_DETAILS_REQUIRED=('material','paint_batch','hardener_batch','color',
+                        'application_date','time_start','time_end','wet_average')
+
+
+def validate_layer_details(entries, facts):
+    """Confirm three distinct per-coat real facts for the historical АКЗ act.
+
+    Daily climate is shared only when all coats are actually applied on the
+    same confirmed day. Application time, batch, paint and wet-film mean are
+    independent facts for each coat; never reuse old passport measurements.
+    """
+    if not isinstance(entries,list) or len(entries)!=3:
+        raise Stop('Для трёхслойного акта АКЗ требуются сведения каждого из трёх слоёв.')
+    indexed={}
+    start=date.fromisoformat(facts['start_date'])
+    end=date.fromisoformat(facts['date'])
+    akz_day=date.fromisoformat(facts['akz_date'])
+    for item in entries:
+        if not isinstance(item,dict) or type(item.get('layer')) is not int:
+            raise Stop('Некорректный номер слоя АКЗ.')
+        number=item['layer']
+        if number not in (1,2,3) or number in indexed:
+            raise Stop('Слои АКЗ должны быть 1, 2, 3 без повторов.')
+        payload={'layer':number}
+        for key in LAYER_DETAILS_REQUIRED:
+            value=item.get(key)
+            if not isinstance(value,str) or not value.strip() or '{{' in value or '}}' in value:
+                raise Stop('Не подтверждено '+key+' слоя '+str(number))
+            payload[key]=value.strip()
+        try:actual_day=date.fromisoformat(payload['application_date'])
+        except ValueError as exc:raise Stop('Дата нанесения слоя АКЗ должна быть YYYY-MM-DD.') from exc
+        if not start<=actual_day<=end or actual_day!=akz_day:
+            raise Stop('Один климат на все слои допустим только при совпадении даты нанесения с подтверждённой датой АКЗ.')
+        import re
+        def minutes(text):
+            if not re.fullmatch(r'\d{2}:\d{2}',text):raise Stop('Время нанесения должно иметь формат HH:MM.')
+            h,m=map(int,text.split(':'))
+            if h>23 or m>59:raise Stop('Некорректное время нанесения АКЗ.')
+            return 60*h+m
+        if minutes(payload['time_end'])<=minutes(payload['time_start']):
+            raise Stop('Время окончания слоя АКЗ должно быть позднее начала в тот же день.')
+        numeric(payload['wet_average'],'Средняя мокрая толщина '+str(number),Decimal('0.001'))
+        indexed[number]=payload
+    return [indexed[n] for n in (1,2,3)]
+
+
 def validate_dry_averages(layers, averages):
     """Compare measured mean dry coating after each layer with cumulative limits.
 
@@ -122,6 +169,8 @@ def validate(facts,vom,project,number,training=False,require_review=False):
             validate_dry_averages(c['layers'],c.get('dry_averages'))
         else:
             numeric(c.get('thickness'),'Средняя толщина',Decimal('0.001'))
+        if c.get('layer_details'):
+            validate_layer_details(c['layer_details'],facts)
         if surface<dew+3:raise Stop('Температура поверхности менее чем на 3°C выше точки росы. Выпуск заблокирован.')
         if not str(c.get('material','')).strip() or not str(c.get('basis','')).strip():raise Stop('Нет материала/протокола послойных измерений АКЗ.')
     proofs=facts.get('evidence',[])
