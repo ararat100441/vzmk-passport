@@ -10,6 +10,7 @@ from .storage import Stop,sha
 from .model import filename,columns
 from .word_controls import fill_word_controls
 from .facts import validate_layer_ranges,validate_dry_averages
+from .real_forms import values_for_documents,validate_uzk_details,UZK_HEADERS,uzk_details_to_table
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
@@ -155,6 +156,7 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
         if values[k.upper()]!=actual:raise Stop('Фактическая дата '+k+' ('+actual+') не совпадает с формулой/данными реестра ('+values[k.upper()]+'). Ничего не подставлено автоматически.')
     values['MASS']=str(vom.mass);values['CONNECTIONS']=vom.connections
     values['NUMBER']=facts['number']
+    values.update(values_for_documents(facts,{c['variant'] for c in facts['climates']}))
     prefix='УЧЕБНЫЙ КОМПЛЕКТ — НЕ ДЛЯ ВЫПУСКА' if training else 'ЧЕРНОВИК — НЕ ДЛЯ ВЫПУСКА'
     by_mark={str(m['mark']):m for m in facts['marks']}
     totals={}
@@ -200,8 +202,14 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                 if not has_number_token and 'NUMBER' not in bound_controls:
                     raise Stop('Нужна утверждённая форма с {{NUMBER}} или пустым полем PASSPORT_NO/NUMBER: '+ref['path'])
                 if role=='uzk':
-                    rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
-                    word_table(doc,'{{UZK_TABLE}}',('Марка','ВОМ, шт','УЗК, шт','Результат','Основание'),rows)
+                    if '{{UZK_DETAILS_TABLE}}' in doc.Content.Text:
+                        details=validate_uzk_details(facts,vom,required=True)
+                        headers=UZK_HEADERS[:8]
+                        rows=[entry[:8] for entry in uzk_details_to_table(details)]
+                        word_table(doc,'{{UZK_DETAILS_TABLE}}',headers,rows)
+                    else:
+                        rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
+                        word_table(doc,'{{UZK_TABLE}}',('Марка','ВОМ, шт','УЗК, шт','Результат','Основание'),rows)
                 if role=='vik' and '{{VIK_TABLE}}' in doc.Content.Text:
                     rows=[(m,totals[m],by_mark[m].get('vik_result','УЧЕБНЫЕ ДАННЫЕ'),by_mark[m].get('vik_basis','УЧЕБНЫЕ ДАННЫЕ')) for m in totals]
                     word_table(doc,'{{VIK_TABLE}}',('Марка','ВОМ, шт','Результат ВИК','Первичный протокол'),rows)
