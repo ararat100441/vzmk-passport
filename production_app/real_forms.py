@@ -146,6 +146,31 @@ def validate_uzk_details(facts, vom, *, required=False):
     return output
 
 
+def require_form_inputs(profile, facts):
+    """Stop before preparation if a Word form has unconfirmed extra fields.
+
+    No unrecognized placeholders are silently left behind. Standard registry
+    and form markers are produced by the existing approved document workflow.
+    """
+    from .word_controls import inspect_word_fields, BINDABLE_FIELDS
+    known = set(BINDABLE_FIELDS)|set(DOC_FIELD_LABELS)|{
+        'VIK_TABLE','UZK_TABLE','UZK_DETAILS_TABLE','ACCEPTANCE_ACTS',
+        'ATTACHMENTS',
+    }
+    provided = normalize_doc_fields(facts.get('doc_fields'))
+    for role in ('vik','uzk','quality'):
+        tokens, controls = inspect_word_fields(profile['templates'][role]['path'])
+        actual = tokens | controls
+        unknown = actual - known
+        if unknown:
+            raise Stop('Неизвестные поля шаблона '+role+': '+', '.join(sorted(unknown)))
+        missing = (actual & set(DOC_FIELD_LABELS)) - set(provided)
+        if missing:
+            labels = '; '.join(DOC_FIELD_LABELS[key] for key in sorted(missing))
+            raise Stop('Заполните обязательные реквизиты '+role+' из первичных данных: '+labels)
+    return True
+
+
 def uzk_details_to_table(details):
     return [
         (r['mark'], r['joint'], r['welders'], r['date'],
