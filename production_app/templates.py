@@ -61,9 +61,17 @@ def validate(profile,project,variants,training=False):
                             raise Stop('Форма трёхслойного АКЗ должна содержать диапазоны всех трёх слоёв.')
                         if not means.issubset(provided):
                             raise Stop('Форма трёхслойного АКЗ должна содержать среднюю сухую толщину после всех трёх слоёв.')
-                        if layer_tokens-(expected|numeric|means|totals):
+                        if layer_tokens-(expected|numeric|means|totals|{f'LAYER_{n}_TOTAL_RANGE' for n in (1,2,3)}):
                             raise Stop('Неподдержанное поле трёхслойного АКЗ.')
-                        required = (AKZ_REQUIRED-{'THICKNESS'})|means
+                        details={f'AKZ_LAYER_{n}_{field}' for n in (1,2,3)
+                                 for field in ('MATERIAL','PAINT_BATCH','HARDENER_BATCH','COLOR',
+                                               'APPLICATION_DATE','TIME_START','TIME_END','WET_AVG')}
+                        if not details.issubset(provided):
+                            raise Stop('Трёхслойная форма должна содержать все поля ЛКМ, партий, дат, времени и средней мокрой толщины по каждому слою.')
+                        # Historical three-layer act has separate real-source
+                        # columns; not the generic one-line scalar fields.
+                        required = {'NUMBER','CONTRACT','CUSTOMER','OBJECT','CIPHER',
+                                    'AKZ_DATE','AIR','SURFACE','HUMIDITY','DEW'}|means|details
             missing=required-provided
             if missing:raise Stop('Нет полей '+', '.join('{{'+k+'}}' for k in sorted(missing))+'. Оформленный исторический акт не является пустой формой для новых результатов.')
         except Exception as exc:errors.append(role+' — '+str(path)+'\n'+str(exc))
