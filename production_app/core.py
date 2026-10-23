@@ -53,6 +53,11 @@ def plan(cfg,project,number,vom,facts,new):
             if role not in profile['templates']:raise Stop('Нет собственного шаблона '+role)
     from .templates import validate as validate_templates
     validate_templates(profile,p,variants,cfg.get('training',False))
+    # The historically detailed UZK form requires each real welded-joint row.
+    from .word_controls import inspect_word_fields
+    from .real_forms import validate_uzk_details
+    uzk_tokens,_=inspect_word_fields(profile['templates']['uzk']['path'])
+    validate_uzk_details(facts,v,required='UZK_DETAILS_TABLE' in uzk_tokens)
     inputs=[registry,v.path,*[t['path'] for t in profile['templates'].values()],*[e['path'] for e in facts['evidence']]]
     catalog=profile.get('catalog')
     if catalog and Path(catalog).is_file():inputs.append(catalog)
