@@ -106,6 +106,9 @@ def validate(facts,vom,project,number,training=False,require_review=False):
             if not str(r.get('paint','')).strip():raise Stop('Не подтверждена краска: '+mark)
         if not training and not str(r.get('basis','')).strip():
             raise Stop('Нет первичного протокола/основания УЗК: '+mark)
+    from .real_forms import normalize_doc_fields,validate_uzk_details
+    normalize_doc_fields(facts.get('doc_fields'))
+    validate_uzk_details(facts,vom)
     climates=facts.get('climates',[])
     if {r.get('variant') for r in climates}!=variants or len(climates)!=len(variants):raise Stop('Нет отдельного подтверждённого набора измерений для каждого выбранного АКЗ.')
     for c in climates:
