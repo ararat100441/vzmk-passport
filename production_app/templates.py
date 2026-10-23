@@ -8,7 +8,7 @@ from .word_controls import inspect_word_fields
 
 WORD_REQUIRED={
     'vik':{'NUMBER','CONTRACT','OBJECT','CIPHER','VIK_DATE','RESPONSIBLE','EVIDENCE'},
-    'uzk':{'NUMBER','OBJECT','CIPHER','UZK_DATE','RESPONSIBLE','EVIDENCE','UZK_TABLE'},
+    'uzk':{'NUMBER','OBJECT','CIPHER','UZK_DATE','RESPONSIBLE','EVIDENCE'},
     'quality':{'NUMBER','CONTRACT','CUSTOMER','OBJECT','CIPHER','MASS','STEEL','KM','KMD_COMPANY','RESPONSIBLE','EVIDENCE'},
 }
 AKZ_REQUIRED={'NUMBER','OBJECT','AKZ_DATE','AIR','SURFACE','HUMIDITY','DEW','THICKNESS','MATERIAL','BASIS','RESPONSIBLE','EVIDENCE'}
@@ -33,6 +33,8 @@ def validate(profile,project,variants,training=False):
                 # is imposed on the approved two-act form.
                 required=WORD_REQUIRED[role]
                 provided = tokens | controls
+                if role=='uzk' and not {'UZK_TABLE','UZK_DETAILS_TABLE'}.intersection(tokens):
+                    raise Stop('УЗК: нужна точка вставки {{UZK_DETAILS_TABLE}} или {{UZK_TABLE}}.')
             else:
                 if path.suffix.lower()!='.xlsx':raise Stop('Нужна форма XLSX.')
                 book=load_book(path)
