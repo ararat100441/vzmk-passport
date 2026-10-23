@@ -264,6 +264,31 @@ class App:
                 # Measured averages are NEVER loaded from old project presets.
                 layers_grid.insert('','end',values=(n,layer,value.get('min',''),value.get('max',''),
                                                    observed.get(layer,{}).get('average','')))
+        ttk.Label(d,text='Трёхслойный АКЗ: по каждому слою отдельно заполняйте подтверждённый ЛКМ, партии, цвет, дату, начало/окончание и СРЕДНЮЮ мокрую толщину. Средние сухие толщины вводятся выше.',wraplength=1060).pack(pady=6)
+        detailcols=('variant','layer','material','paint_batch','hardener_batch','color',
+                    'application_date','time_start','time_end','wet_average')
+        layer_data_frame=ttk.Frame(d);layer_data_frame.pack(fill='both',padx=10,pady=4)
+        layer_data=ttk.Treeview(layer_data_frame,columns=detailcols,show='headings',height=8)
+        detail_labels={'variant':'№ АКЗ','layer':'Слой','material':'ЛКМ','paint_batch':'Партия ЛКМ',
+                       'hardener_batch':'Партия отвердителя','color':'Цвет',
+                       'application_date':'Дата нанесения YYYY-MM-DD','time_start':'Начало HH:MM',
+                       'time_end':'Окончание HH:MM','wet_average':'Средняя мокрая, мкм'}
+        for col in detailcols:
+            layer_data.heading(col,text=detail_labels[col])
+            layer_data.column(col,width=85 if col in ('variant','layer') else 160)
+        detail_y=ttk.Scrollbar(layer_data_frame,orient='vertical',command=layer_data.yview)
+        detail_x=ttk.Scrollbar(layer_data_frame,orient='horizontal',command=layer_data.xview)
+        layer_data.configure(yscrollcommand=detail_y.set,xscrollcommand=detail_x.set)
+        detail_y.pack(side='right',fill='y')
+        detail_x.pack(side='bottom',fill='x')
+        layer_data.pack(fill='both',expand=True)
+        self.editable(layer_data,immutable={0,1})
+        for n in range(4):
+            previous={int(x['layer']):x for x in prev.get(n,{}).get('layer_details',[])}
+            for layer in (1,2,3):
+                data=previous.get(layer,{})
+                layer_data.insert('','end',values=(n,layer)+
+                    tuple(data.get(k,'') for k in detailcols[2:]))
         ttk.Label(d,text='Подробный УЗК: строки по сварным соединениям из подтверждённой ведомости контроля, НЕ из старых актов. Повторяющиеся марки допустимы.',wraplength=1070).pack(pady=5)
         imported_uzk=list(self.facts.get('uzk_details',[]))
         uzk_line=ttk.Frame(d);uzk_line.pack(fill='x',padx=10)
@@ -334,6 +359,13 @@ class App:
                         n=int(row['variant'])
                         ranges_by_variant[n].append({'layer':int(row['layer']),'min':row['min'],'max':row['max']})
                         averages_by_variant[n].append({'layer':int(row['layer']),'average':row['average']})
+                detailed_by_variant={n:[] for n in range(4)}
+                for item in layer_data.get_children():
+                    row=dict(zip(detailcols,layer_data.item(item,'values')))
+                    if any(str(row[k]).strip() for k in detailcols[2:]):
+                        n=int(row['variant'])
+                        detailed_by_variant[n].append({'layer':int(row['layer']),
+                                                     **{k:row[k] for k in detailcols[2:]}})
                 used={r['akz'] for r in data['marks'] if r['akz'] is not None}
                 for item in climates.get_children():
                     row=dict(zip(ccols,climates.item(item,'values')))
@@ -343,6 +375,7 @@ class App:
                     if ranges_by_variant[n]:
                         row['layers']=ranges_by_variant[n]
                         row['dry_averages']=averages_by_variant[n]
+                    if detailed_by_variant[n]:row['layer_details']=detailed_by_variant[n]
                     data['climates'].append(row)
                 data['uzk_details']=list(imported_uzk)
                 data['doc_fields']={}
