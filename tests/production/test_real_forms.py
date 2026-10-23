@@ -86,14 +86,10 @@ class RealForms(TestCase):
                 w.write(UZK_CSV_HEADER+'\n')
                 for r in (record('M-1'),record('M-2'),record('M-1')):
                     w.write(';'.join(r[k] for k in UZK_COLUMNS)+'\n')
-            loaded=load_uzk_csv(p)
-            self.assertEqual(len(loaded),3)
-            self.assertEqual(loaded[0]['frequency_mhz'],'5')
-            # This CSV fixture intentionally contains unquoted ; in numeric
-            # value: importer must reject malformed structure before issuance.
-            with self.assertRaises(Stop):
-                validate_uzk_details(facts()|{'uzk_details':loaded},
-                                     shipment(),required=True)
+            # Raw semicolons inside fields must be CSV-quoted. Reject malformed
+            # input immediately; a separate test covers well-formed repeats.
+            with self.assertRaisesRegex(Stop,'Лишний разделитель'):
+                load_uzk_csv(p)
 
     def test_csv_quoted_values_can_contain_semicolons(self):
         import csv
