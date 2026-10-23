@@ -9,7 +9,8 @@ from passport_app.appendix import generate_appendix
 from .storage import Stop,sha
 from .model import filename,columns
 from .word_controls import fill_word_controls
-from .facts import validate_layer_ranges,validate_dry_averages
+from .facts import validate_layer_ranges,validate_dry_averages,validate_layer_details
+from .real_forms import values_for_documents,validate_uzk_details,UZK_HEADERS,uzk_details_to_table
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
@@ -86,6 +87,9 @@ def tokens_excel(sheet,values):
     numeric_keys={'AIR','SURFACE','HUMIDITY','DEW','THICKNESS'}
     numeric_keys.update('LAYER_'+str(n)+'_'+edge
                         for n in (1,2,3) for edge in ('MIN','MAX','DRY_AVG','TOTAL_MIN','TOTAL_MAX'))
+    numeric_keys.update('AKZ_LAYER_'+str(n)+'_WET_AVG' for n in (1,2,3))
+    date_keys={'AKZ_DATE'}|{'AKZ_LAYER_'+str(n)+'_APPLICATION_DATE' for n in (1,2,3)}
+    time_keys={'AKZ_LAYER_'+str(n)+'_'+suffix for n in (1,2,3) for suffix in ('TIME_START','TIME_END')}
     used=sheet.UsedRange
     for row in range(used.Row,used.Row+used.Rows.Count):
         for col in range(used.Column,used.Column+used.Columns.Count):
@@ -94,6 +98,24 @@ def tokens_excel(sheet,values):
             v=cell.Value2
             if isinstance(v,str) and '{{' in v:
                 key=v[2:-2] if v.startswith('{{') and v.endswith('}}') else ''
+                if key in date_keys and key in values:
+                    raw=str(values[key]).strip()
+                    try:
+                        actual=date.fromisoformat(raw) if '-' in raw else datetime.strptime(raw,'%d.%m.%Y').date()
+                    except ValueError as exc:
+                        raise Stop('Некорректная дата Excel АКЗ: '+key) from exc
+                    cell.Value2=(actual-date(1899,12,30)).days
+                    cell.NumberFormat='dd.mm.yyyy'
+                    continue
+                if key in time_keys and key in values:
+                    raw=str(values[key]).strip()
+                    import re as regex
+                    if not regex.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',raw):
+                        raise Stop('Некорректное время слоя АКЗ: '+key)
+                    hh,mm=map(int,raw.split(':'))
+                    cell.Value2=(hh*60+mm)/1440
+                    cell.NumberFormat='hh:mm'
+                    continue
                 if key in numeric_keys and key in values:
                     numeric_value=Decimal(str(values[key]).replace(',','.'))
                     if not numeric_value.is_finite():
@@ -103,7 +125,7 @@ def tokens_excel(sheet,values):
                 for key,value in values.items():v=v.replace('{{'+key+'}}',str(value))
                 cell.Value2=v
 
-def akz_values(climate):
+def akz_values(climate,facts=None):
     """One daily climate set shared by all three coating layers.
 
     Range tokens can be placed on an approved 3-layer Excel form:
@@ -112,7 +134,7 @@ def akz_values(climate):
     measurements and their primary protocols.
     """
     values={str(key).upper():value for key,value in climate.items()
-            if key not in ('variant','layers','dry_averages')}
+            if key not in ('variant','layers','dry_averages','layer_details')}
     if climate.get('layers'):
         checked=validate_dry_averages(climate['layers'],climate.get('dry_averages'))
         for entry in validate_layer_ranges(climate['layers']):
@@ -125,6 +147,14 @@ def akz_values(climate):
             values[prefix+'DRY_AVG']=entry['average']
             values[prefix+'TOTAL_MIN']=entry['required_total_min']
             values[prefix+'TOTAL_MAX']=entry['required_total_max']
+            values[prefix+'TOTAL_RANGE']=entry['required_total_min']+'–'+entry['required_total_max']
+    if climate.get('layer_details'):
+        if not isinstance(facts,dict):raise Stop('Нет подтверждённых фактов по слоям АКЗ.')
+        for row in validate_layer_details(climate['layer_details'],facts):
+            prefix='AKZ_LAYER_'+str(row['layer'])+'_'
+            for key in ('material','paint_batch','hardener_batch','color','application_date','time_start','time_end'):
+                values[prefix+key.upper()]=row[key]
+            values[prefix+'WET_AVG']=row['wet_average']
     return values
 
 
@@ -155,6 +185,7 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
         if values[k.upper()]!=actual:raise Stop('Фактическая дата '+k+' ('+actual+') не совпадает с формулой/данными реестра ('+values[k.upper()]+'). Ничего не подставлено автоматически.')
     values['MASS']=str(vom.mass);values['CONNECTIONS']=vom.connections
     values['NUMBER']=facts['number']
+    values.update(values_for_documents(facts,{c['variant'] for c in facts['climates']}))
     prefix='УЧЕБНЫЙ КОМПЛЕКТ — НЕ ДЛЯ ВЫПУСКА' if training else 'ЧЕРНОВИК — НЕ ДЛЯ ВЫПУСКА'
     by_mark={str(m['mark']):m for m in facts['marks']}
     totals={}
@@ -176,7 +207,7 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                     if role.startswith('akz_appendix'):
                         selected=[r for r in vom.rows if by_mark[str(r[0])]['akz']==variant]
                         akz_rows(s,selected)
-                    native_values=values|akz_values(climate)
+                    native_values=values|akz_values(climate,facts)
                     tokens_excel(s,native_values)
                     app.CalculateFull();b.Save()
                 finally:b.Close(SaveChanges=False)
@@ -200,8 +231,14 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                 if not has_number_token and 'NUMBER' not in bound_controls:
                     raise Stop('Нужна утверждённая форма с {{NUMBER}} или пустым полем PASSPORT_NO/NUMBER: '+ref['path'])
                 if role=='uzk':
-                    rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
-                    word_table(doc,'{{UZK_TABLE}}',('Марка','ВОМ, шт','УЗК, шт','Результат','Основание'),rows)
+                    if '{{UZK_DETAILS_TABLE}}' in doc.Content.Text:
+                        details=validate_uzk_details(facts,vom,required=True)
+                        headers=UZK_HEADERS[:8]
+                        rows=[entry[:8] for entry in uzk_details_to_table(details)]
+                        word_table(doc,'{{UZK_DETAILS_TABLE}}',headers,rows)
+                    else:
+                        rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
+                        word_table(doc,'{{UZK_TABLE}}',('Марка','ВОМ, шт','УЗК, шт','Результат','Основание'),rows)
                 if role=='vik' and '{{VIK_TABLE}}' in doc.Content.Text:
                     rows=[(m,totals[m],by_mark[m].get('vik_result','УЧЕБНЫЕ ДАННЫЕ'),by_mark[m].get('vik_basis','УЧЕБНЫЕ ДАННЫЕ')) for m in totals]
                     word_table(doc,'{{VIK_TABLE}}',('Марка','ВОМ, шт','Результат ВИК','Первичный протокол'),rows)

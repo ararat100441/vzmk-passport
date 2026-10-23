@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 from .storage import local_root,read,save,sha,Stop
 from . import model,core,akz_presets,VERSION
+from .real_forms import DOC_FIELD_LABELS, UZK_CSV_HEADER, load_uzk_csv
 
 class App:
     def __init__(self,root):
@@ -263,6 +264,79 @@ class App:
                 # Measured averages are NEVER loaded from old project presets.
                 layers_grid.insert('','end',values=(n,layer,value.get('min',''),value.get('max',''),
                                                    observed.get(layer,{}).get('average','')))
+        ttk.Label(d,text='Трёхслойный АКЗ: по каждому слою отдельно заполняйте подтверждённый ЛКМ, партии, цвет, дату, начало/окончание и СРЕДНЮЮ мокрую толщину. Средние сухие толщины вводятся выше.',wraplength=1060).pack(pady=6)
+        detailcols=('variant','layer','material','paint_batch','hardener_batch','color',
+                    'application_date','time_start','time_end','wet_average')
+        layer_data_frame=ttk.Frame(d);layer_data_frame.pack(fill='both',padx=10,pady=4)
+        layer_data=ttk.Treeview(layer_data_frame,columns=detailcols,show='headings',height=8)
+        detail_labels={'variant':'№ АКЗ','layer':'Слой','material':'ЛКМ','paint_batch':'Партия ЛКМ',
+                       'hardener_batch':'Партия отвердителя','color':'Цвет',
+                       'application_date':'Дата нанесения YYYY-MM-DD','time_start':'Начало HH:MM',
+                       'time_end':'Окончание HH:MM','wet_average':'Средняя мокрая, мкм'}
+        for col in detailcols:
+            layer_data.heading(col,text=detail_labels[col])
+            layer_data.column(col,width=85 if col in ('variant','layer') else 160)
+        detail_y=ttk.Scrollbar(layer_data_frame,orient='vertical',command=layer_data.yview)
+        detail_x=ttk.Scrollbar(layer_data_frame,orient='horizontal',command=layer_data.xview)
+        layer_data.configure(yscrollcommand=detail_y.set,xscrollcommand=detail_x.set)
+        detail_y.pack(side='right',fill='y')
+        detail_x.pack(side='bottom',fill='x')
+        layer_data.pack(fill='both',expand=True)
+        self.editable(layer_data,immutable={0,1})
+        for n in range(4):
+            previous={int(x['layer']):x for x in prev.get(n,{}).get('layer_details',[])}
+            for layer in (1,2,3):
+                data=previous.get(layer,{})
+                layer_data.insert('','end',values=(n,layer)+
+                    tuple(data.get(k,'') for k in detailcols[2:]))
+        ttk.Label(d,text='Подробный УЗК: строки по сварным соединениям из подтверждённой ведомости контроля, НЕ из старых актов. Повторяющиеся марки допустимы.',wraplength=1070).pack(pady=5)
+        imported_uzk=list(self.facts.get('uzk_details',[]))
+        uzk_line=ttk.Frame(d);uzk_line.pack(fill='x',padx=10)
+        uzk_label=ttk.Label(uzk_line,text='Загружено соединений: '+str(len(imported_uzk)))
+        uzk_label.pack(side='left',padx=6)
+        def load_details():
+            path=filedialog.askopenfilename(title='Подробная ведомость УЗК CSV',
+                filetypes=[('CSV UTF-8','*.csv')])
+            if not path:return
+            try:
+                records=load_uzk_csv(path)
+                # Validate before replacing the current input.
+                from .real_forms import validate_uzk_details
+                preview={**self.facts, **{k:var.get() for k,var in variables.items()},
+                         'start_date':variables['start_date'].get(),
+                         'date':variables['date'].get(),
+                         'uzk_date':variables['uzk_date'].get(),
+                         'uzk_details':records}
+                validate_uzk_details(preview,v)
+                imported_uzk[:]=records
+                uzk_label.configure(text='Загружено соединений: '+str(len(imported_uzk)))
+                self.write('Приняты подробные строки УЗК из '+str(path)+': '+str(len(imported_uzk)))
+            except Exception as exc:self.error(exc)
+        def new_uzk_csv():
+            target=filedialog.asksaveasfilename(title='Новый CSV для подробных строк УЗК',
+                defaultextension='.csv',filetypes=[('CSV UTF-8','*.csv')])
+            if not target:return
+            try:
+                with Path(target).open('x',encoding='utf-8-sig',newline='') as writer:
+                    writer.write(UZK_CSV_HEADER+'\n')
+                self.write('Создан пустой CSV УЗК: '+target+' — внесите фактические строки, затем импортируйте.')
+            except Exception as exc:self.error(exc)
+        ttk.Button(uzk_line,text='Загрузить CSV УЗК…',command=load_details).pack(side='left',padx=6)
+        ttk.Button(uzk_line,text='Создать CSV-шаблон…',command=new_uzk_csv).pack(side='left',padx=6)
+
+        ttk.Label(d,text='Дополнительные реквизиты утверждённых форм (ВИК, качество, УЗК): заполните только необходимые поля по подтверждённым источникам. Старые сведения не подставляются.',wraplength=1080).pack(pady=5)
+        extra_columns=('key','description','value')
+        extra_frame=ttk.Frame(d);extra_frame.pack(fill='both',padx=10,pady=4)
+        extra=ttk.Treeview(extra_frame,columns=extra_columns,show='headings',height=8)
+        for col,heading,width in [('key','Поле',210),('description','Наименование',430),('value','Подтверждённое значение',470)]:
+            extra.heading(col,text=heading);extra.column(col,width=width)
+        extra_scroll=ttk.Scrollbar(extra_frame,orient='vertical',command=extra.yview)
+        extra.configure(yscrollcommand=extra_scroll.set)
+        extra_scroll.pack(side='right',fill='y');extra.pack(fill='both',expand=True)
+        self.editable(extra,immutable={0,1})
+        previous_fields=self.facts.get('doc_fields',{})
+        for key,label in DOC_FIELD_LABELS.items():
+            extra.insert('','end',values=(key,label,previous_fields.get(key,'')))
         proofs=list(self.facts.get('evidence',[]));proof_label=ttk.Label(d,text='Протоколов: '+str(len(proofs)));proof_label.pack()
         def add():
             for f in filedialog.askopenfilenames(title='Первичные протоколы фактического контроля'):
@@ -285,6 +359,13 @@ class App:
                         n=int(row['variant'])
                         ranges_by_variant[n].append({'layer':int(row['layer']),'min':row['min'],'max':row['max']})
                         averages_by_variant[n].append({'layer':int(row['layer']),'average':row['average']})
+                detailed_by_variant={n:[] for n in range(4)}
+                for item in layer_data.get_children():
+                    row=dict(zip(detailcols,layer_data.item(item,'values')))
+                    if any(str(row[k]).strip() for k in detailcols[2:]):
+                        n=int(row['variant'])
+                        detailed_by_variant[n].append({'layer':int(row['layer']),
+                                                     **{k:row[k] for k in detailcols[2:]}})
                 used={r['akz'] for r in data['marks'] if r['akz'] is not None}
                 for item in climates.get_children():
                     row=dict(zip(ccols,climates.item(item,'values')))
@@ -294,7 +375,13 @@ class App:
                     if ranges_by_variant[n]:
                         row['layers']=ranges_by_variant[n]
                         row['dry_averages']=averages_by_variant[n]
+                    if detailed_by_variant[n]:row['layer_details']=detailed_by_variant[n]
                     data['climates'].append(row)
+                data['uzk_details']=list(imported_uzk)
+                data['doc_fields']={}
+                for item in extra.get_children():
+                    key,_,value=extra.item(item,'values')
+                    if str(value).strip():data['doc_fields'][key]=str(value).strip()
                 from .facts import validate
                 validate(data,v,self.project.get(),self.number.get(),self.cfg.get('training',False))
                 self.facts=data;self.invalidate();window.destroy();self.write('Фактические данные сохранены локально в текущей заявке. Исходники не изменены.')
