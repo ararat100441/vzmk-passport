@@ -139,6 +139,51 @@ def word_table(doc,token,headers,rows):
 
 
 
+# Compact two-tier headers in the historical VZMK appendix are vertically
+# merged (A3:A4, etc.). The original 15 pt rows were too short to guarantee
+# legible repeats when many data lines printed across three PDF pages.
+# Change heights ONLY in temporary/newly issued copies; never in sources.
+_MIN_HEADER_ROW_HEIGHT_PT = 28.0
+_MIN_DATA_ROW_HEIGHT_PT = 18.0
+_MAX_DATA_ROW_HEIGHT_PT = 220.0
+
+
+def fit_appendix_body(sheet,first_data_row,last_data_row):
+    """Fit *actual text* after expanding data, not fixed-size diagnostic rows.
+
+    All body rows must be standalone (not merged) so native AutoFit can
+    increase heights for long marks/names. Reject a row that would require
+    more than a reasonable page height instead of silently cropping it.
+    Original column widths, fonts, number formats, formulas are preserved.
+    """
+    if (type(first_data_row) is not int or type(last_data_row) is not int
+            or first_data_row < 4 or last_data_row < first_data_row
+            or last_data_row - first_data_row > 10000):
+        raise Stop('Недопустимое число строк печати приложения.')
+    body=sheet.Range('A'+str(first_data_row)+':B'+str(last_data_row))
+    # Excel merged cells prevent reliable automatic row-height calculation.
+    if body.MergeCells:
+        raise Stop('В строках марок приложения имеются объединённые ячейки; '
+                   'безопасная высота для печати не подтверждена.')
+    body.WrapText=True
+    body.ShrinkToFit=False
+    body.VerticalAlignment=-4108  # xlCenter
+    sheet.Rows(str(first_data_row)+':'+str(last_data_row)).AutoFit()
+    for row in range(first_data_row,last_data_row+1):
+        native=sheet.Rows(row)
+        if native.Hidden:
+            raise Stop('Строка марки скрыта от печати: '+str(row))
+        height=native.RowHeight
+        if not isinstance(height,(int,float)) or height <= 0:
+            raise Stop('Excel не определил высоту строки марки '+str(row))
+        if height > _MAX_DATA_ROW_HEIGHT_PT:
+            raise Stop('Слишком длинное наименование для печати в строке '
+                       +str(row)+'; требуется проверка макета.')
+        if height < _MIN_DATA_ROW_HEIGHT_PT:
+            native.RowHeight=_MIN_DATA_ROW_HEIGHT_PT
+    return last_data_row-first_data_row+1
+
+
 def verify_appendix_print_layout(sheet,expected=None):
     """Read-only native Excel check for repeated compact headings."""
     actual=str(sheet.PageSetup.PrintTitleRows or '').replace('$','')
@@ -171,6 +216,17 @@ def set_appendix_print_titles(sheet,first_data_row):
     if (not str(sheet.Cells(first_header,1).Value2 or '').strip()
             or not str(sheet.Cells(first_data_row,1).Value2 or '').strip()):
         raise Stop('Нет заголовка или строки марок для печати.')
+    # Merged column header cells need real physical height on *every*
+    # printed page, especially pages 3+ with repeated titles.
+    heading=sheet.Range('A'+str(first_header)+':G'+str(last_header))
+    heading.WrapText=True
+    heading.VerticalAlignment=-4108  # xlCenter
+    for row in range(first_header,last_header+1):
+        line=sheet.Rows(row)
+        if not isinstance(line.RowHeight,(int,float)):
+            raise Stop('Excel не определил высоту заголовка '+str(row))
+        if line.RowHeight < _MIN_HEADER_ROW_HEIGHT_PT:
+            line.RowHeight=_MIN_HEADER_ROW_HEIGHT_PT
     sheet.PageSetup.PrintTitleRows='$'+str(first_header)+':$'+str(last_header)
     sheet.PageSetup.FitToPagesWide=1
     sheet.PageSetup.FitToPagesTall=False
@@ -334,6 +390,7 @@ def akz_rows(sheet,rows):
     for col in ('E','G'):sheet.Range(f'{col}{first}:{col}{total}').NumberFormatLocal='0'+str(sheet.Application.DecimalSeparator)+'00'
     sheet.Range(f'A{first}:G{total}').Borders.LineStyle=1
     sheet.Range(f'A{total}:G{total}').Font.Bold=True
+    fit_appendix_body(sheet,first,total-1)
     sheet.PageSetup.PrintArea=f'$A$1:$G${total}'
     set_appendix_print_titles(sheet,first)
 
@@ -368,7 +425,9 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                 # Set compact repeating table headers on NEW production copy only.
                 b=open_excel(app,target)
                 try:
-                    set_appendix_print_titles(b.Worksheets(layout.sheet),layout.start)
+                    sheet=b.Worksheets(layout.sheet)
+                    fit_appendix_body(sheet,layout.start,layout.start+len(vom.rows)-1)
+                    set_appendix_print_titles(sheet,layout.start)
                     b.Save()
                 finally:
                     b.Close(SaveChanges=False)
