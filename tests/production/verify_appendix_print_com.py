@@ -182,9 +182,11 @@ def main(first,akz,output):
     akz=Path(akz).resolve(strict=True)
     if first==akz or any(p.suffix.lower()!='.xlsx' for p in (first,akz)):
         raise ValueError('Нужны два разных проверенных XLSX.')
-    target=Path(output).resolve() if output else None
-    if target is not None:
-        target.mkdir(parents=True,exist_ok=False)
+    if not output:
+        raise ValueError('Нужна НОВАЯ папка --output: все страницы PDF '
+                         'обязательно просматриваются вручную.')
+    target=Path(output).resolve()
+    target.mkdir(parents=True,exist_ok=False)
     with tempfile.TemporaryDirectory(prefix='vzmk-pr14-print-') as temp:
         folder=target if target else Path(temp)
         with excel_session() as app:
@@ -211,7 +213,8 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument('--appendix-one',required=True)
     parser.add_argument('--akz-appendix',required=True)
-    parser.add_argument('--output',help='NEW directory for PDF screenshots and JSON')
+    parser.add_argument('--output',required=True,
+                        help='NEW directory for mandatory full PDF visual review')
     args=parser.parse_args()
     try:
         print(json.dumps(main(args.appendix_one,args.akz_appendix,args.output),
