@@ -92,6 +92,8 @@ def audit_pdf_pages(pdf_file,first_mark,last_mark):
     # Extraction may be inconclusive for specific fonts, but if it works on
     # the first page, missing headings on page 3 are a demonstrable FAIL.
     first=records[0]
+    if first['text_extracted'] and any(not p['text_extracted'] for p in records):
+        raise RuntimeError('Одна из страниц PDF не содержит извлекаемого текста.')
     if first['has_mark_header'] and first['has_name_header']:
         for page in records[1:]:
             if not (page['has_mark_header'] and page['has_name_header']):
@@ -99,8 +101,6 @@ def audit_pdf_pages(pdf_file,first_mark,last_mark):
                     'В PDF отсутствует повторяемый заголовок на странице '
                     +str(page['page'])+'; проверьте третью страницу.'
                 )
-    if first['text_extracted'] and any(not p['text_extracted'] for p in records):
-        raise RuntimeError('Одна из страниц PDF не содержит извлекаемого текста.')
     return records
 
 
