@@ -19,7 +19,7 @@ Runtime fixes: `13980df6ea3f5abe212899e6721db3def279c128` and
 | G0 isolated worktree and source hashes | PASS |
 | G1 native Word and visual review | PASS: 11 pages, 60 synthetic welds, 8 columns |
 | G1 native Excel and visual review | PASS: 4 and 6 pages, 7 columns, automatic row heights |
-| G2 current automated regression | PASS: 240 tests, zero failures/errors/skips in one run |
+| G2 current automated regression | PASS: 240 tests, zero failures/errors/skips in one run; historical ALL scope incomplete |
 | G3 training Office CHECK through COMPLETE | PASS |
 | G3 combined PDF | PASS: 13 pages, correct order and matching folder/file name |
 | G4 actual ReplaceFile fault and rollback | PASS: parallel-edit refusal, exact SHA rollback, idempotence |
@@ -51,5 +51,10 @@ the capture showed desktop wallpaper. A responding program window was registered
 but external GUI selection/input is **not verified**. The shipped-source Tk
 component test is separate evidence and does not replace this gate.
 
-Until external GUI acceptance is completed, G4 is PARTIAL and the overall
-acceptance closeout is **NO_GO**. Draft only; no merge or production issue.
+The literal requirement to rerun ALL historical tests is also not fully proved:
+four Stage5 acceptance scripts remain NOT_RUN because their historical evidence
+and execution context were not reconstructed. The 240-test result is not a claim
+that those scripts passed.
+
+Until external GUI acceptance and the historical regression scope are resolved,
+the overall acceptance closeout is **NO_GO**. Draft only; no merge or production issue.
