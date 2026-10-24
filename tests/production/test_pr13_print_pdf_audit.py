@@ -52,6 +52,13 @@ class MultiPagePdfAudit(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'странице 3'):
                 audit_pdf_pages('unused.pdf','SYNTHETIC-001','SYNTHETIC-110')
 
+    def test_repeated_header_without_any_mark_rows_is_rejected(self):
+        only_header='Отправочная марка  Наименование марки   Количество'
+        with patch('verify_appendix_print_com.PdfReader',
+                   return_value=pdf_pages(GOOD,GOOD,only_header)):
+            with self.assertRaisesRegex(RuntimeError,'ни одной синтетической'):
+                audit_pdf_pages('unused.pdf','SYNTHETIC-001','SYNTHETIC-110')
+
     def test_missing_page_text_is_detected(self):
         with patch('verify_appendix_print_com.PdfReader',
                    return_value=pdf_pages(GOOD,GOOD,'')):
