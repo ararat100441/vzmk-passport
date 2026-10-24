@@ -44,37 +44,35 @@ STATIC = {
 }
 
 
-
 def validate_three_layer_source(sheet):
-    """Only the audited, three-independent-column VZMK act is supported."""
+    """Reject single-layer imitations of the audited VZMK 3-layer act."""
     def val(address):
         return sheet.Range(address).Value2
     def label(address):
         return ' '.join(str(val(address) or '').casefold().replace('ё','е').split())
-    labels={'B17':'слой','B18':'наименование лкм','B19':'серийный',
-            'B20':'отвердител','B22':'дата','C25':'требуемая толщина',
-            'C28':'средняя толщина','B31':'температура поверхности',
-            'B32':'температура воздуха','B33':'влажности','B34':'точка росы'}
-    for address,expected in labels.items():
-        if expected not in label(address):
-            raise ValueError('Неверная трёхслойная форма АКЗ: '+address+' / '+expected)
+    required={'B17':'слой','B18':'наименование лкм','B19':'серийный',
+              'B20':'отвердител','B22':'дата','C25':'требуемая толщина',
+              'C28':'средняя толщина','B31':'температура поверхности',
+              'B32':'температура воздуха','B33':'влажности','B34':'точка росы'}
+    for address,needle in required.items():
+        if needle not in label(address):
+            raise ValueError('Неизвестная трёхслойная структура: '+address)
     if 'сертификат качества' not in label('B3'):
-        raise ValueError('Не найден заголовок сертификата качества АКЗ.')
-    for column,number in LAYERS:
-        mark=val(column+'17')
-        if type(mark) not in (int,float) or mark!=number:
-            raise ValueError('Отсутствует самостоятельный слой №'+str(number)
-                             +' в ячейке '+column+'17.')
+        raise ValueError('Не найдена форма сертификата АКЗ.')
+    for col,index in LAYERS:
+        raw=val(col+'17')
+        if type(raw) not in (int,float) or raw!=index:
+            raise ValueError('Не найден самостоятельный слой №'+str(index)
+                             +' в '+col+'17')
         for row in (18,19,20,22,27,28):
-            measured=val(column+str(row))
-            if measured in (None,''):
-                raise ValueError('Нет данных колонки слоя №'+str(number)
-                                 +': '+column+str(row))
+            v=val(col+str(row))
+            if v in (None,''):
+                raise ValueError('Нет данных слоя №'+str(index)+': '+col+str(row))
         for row in (22,27,28):
-            measured=val(column+str(row))
-            if type(measured) not in (int,float) or not (0<measured<100000):
-                raise ValueError('Неожиданное числовое значение '+column+str(row))
-        merged=str(sheet.Range(column+'18').MergeArea.Address).replace('
+            v=val(col+str(row))
+            if type(v) not in (int,float) or not 0<v<100000:
+                raise ValueError('Неверное значение '+col+str(row))
+        merge=str(sheet.Range(col+'18').MergeArea.Address).replace('
     source=Path(source).resolve(strict=True)
     dest=Path(destination).absolute()
     if source.suffix.lower()!='.xlsx' or dest.suffix.lower()!='.xlsx':
@@ -127,17 +125,17 @@ def validate_three_layer_source(sheet):
                 for row,field in fields.items():
                     cell=sheet.Range(column+str(row))
                     cell.Value2='{{'+field+'}}'
-            # Original H4 and per-coat row 22 were Excel dates. They are
-            # restored to true numbers by production_app.office.tokens_excel().
-            # Existing E30/H30/J30 formulas link to the corresponding row 22.
-            # Keep signature blocks legible in the candidate printout.
-            for address in ('E46','E47','F50','I50'):
-                sheet.Range(address).WrapText=True
+            # Keep technical markers legible for Windows print review.
+            for cell in ('E46','E47','F50','I50'):
+                sheet.Range(cell).WrapText=True
             sheet.Rows('46:47').RowHeight=45
             sheet.Rows('50:50').RowHeight=78
             verify_converted_three_layer_sheet(sheet)
+            # Existing day formulas rely on native date serials at row 22;
+            # those will be restored by production_app.office.tokens_excel().
             book.Save()
-            book.Close(SaveChanges=False);book=None
+            book.Close(SaveChanges=False)
+            book=None
             proof=app.Workbooks.Open(Filename=str(scratch),UpdateLinks=0,
                                      ReadOnly=True,AddToMru=False)
             try:verify_converted_three_layer_sheet(proof.Worksheets(1))
@@ -169,31 +167,32 @@ if __name__=='__main__':
     args=parser.parse_args()
     print(json.dumps(convert(args.source,args.destination),ensure_ascii=False,indent=2))
 ,'').upper()
-        end={'E':'G','H':'I','J':'K'}[column]
-        if merged!=column+'18:'+end+'18':
-            raise ValueError('Иная структура объединённых ячеек '+column+'18')
+        expected=col+'18:'+{'E':'G','H':'I','J':'K'}[col]+'18'
+        if merge!=expected:
+            raise ValueError('Не совпадает объединённая ячейка '+col+'18')
     return True
 
 
 def verify_converted_three_layer_sheet(sheet):
-    """Check each placeholder after native Excel Save/Open."""
-    for column,number in LAYERS:
-        if sheet.Range(column+'17').Value2!=number:
-            raise ValueError('После сохранения потерян слой №'+str(number))
-        prefix='AKZ_LAYER_'+str(number)+'_'
-        for row,field in ((18,'MATERIAL'),(19,'PAINT_BATCH'),(20,'HARDENER_BATCH'),
-                          (21,'COLOR'),(22,'APPLICATION_DATE'),(23,'TIME_START'),
-                          (24,'TIME_END'),(27,'WET_AVG')):
-            if sheet.Range(column+str(row)).Value2!='{{'+prefix+field+'}}':
-                raise ValueError('После сохранения потеряно поле '+column+str(row))
+    """Check complete template after native Excel Save/ReadOnly Open."""
+    for col,index in LAYERS:
+        if sheet.Range(col+'17').Value2!=index:
+            raise ValueError('После сохранения потерян слой №'+str(index))
+        prefix='AKZ_LAYER_'+str(index)+'_'
+        fields=((18,'MATERIAL'),(19,'PAINT_BATCH'),(20,'HARDENER_BATCH'),
+                (21,'COLOR'),(22,'APPLICATION_DATE'),(23,'TIME_START'),
+                (24,'TIME_END'),(27,'WET_AVG'))
+        for row,field in fields:
+            if sheet.Range(col+str(row)).Value2!='{{'+prefix+field+'}}':
+                raise ValueError('Потеряно поле '+col+str(row))
         for row,field in ((25,'RANGE'),(26,'TOTAL_RANGE'),(28,'DRY_AVG')):
-            if sheet.Range(column+str(row)).Value2!='{{LAYER_'+str(number)+'_'+field+'}}':
-                raise ValueError('После сохранения потерян диапазон/средняя слоя '+str(number))
+            if sheet.Range(col+str(row)).Value2!='{{LAYER_'+str(index)+'_'+field+'}}':
+                raise ValueError('Потеряна толщина/средняя слоя №'+str(index))
         for row,field in ((31,'SURFACE'),(32,'AIR'),(33,'HUMIDITY'),(34,'DEW')):
-            if sheet.Range(column+str(row)).Value2!='{{'+field+'}}':
-                raise ValueError('После сохранения потерян климат слоя №'+str(number))
+            if sheet.Range(col+str(row)).Value2!='{{'+field+'}}':
+                raise ValueError('Потерян климат слоя №'+str(index))
     if sheet.Range('E7').Value2!='{{OBJECT}}':
-        raise ValueError('Потерян обязательный реквизит объекта АКЗ.')
+        raise ValueError('Потеряно поле объекта АКЗ.')
     if not str(sheet.PageSetup.PrintArea or '').strip():
         raise ValueError('Потеряна область печати АКЗ.')
     return True
