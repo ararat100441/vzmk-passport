@@ -118,6 +118,9 @@ def word_table(doc,token,headers,rows):
         # Fit the 8-column UZK table to the landscape document width.
         # Word constants: wdAutoFitWindow=2.
         table.AutoFitBehavior(2)
+        # A weld record must remain readable with its mark on the same page.
+        # Word otherwise splits long cells across pages under a repeated head.
+        table.Rows.AllowBreakAcrossPages=False
         for col,value in enumerate(headers,1):
             table.Cell(1,col).Range.Text=str(value)
         table.Rows(1).HeadingFormat=True

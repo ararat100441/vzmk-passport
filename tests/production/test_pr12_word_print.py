@@ -54,6 +54,17 @@ class FakeContent:
         return FakeAnchor(self.doc)
 
 
+class FakeWordRows:
+    def __init__(self,table):
+        self.table=table
+        self.AllowBreakAcrossPages=True
+    def __call__(self,index):
+        assert 1<=index<=self.table.rows
+        return SimpleNamespace(Cells=SimpleNamespace(Count=self.table.columns),
+                               HeadingFormat=None,Range=SimpleNamespace(
+                                   Font=SimpleNamespace(Bold=False)))
+
+
 class FakeTable:
     def __init__(self,rows,columns):
         self.rows=rows
@@ -61,13 +72,9 @@ class FakeTable:
         self.Borders=SimpleNamespace(Enable=None)
         self.values={}
         self.fit_mode=None
+        self.Rows=FakeWordRows(self)
     def AutoFitBehavior(self,mode):
         self.fit_mode=mode
-    def Rows(self,index):
-        assert 1<=index<=self.rows
-        return SimpleNamespace(Cells=SimpleNamespace(Count=self.columns),
-                               HeadingFormat=None,Range=SimpleNamespace(
-                                   Font=SimpleNamespace(Bold=False)))
     def Cell(self,row,column):
         assert 1<=row<=self.rows
         assert 1<=column<=self.columns
@@ -163,6 +170,14 @@ class FakeExcelSheet:
 
 
 class OfficeContracts(unittest.TestCase):
+    def test_uzk_records_stay_with_their_mark_across_printed_pages(self):
+        doc=FakeWord()
+        long_row=tuple('LONG WELD RECORD '+str(n)+' '*5 for n in range(8))
+        table=word_table(doc,TOKEN,HEADERS,(long_row,))
+        self.assertFalse(table.Rows.AllowBreakAcrossPages)
+        self.assertEqual([table.Cell(2,n).Range.Text for n in range(1,9)],
+                         list(long_row))
+
     def test_uzk_has_new_independent_eight_column_table(self):
         doc=FakeWord()
         table=word_table(doc,TOKEN,HEADERS,ROWS)

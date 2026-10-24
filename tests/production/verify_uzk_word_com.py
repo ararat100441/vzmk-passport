@@ -86,6 +86,8 @@ def verify_saved_table(doc,original_count):
     if len(found)!=1:
         raise RuntimeError('Не найдена ровно одна самостоятельная таблица УЗК с 8 колонками.')
     table=found[0]
+    if table.Rows.AllowBreakAcrossPages:
+        raise RuntimeError('Word разрешает разрыв записи соединения между страницами.')
     if not bool(table.Rows(1).HeadingFormat):
         raise RuntimeError('В Word не сохранён повторяемый заголовок строк УЗК.')
     doc.Repaginate()
@@ -95,6 +97,7 @@ def verify_saved_table(doc,original_count):
     return {'pages':pages,
             'tables':doc.Tables.Count,
             'uzk_columns':8,
+            'uzk_rows_unsplit':True,
             'uzk_header_repeat_property':True}
 
 
