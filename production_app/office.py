@@ -197,6 +197,14 @@ def verify_appendix_print_layout(sheet,expected=None):
                    '; фактически '+actual)
     if not str(sheet.PageSetup.PrintArea or '').strip():
         raise Stop('Отсутствует область печати приложения.')
+    # Persisted PrintTitleRows alone is not sufficient: the PR13 PDF had
+    # cropped headings on page three despite correct repeat-row metadata.
+    first,last=map(int,actual.split(':'))
+    for row in range(first,last+1):
+        height=sheet.Rows(row).RowHeight
+        if not isinstance(height,(int,float)) or height < _MIN_HEADER_ROW_HEIGHT_PT:
+            raise Stop('Повторяемый заголовок слишком низкий после Excel Save/Open: '
+                       +str(row)+' / '+str(height))
     return actual
 
 
