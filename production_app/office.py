@@ -345,9 +345,12 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                 if climate is None:continue
             target=folder/(filename(facts['number'])+' - '+role+'.xlsx');shutil.copyfile(ref['path'],target)
             if role=='appendix':
+                # The first-passport template is valid BEFORE number/date change.
+                # A second inspect_template AFTER generation would reject the
+                # newly numbered passport as no longer the first template.
+                layout,_,_=inspect_template(target,project)
                 generate_appendix(app,target,project,vom,{'number':facts['number'],'date':date.fromisoformat(facts['date']),'object':values['OBJECT']})
                 # Set compact repeating table headers on NEW production copy only.
-                layout,_,_=inspect_template(target,project)
                 b=open_excel(app,target)
                 try:
                     set_appendix_print_titles(b.Worksheets(layout.sheet),layout.start)
