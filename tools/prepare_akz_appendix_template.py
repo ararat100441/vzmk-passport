@@ -59,25 +59,48 @@ def convert(source, destination):
         if len(totals) != 1 or totals[0] <= 4:
             raise ValueError("Expected exactly one historical total row after mark rows.")
 
-        # Remove old marks, quantities, weights, areas and historical total values
-        # from the COPY only. Keep all header cells, merges, borders and native
-        # printer settings. Runtime inserts dynamic rows and recalculates totals.
-        sheet.Range("A4:G" + str(totals[0])).ClearContents()
+        # Insert one explicitly approved, merged OBJECT row. The historic
+        # appendix has a title in A1:G1, headers in rows 2/3 and no place for
+        # an object name. Adding the separate row preserves both header tiers.
+        # All historical marks/results are cleared ONLY in the temporary copy.
+        original_total = totals[0]
+        sheet.Rows("2:2").Insert()
+        sheet.Range("A2:G2").Merge()
+        sheet.Range("A2").Value2 = "Объект: {{OBJECT}}"
+        sheet.Range("A2").WrapText = True
+        sheet.Rows("2:2").RowHeight = 75
+        sheet.Range("A5:G" + str(original_total + 1)).ClearContents()
         sheet.Range("A1").Value2 = (
             "Приложение № {{NUMBER}} к акту АКЗ № {{NUMBER}} от {{AKZ_DATE}} г."
         )
-        sheet.Range("A4").Value2 = "{{AKZ_MARKS}}"
-        sheet.Range("A5").Value2 = "Итого"
-        sheet.Range("A5:G5").Font.Bold = True
-        sheet.Range("A4:G5").Borders.LineStyle = 1
-        sheet.PageSetup.PrintArea = "$A$1:$G$5"
-        sheet.PageSetup.PrintTitleRows = "$1:$3"
+        sheet.Range("A5").Value2 = "{{AKZ_MARKS}}"
+        sheet.Range("A6").Value2 = "Итого"
+        sheet.Range("A6:G6").Font.Bold = True
+        sheet.Range("A5:G6").Borders.LineStyle = 1
+        sheet.PageSetup.PrintArea = "$A$1:$G$6"
+        sheet.PageSetup.PrintTitleRows = "$1:$4"
         sheet.PageSetup.FitToPagesWide = 1
         sheet.PageSetup.FitToPagesTall = False
         sheet.PageSetup.Zoom = False
+        if (sheet.Range("A2").Value2 != "Объект: {{OBJECT}}" or
+                sheet.Range("A3").Value2 != "Отправочная марка" or
+                sheet.Range("A5").Value2 != "{{AKZ_MARKS}}" or
+                sheet.Range("A6").Value2 != "Итого"):
+            raise ValueError("Неверная структура нового приложения АКЗ.")
         book.Save()
         book.Close(SaveChanges=False)
         book = None
+        proof = app.Workbooks.Open(str(scratch), UpdateLinks=0, ReadOnly=True, AddToMru=False)
+        try:
+            check = proof.Worksheets(1)
+            if (check.Range("A2").Value2 != "Объект: {{OBJECT}}" or
+                    check.Range("A3").Value2 != "Отправочная марка" or
+                    check.Range("A5").Value2 != "{{AKZ_MARKS}}" or
+                    check.Range("A6").Value2 != "Итого" or
+                    not str(check.PageSetup.PrintArea or "").strip()):
+                raise ValueError("Excel Save/Open изменил шаблон приложения АКЗ.")
+        finally:
+            proof.Close(SaveChanges=False)
         if digest(source) != before:
             raise RuntimeError("Source SHA changed unexpectedly — STOP.")
         if dest.exists():
