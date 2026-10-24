@@ -95,14 +95,14 @@ class AdapterContracts(unittest.TestCase):
     def test_different_merge_layout_not_silently_used(self):
         sample=source()
         sample.merges['H18']='$H$18:$J$18'
-        with self.assertRaisesRegex(ValueError,'объединён'):
+        with self.assertRaisesRegex(ValueError,'объедин'):
             validate_three_layer_source(sample)
 
     def test_candidate_has_all_fields_after_save(self):
         self.assertTrue(verify_converted_three_layer_sheet(converted()))
         sample=converted()
         sample.values['J28']='Historical mean'
-        with self.assertRaisesRegex(ValueError,'средняя'):
+        with self.assertRaisesRegex(ValueError,'толщины'):
             verify_converted_three_layer_sheet(sample)
 
     def test_appendix_has_object_and_dynamic_row(self):
