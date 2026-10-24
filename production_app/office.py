@@ -82,75 +82,64 @@ def word_table(doc,token,headers,rows):
         for c,value in enumerate(row,1):table.Cell(n,c).Range.Text=str(value)
 
 
-# Microsoft Excel NumberFormat uses invariant codes; NumberFormatLocal
-# uses the UI language.  A particular Russian installation displayed
-# NumberFormatLocal "дд.мм.гггг" as 19.00.2026, i.e. the "мм" segment
-# was not interpreted as the calendar month. Never trust one format code
-# without checking its actual rendering.
-#
-# Prefer the format inherited from an approved historical Excel template;
-# otherwise select the first format actually verified by Excel itself.
-# All candidates preserve numeric serials required by АКЗ formulas.
-_DATE_FORMAT_CANDIDATES = (
-    ('NumberFormat', 'dd.mm.yyyy'),
-    ('NumberFormat', 'dd"."mm"."yyyy'),
-    ('NumberFormatLocal', 'дд.мм.гггг'),
-)
-_TIME_FORMAT_CANDIDATES = (
-    ('NumberFormatLocal', 'чч:мм'),
-    ('NumberFormat', 'hh:mm'),
-)
+# The approved VZMK historical 3-layer XLSX uses *built-in* Excel number
+# format IDs 14 (dates at H4, E22/H22/J22) and 20 (times at E23/H23/J23).
+# Applying text-based NumberFormat or NumberFormatLocal from Python destroyed
+# those native styles on the user's ru-RU installation: 19.00.2026 / literal
+# dd.mm.yyyy. Keep the native Excel styles exactly as provided in the form.
+# We write only Value2, preserving the numeric serial used by workbook formulas.
+# A template without correctly preformatted date/time cells must fail closed.
+
+def _native_time_matches(visible, expected):
+    """Accept a valid native h:mm as well as hh:mm, never a literal mask."""
+    try:
+        shown = str(visible).strip().split(':')
+        target = str(expected).strip().split(':')
+        if len(shown) != 2 or len(target) != 2:
+            return False
+        if not all(part.isascii() and part.isdecimal() for part in shown+target):
+            return False
+        hh, mm = map(int, shown)
+        th, tm = map(int, target)
+        return 0 <= hh < 24 and 0 <= mm < 60 and (hh,mm) == (th,tm)
+    except (TypeError, ValueError):
+        return False
 
 
 def _set_ru_excel_date_time(cell, serial, rendered, *, is_time, key):
-    """Write numeric Excel serial; confirm actual visible date/time.
+    """Require *existing* Excel date/time formatting, never set mask strings.
 
-    Preserve existing format when it works; otherwise choose a verified
-    format instead of assuming English or localized pattern is correct.
-    Fail closed if no format renders exactly the required date/time.
+    Document fields H4 / E22 / E23 have built-in format styles. Do not replace
+    them with a custom mask. Reject general-format cells and incorrect display;
+    user must provide an approved native preformatted template.
     """
-    attempted = []
     try:
+        before_local = cell.NumberFormatLocal
+        before_invariant = cell.NumberFormat
         cell.Value2 = serial
-        actual_number = cell.Value2
-        if (isinstance(actual_number, bool) or
-                not isinstance(actual_number, (int, float)) or
-                abs(float(actual_number) - float(serial)) > 1e-9):
-            raise Stop('Excel: дата/время не сохранены числом: ' + key)
+        stored = cell.Value2
         visible = str(cell.Text or '').strip()
-        if visible == rendered:
-            return
-        attempted.append('Исходный формат: ' + visible)
-    except Stop:
-        raise
+        after_local = cell.NumberFormatLocal
+        after_invariant = cell.NumberFormat
     except Exception as exc:
-        raise Stop('Excel: не удалось записать число даты/времени ' +
-                   key + ': ' + str(exc)) from exc
+        raise Stop('Excel: не удалось прочитать исходный формат даты/времени '
+                   + key + ': ' + str(exc)) from exc
 
-    candidates = (_TIME_FORMAT_CANDIDATES if is_time
-                  else _DATE_FORMAT_CANDIDATES)
-    for property_name, format_code in candidates:
-        try:
-            setattr(cell, property_name, format_code)
-            actual_number = cell.Value2
-            if (isinstance(actual_number, bool) or
-                    not isinstance(actual_number, (int, float)) or
-                    abs(float(actual_number) - float(serial)) > 1e-9):
-                raise Stop('Excel: формат изменил число даты/времени: ' + key)
-            visible = str(cell.Text or '').strip()
-        except Stop:
-            raise
-        except Exception as exc:
-            attempted.append(property_name + '=' + format_code + ': ' +
-                             type(exc).__name__)
-            continue
-        if visible == rendered:
-            return
-        attempted.append(property_name + '=' + format_code + ': ' + visible)
+    if (isinstance(stored, bool) or not isinstance(stored, (int, float))
+            or abs(float(stored) - float(serial)) > 1e-9):
+        raise Stop('Excel: неверное числовое значение даты/времени ' + key)
 
-    raise Stop('Excel: ни один проверенный формат даты/времени не подошёл '
-               + key + '; ожидалось ' + rendered + '; ' +
-               '; '.join(attempted))
+    if after_local != before_local or after_invariant != before_invariant:
+        raise Stop('Excel: изменился исходный формат ячейки '+key)
+
+    accepted = (_native_time_matches(visible, rendered)
+                if is_time else visible == rendered)
+    if not accepted:
+        raise Stop('Excel: исходная ячейка шаблона АКЗ не имеет корректного '
+                   'встроенного формата даты/времени '+key+
+                   '; отображается '+visible+'; ожидалось '+rendered+
+                   '. Используйте отдельную согласованную XLSX-форму с '
+                   'исходными форматами Excel; маски программой не заменяются.')
 
 def tokens_excel(sheet,values):
     # Preserve number types in Excel when a cell contains a single numeric
