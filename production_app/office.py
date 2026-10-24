@@ -82,34 +82,75 @@ def word_table(doc,token,headers,rows):
         for c,value in enumerate(row,1):table.Cell(n,c).Range.Text=str(value)
 
 
-# Excel NumberFormatLocal accepts the *Excel UI language* format codes.
-# On Russian Excel the English identifiers dd / yyyy / hh are rendered as
-# literal characters and may cause error 1004 after a native Save/Open.
-# Microsoft documents Russian codes дд / мм / гггг and чч / мм.
-_RU_DATE_FORMAT = 'дд.мм.гггг'
-_RU_TIME_FORMAT = 'чч:мм'
+# Microsoft Excel NumberFormat uses invariant codes; NumberFormatLocal
+# uses the UI language.  A particular Russian installation displayed
+# NumberFormatLocal "дд.мм.гггг" as 19.00.2026, i.e. the "мм" segment
+# was not interpreted as the calendar month. Never trust one format code
+# without checking its actual rendering.
+#
+# Prefer the format inherited from an approved historical Excel template;
+# otherwise select the first format actually verified by Excel itself.
+# All candidates preserve numeric serials required by АКЗ formulas.
+_DATE_FORMAT_CANDIDATES = (
+    ('NumberFormat', 'dd.mm.yyyy'),
+    ('NumberFormat', 'dd"."mm"."yyyy'),
+    ('NumberFormatLocal', 'дд.мм.гггг'),
+)
+_TIME_FORMAT_CANDIDATES = (
+    ('NumberFormatLocal', 'чч:мм'),
+    ('NumberFormat', 'hh:mm'),
+)
 
 
 def _set_ru_excel_date_time(cell, serial, rendered, *, is_time, key):
-    """Write numeric native serial and verify Excel's visible ru-RU formatting.
+    """Write numeric Excel serial; confirm actual visible date/time.
 
-    Never replace the actual value with the displayed text: Excel formulas in
-    the three-layer АКЗ act depend on genuine date/time numbers.
+    Preserve existing format when it works; otherwise choose a verified
+    format instead of assuming English or localized pattern is correct.
+    Fail closed if no format renders exactly the required date/time.
     """
-    fmt = _RU_TIME_FORMAT if is_time else _RU_DATE_FORMAT
+    attempted = []
     try:
-        cell.NumberFormatLocal = fmt
         cell.Value2 = serial
-        visible = getattr(cell, 'Text', None)
-        stored = cell.Value2
+        actual_number = cell.Value2
+        if (isinstance(actual_number, bool) or
+                not isinstance(actual_number, (int, float)) or
+                abs(float(actual_number) - float(serial)) > 1e-9):
+            raise Stop('Excel: дата/время не сохранены числом: ' + key)
+        visible = str(cell.Text or '').strip()
+        if visible == rendered:
+            return
+        attempted.append('Исходный формат: ' + visible)
+    except Stop:
+        raise
     except Exception as exc:
-        raise Stop('Excel: не удалось установить локальный формат даты/времени '
-                   + key + ': ' + str(exc)) from exc
-    if isinstance(stored, bool) or not isinstance(stored, (int, float)):
-        raise Stop('Excel: дата/время не сохранены числом: ' + key)
-    if visible is not None and str(visible).strip() != rendered:
-        raise Stop('Excel ru-RU: неправильное отображение даты/времени '
-                   + key + ': ' + str(visible) + '; ожидалось ' + rendered)
+        raise Stop('Excel: не удалось записать число даты/времени ' +
+                   key + ': ' + str(exc)) from exc
+
+    candidates = (_TIME_FORMAT_CANDIDATES if is_time
+                  else _DATE_FORMAT_CANDIDATES)
+    for property_name, format_code in candidates:
+        try:
+            setattr(cell, property_name, format_code)
+            actual_number = cell.Value2
+            if (isinstance(actual_number, bool) or
+                    not isinstance(actual_number, (int, float)) or
+                    abs(float(actual_number) - float(serial)) > 1e-9):
+                raise Stop('Excel: формат изменил число даты/времени: ' + key)
+            visible = str(cell.Text or '').strip()
+        except Stop:
+            raise
+        except Exception as exc:
+            attempted.append(property_name + '=' + format_code + ': ' +
+                             type(exc).__name__)
+            continue
+        if visible == rendered:
+            return
+        attempted.append(property_name + '=' + format_code + ': ' + visible)
+
+    raise Stop('Excel: ни один проверенный формат даты/времени не подошёл '
+               + key + '; ожидалось ' + rendered + '; ' +
+               '; '.join(attempted))
 
 def tokens_excel(sheet,values):
     # Preserve number types in Excel when a cell contains a single numeric
