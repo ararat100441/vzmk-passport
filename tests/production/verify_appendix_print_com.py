@@ -94,6 +94,11 @@ def audit_pdf_pages(pdf_file,first_mark,last_mark):
     first=records[0]
     if first['text_extracted'] and any(not p['text_extracted'] for p in records):
         raise RuntimeError('Одна из страниц PDF не содержит извлекаемого текста.')
+    if first['has_synthetic_rows']:
+        for page in records[1:]:
+            if not page['has_synthetic_rows']:
+                raise RuntimeError('PDF страница '+str(page['page'])+
+                                   ' не содержит ни одной синтетической марки.')
     if first['has_mark_header'] and first['has_name_header']:
         for page in records[1:]:
             if not (page['has_mark_header'] and page['has_name_header']):
