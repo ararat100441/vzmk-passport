@@ -45,9 +45,12 @@ class Cell:
 
     @property
     def Text(self):
-        if self.NumberFormatLocal == 'дд.мм.гггг':
+        if self.NumberFormat in ('dd.mm.yyyy', 'dd"."mm"."yyyy'):
             dt = date(1899,12,30) + timedelta(days=int(self.Value2))
             return dt.strftime('%d.%m.%Y')
+        if self.NumberFormatLocal == 'дд.мм.гггг':
+            dt = date(1899,12,30) + timedelta(days=int(self.Value2))
+            return dt.strftime('%d.00.%Y')  # exact PR10 Russian Excel defect
         if self.NumberFormatLocal == 'чч:мм':
             total = round(float(self.Value2)*1440)
             return f'{total//60:02d}:{total%60:02d}'
@@ -111,8 +114,8 @@ class HistoricalAKZ(unittest.TestCase):
         expected=(date(2026,10,19)-date(1899,12,30)).days
         self.assertEqual(sheet.Cells(1,1).Value2,expected)
         self.assertEqual(sheet.Cells(2,1).Value2,expected)
-        self.assertEqual(sheet.Cells(1,1).NumberFormatLocal,'дд.мм.гггг')
-        self.assertEqual(sheet.Cells(1,1).NumberFormat,'General')
+        self.assertEqual(sheet.Cells(1,1).NumberFormat,'dd.mm.yyyy')
+        self.assertEqual(sheet.Cells(1,1).NumberFormatLocal,'Общий')
         self.assertEqual(sheet.Cells(1,1).Text,'19.10.2026')
         self.assertEqual(sheet.Cells(3,1).NumberFormatLocal,'чч:мм')
         self.assertEqual(sheet.Cells(3,1).Text,'08:00')
@@ -128,21 +131,47 @@ class HistoricalAKZ(unittest.TestCase):
 
         sheet=Sheet(['{{AKZ_LAYER_1_TIME_START}}'])
         sheet._cells[(1,1)] = WrongVisibleCell('{{AKZ_LAYER_1_TIME_START}}')
-        with self.assertRaisesRegex(Stop, 'неправильное отображение'):
+        with self.assertRaisesRegex(Stop, 'ни один проверенный формат'):
             tokens_excel(sheet, {'AKZ_LAYER_1_TIME_START':'08:00'})
+
+    def test_regression_month_zero_falls_back_to_invariant_date_format(self):
+        # PR10 observed 19.00.2026 from a Cyrillic NumberFormatLocal mask.
+        sheet=Sheet(['{{AKZ_DATE}}'])
+        cell=sheet.Cells(1,1)
+        cell.NumberFormatLocal='дд.мм.гггг'
+        tokens_excel(sheet, {'AKZ_DATE':'19.10.2026'})
+        self.assertEqual(cell.Text, '19.10.2026')
+        self.assertEqual(cell.NumberFormat, 'dd.mm.yyyy')
+
+    def test_preexisting_correct_date_format_remains_unchanged(self):
+        # Prefer the approved template's existing working native format.
+        sheet=Sheet(['{{AKZ_DATE}}'])
+        cell=sheet.Cells(1,1)
+        cell.NumberFormat='dd.mm.yyyy'
+        tokens_excel(sheet, {'AKZ_DATE':'19.10.2026'})
+        self.assertEqual(cell.NumberFormat, 'dd.mm.yyyy')
+        self.assertEqual(cell.NumberFormatLocal, 'Общий')
+        self.assertEqual(cell.Text, '19.10.2026')
 
     def test_excel_format_com_failure_is_not_silenced(self):
         class FailingCell(Cell):
             @property
             def NumberFormatLocal(self):
-                return 'Общий'
+                return self._local_format
             @NumberFormatLocal.setter
-            def NumberFormatLocal(self, format_code):
-                if format_code!='Общий':
-                    raise RuntimeError('Excel 1004')
+            def NumberFormatLocal(self, fmt):
+                if fmt!='Общий':raise RuntimeError('Excel 1004')
+                self._local_format=fmt
+            @property
+            def NumberFormat(self):
+                return self._format
+            @NumberFormat.setter
+            def NumberFormat(self, fmt):
+                if fmt!='General':raise RuntimeError('Excel 1004')
+                self._format=fmt
         sheet=Sheet(['{{AKZ_DATE}}'])
         sheet._cells[(1,1)] = FailingCell('{{AKZ_DATE}}')
-        with self.assertRaisesRegex(Stop, 'локальный формат'):
+        with self.assertRaisesRegex(Stop, 'ни один проверенный формат'):
             tokens_excel(sheet, {'AKZ_DATE':'19.10.2026'})
 
     def test_ru_date_and_time_leave_neighboring_excel_formulas_untouched(self):
@@ -153,7 +182,7 @@ class HistoricalAKZ(unittest.TestCase):
         self.assertEqual(sheet.Cells(2,1).Value2, '=E22+1')
         self.assertEqual(sheet.Cells(3,1).Text, '10:30')
         self.assertAlmostEqual(sheet.Cells(3,1).Value2, 10.5/24)
-        self.assertEqual(sheet.Cells(1,1).NumberFormatLocal, 'дд.мм.гггг')
+        self.assertEqual(sheet.Cells(1,1).NumberFormat, 'dd.mm.yyyy')
 
     def test_three_layer_act_require_input_fields_before_copy(self):
         roles={'akz0':{'path':'test.xlsx'}}
