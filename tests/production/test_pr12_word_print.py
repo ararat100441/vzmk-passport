@@ -2,7 +2,7 @@
 import unittest
 from types import SimpleNamespace
 
-from production_app.office import word_table, set_appendix_print_titles, verify_appendix_print_layout
+from production_app.office import word_table, set_appendix_print_titles, verify_appendix_print_layout, fit_appendix_body
 from production_app.storage import Stop
 
 TOKEN='{{UZK_DETAILS_TABLE}}'
@@ -100,6 +100,42 @@ class FakeWord:
         self.Tables=FakeTables(self)
 
 
+class FakeExcelRange:
+    def __init__(self, *, merged=False):
+        self.MergeCells=merged
+        self.WrapText=False
+        self.ShrinkToFit=True
+        self.VerticalAlignment=None
+
+
+class FakeExcelRows:
+    def __init__(self,sheet,index):
+        self.sheet=sheet
+        self.index=str(index)
+        self.start=int(self.index.split(':')[0])
+        self.end=int(self.index.split(':')[-1])
+
+    @property
+    def RowHeight(self):
+        return self.sheet.heights[self.start]
+    @RowHeight.setter
+    def RowHeight(self,value):
+        for row in range(self.start,self.end+1):
+            self.sheet.heights[row]=value
+
+    @property
+    def Hidden(self):
+        return self.sheet.hidden.get(self.start,False)
+
+    def AutoFit(self):
+        self.sheet.called_autofit=True
+        for row in range(self.start,self.end+1):
+            text=' '.join(str(self.sheet.values.get((row,col),''))
+                          for col in (1,2))
+            # Synthetic Excel estimate for long wrapped input.
+            self.sheet.heights[row]=18+(len(text)//35)*14
+
+
 class FakeExcelSheet:
     def __init__(self,start):
         self.start=start
@@ -112,8 +148,18 @@ class FakeExcelSheet:
         self.PageSetup=SimpleNamespace(PrintTitleRows='$1:$4',PrintArea='$A$1:$G$110',
                                        FitToPagesWide=None,
                                        FitToPagesTall=None,Zoom=None)
+        self.heights={i:15.0 for i in range(1,320)}
+        self.hidden={}
+        self.ranges={}
+        self.called_autofit=False
     def Cells(self,row,col):
         return SimpleNamespace(Value2=self.values.get((row,col)))
+    def Rows(self,index):
+        return FakeExcelRows(self,index)
+    def Range(self,address):
+        if address not in self.ranges:
+            self.ranges[address]=FakeExcelRange()
+        return self.ranges[address]
 
 
 class OfficeContracts(unittest.TestCase):
@@ -161,6 +207,40 @@ class OfficeContracts(unittest.TestCase):
                          'ПРИЛОЖЕНИЕ — длинный номер и дата')
         self.assertIn('очень длинное',sheet.values[(2,1)])
 
+    def test_tall_repeated_headers_avoid_page_three_clipping(self):
+        sheet=FakeExcelSheet(start=5)
+        self.assertEqual(sheet.Rows(3).RowHeight,15)
+        set_appendix_print_titles(sheet,5)
+        self.assertGreaterEqual(sheet.Rows(3).RowHeight,28)
+        self.assertGreaterEqual(sheet.Rows(4).RowHeight,28)
+        self.assertTrue(sheet.Range('A3:G4').WrapText)
+        self.assertEqual(sheet.PageSetup.PrintTitleRows,'$3:$4')
+
+    def test_long_mark_names_trigger_autofit_not_fixed_18pt(self):
+        sheet=FakeExcelSheet(start=5)
+        sheet.values[(6,2)]='Тестовое наименование марки с большим количеством слов '*3
+        self.assertEqual(fit_appendix_body(sheet,5,8),4)
+        self.assertTrue(sheet.called_autofit)
+        self.assertGreater(sheet.Rows(6).RowHeight,18)
+        self.assertTrue(sheet.Range('A5:B8').WrapText)
+        self.assertFalse(sheet.Range('A5:B8').ShrinkToFit)
+
+    def test_merged_or_overlong_data_row_stops_before_print(self):
+        sheet=FakeExcelSheet(start=5)
+        sheet.Range('A5:B8').MergeCells=True
+        with self.assertRaisesRegex(Stop,'объединённые'):
+            fit_appendix_body(sheet,5,8)
+        sheet=FakeExcelSheet(start=5)
+        sheet.values[(6,2)]='very long synthetic label '*70
+        with self.assertRaisesRegex(Stop,'Слишком длинное'):
+            fit_appendix_body(sheet,5,8)
+
+    def test_hidden_source_row_stops_instead_of_omitting_marks(self):
+        sheet=FakeExcelSheet(start=5)
+        sheet.hidden[6]=True
+        with self.assertRaisesRegex(Stop,'скрыта'):
+            fit_appendix_body(sheet,5,8)
+
     def test_generic_one_tier_header_excludes_object(self):
         sheet=FakeExcelSheet(start=4)
         self.assertEqual(set_appendix_print_titles(sheet,4),(3,3))
@@ -181,7 +261,16 @@ class OfficeContracts(unittest.TestCase):
     def test_reopened_compact_print_titles_preserved(self):
         sheet=FakeExcelSheet(start=5)
         sheet.PageSetup.PrintTitleRows="'Приложение №1'!$3:$4"
+        sheet.heights[3]=28
+        sheet.heights[4]=28
         self.assertEqual(verify_appendix_print_layout(sheet,'3:4'),'3:4')
+
+    def test_page_three_header_too_short_after_reopen_is_refused(self):
+        sheet=FakeExcelSheet(start=5)
+        sheet.PageSetup.PrintTitleRows='$3:$4'
+        # Correct PrintTitleRows alone never certifies print legibility.
+        with self.assertRaisesRegex(Stop,'слишком низкий'):
+            verify_appendix_print_layout(sheet,'3:4')
 
     def test_missing_print_area_refused(self):
         sheet=FakeExcelSheet(start=5)
