@@ -138,6 +138,23 @@ def word_table(doc,token,headers,rows):
     return table
 
 
+
+def verify_appendix_print_layout(sheet,expected=None):
+    """Read-only native Excel check for repeated compact headings."""
+    actual=str(sheet.PageSetup.PrintTitleRows or '').replace('$','')
+    # Excel may prepend the sheet name to the A1-style range.
+    actual=actual.rsplit('!',1)[-1].strip().upper()
+    if actual not in ('3:3','3:4'):
+        raise Stop('Excel повторяет длинные строки названия/объекта или не '
+                   'сохранил компактную шапку таблицы: '+actual)
+    if expected is not None and actual!=expected:
+        raise Stop('Excel не сохранил ожидаемую шапку '+expected+
+                   '; фактически '+actual)
+    if not str(sheet.PageSetup.PrintArea or '').strip():
+        raise Stop('Отсутствует область печати приложения.')
+    return actual
+
+
 def set_appendix_print_titles(sheet,first_data_row):
     """Repeat ONLY compact table labels, not long title/object on later pages.
 
@@ -158,9 +175,7 @@ def set_appendix_print_titles(sheet,first_data_row):
     sheet.PageSetup.FitToPagesWide=1
     sheet.PageSetup.FitToPagesTall=False
     sheet.PageSetup.Zoom=False
-    actual=str(sheet.PageSetup.PrintTitleRows or '').replace('$','').upper()
-    if str(first_header)+':'+str(last_header) not in actual:
-        raise Stop('Excel не сохранил повторяемые строки заголовков приложения.')
+    verify_appendix_print_layout(sheet,str(first_header)+':'+str(last_header))
     return first_header,last_header
 
 
@@ -422,7 +437,8 @@ def verify_documents(outputs,number,training=False,draft=True):
                     formulas=' '.join(str(v) for r in s.UsedRange.Formula for v in r if v is not None)
                     if TOKEN.search(text) or any(t in (text+' '+formulas).upper() for t in forbidden):raise Stop('Неподтверждённые/случайные данные Excel: '+str(path))
                     if not training and ('ТЕСТ' in text.upper() or 'TEST' in text.upper()):raise Stop('TEST в рабочем документе: '+str(path))
-                    if not s.PageSetup.PrintArea and out['role'].startswith('akz_appendix'):raise Stop('Нет области печати АКЗ.')
+                    if out['role']=='appendix' or out['role'].startswith('akz_appendix'):
+                        verify_appendix_print_layout(s)
                     errors=None
                     try:errors=s.UsedRange.SpecialCells(-4123,16)
                     except Exception:pass
