@@ -81,6 +81,36 @@ def word_table(doc,token,headers,rows):
     for n,row in enumerate(rows,2):
         for c,value in enumerate(row,1):table.Cell(n,c).Range.Text=str(value)
 
+
+# Excel NumberFormatLocal accepts the *Excel UI language* format codes.
+# On Russian Excel the English identifiers dd / yyyy / hh are rendered as
+# literal characters and may cause error 1004 after a native Save/Open.
+# Microsoft documents Russian codes дд / мм / гггг and чч / мм.
+_RU_DATE_FORMAT = 'дд.мм.гггг'
+_RU_TIME_FORMAT = 'чч:мм'
+
+
+def _set_ru_excel_date_time(cell, serial, rendered, *, is_time, key):
+    """Write numeric native serial and verify Excel's visible ru-RU formatting.
+
+    Never replace the actual value with the displayed text: Excel formulas in
+    the three-layer АКЗ act depend on genuine date/time numbers.
+    """
+    fmt = _RU_TIME_FORMAT if is_time else _RU_DATE_FORMAT
+    try:
+        cell.NumberFormatLocal = fmt
+        cell.Value2 = serial
+        visible = getattr(cell, 'Text', None)
+        stored = cell.Value2
+    except Exception as exc:
+        raise Stop('Excel: не удалось установить локальный формат даты/времени '
+                   + key + ': ' + str(exc)) from exc
+    if isinstance(stored, bool) or not isinstance(stored, (int, float)):
+        raise Stop('Excel: дата/время не сохранены числом: ' + key)
+    if visible is not None and str(visible).strip() != rendered:
+        raise Stop('Excel ru-RU: неправильное отображение даты/времени '
+                   + key + ': ' + str(visible) + '; ожидалось ' + rendered)
+
 def tokens_excel(sheet,values):
     # Preserve number types in Excel when a cell contains a single numeric
     # placeholder, especially climate and coating-range bounds used by formulas.
@@ -104,8 +134,10 @@ def tokens_excel(sheet,values):
                         actual=date.fromisoformat(raw) if '-' in raw else datetime.strptime(raw,'%d.%m.%Y').date()
                     except ValueError as exc:
                         raise Stop('Некорректная дата Excel АКЗ: '+key) from exc
-                    cell.Value2=(actual-date(1899,12,30)).days
-                    cell.NumberFormat='dd.mm.yyyy'
+                    _set_ru_excel_date_time(
+                        cell, (actual-date(1899,12,30)).days,
+                        actual.strftime('%d.%m.%Y'), is_time=False, key=key,
+                    )
                     continue
                 if key in time_keys and key in values:
                     raw=str(values[key]).strip()
@@ -113,8 +145,10 @@ def tokens_excel(sheet,values):
                     if not regex.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d',raw):
                         raise Stop('Некорректное время слоя АКЗ: '+key)
                     hh,mm=map(int,raw.split(':'))
-                    cell.Value2=(hh*60+mm)/1440
-                    cell.NumberFormat='hh:mm'
+                    _set_ru_excel_date_time(
+                        cell, (hh*60+mm)/1440,
+                        f'{hh:02d}:{mm:02d}', is_time=True, key=key,
+                    )
                     continue
                 if key in numeric_keys and key in values:
                     numeric_value=Decimal(str(values[key]).replace(',','.'))
