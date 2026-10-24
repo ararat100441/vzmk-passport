@@ -2,7 +2,7 @@
 import unittest
 from types import SimpleNamespace
 
-from production_app.office import word_table, set_appendix_print_titles
+from production_app.office import word_table, set_appendix_print_titles, verify_appendix_print_layout
 from production_app.storage import Stop
 
 TOKEN='{{UZK_DETAILS_TABLE}}'
@@ -109,7 +109,7 @@ class FakeExcelSheet:
             (max(3,start-2),1):'Отправочная марка',
             (start,1):'МАРКА-001',
         }
-        self.PageSetup=SimpleNamespace(PrintTitleRows='$1:$4',
+        self.PageSetup=SimpleNamespace(PrintTitleRows='$1:$4',PrintArea='$A$1:$G$110',
                                        FitToPagesWide=None,
                                        FitToPagesTall=None,Zoom=None)
     def Cells(self,row,col):
@@ -172,12 +172,31 @@ class OfficeContracts(unittest.TestCase):
         with self.assertRaisesRegex(Stop,'Нет заголовка'):
             set_appendix_print_titles(sheet,5)
 
+    def test_reopening_with_old_repeated_title_is_refused(self):
+        sheet=FakeExcelSheet(start=5)
+        sheet.PageSetup.PrintTitleRows='$1:$4'
+        with self.assertRaisesRegex(Stop,'длинные строки'):
+            verify_appendix_print_layout(sheet)
+
+    def test_reopened_compact_print_titles_preserved(self):
+        sheet=FakeExcelSheet(start=5)
+        sheet.PageSetup.PrintTitleRows="'Приложение №1'!$3:$4"
+        self.assertEqual(verify_appendix_print_layout(sheet,'3:4'),'3:4')
+
+    def test_missing_print_area_refused(self):
+        sheet=FakeExcelSheet(start=5)
+        sheet.PageSetup.PrintTitleRows='$3:$4'
+        sheet.PageSetup.PrintArea=''
+        with self.assertRaisesRegex(Stop,'область печати'):
+            verify_appendix_print_layout(sheet)
+
     def test_unexpected_print_title_reset_is_rejected(self):
         sheet=FakeExcelSheet(start=5)
         class BrokenPageSetup:
             FitToPagesWide=None
             FitToPagesTall=None
             Zoom=None
+            PrintArea='$A$1:$G$110'
             @property
             def PrintTitleRows(self):return '$1:$4'
             @PrintTitleRows.setter
