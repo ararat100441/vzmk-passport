@@ -37,29 +37,33 @@ def climate():
 
 
 class Cell:
-    def __init__(self, value):
+    def __init__(self, value, *, native_style=None):
         self.Value2=value
         self.HasFormula=False
-        self.NumberFormat='General'
-        self.NumberFormatLocal='Общий'
+        self.NumberFormat=('BuiltinDate14' if native_style=='date14'
+                           else 'BuiltinTime20' if native_style=='time20'
+                           else 'General')
+        self.NumberFormatLocal=self.NumberFormat
 
     @property
     def Text(self):
-        if self.NumberFormat in ('dd.mm.yyyy', 'dd"."mm"."yyyy'):
-            dt = date(1899,12,30) + timedelta(days=int(self.Value2))
+        if self.NumberFormat=='BuiltinDate14':
+            dt=date(1899,12,30)+timedelta(days=int(self.Value2))
             return dt.strftime('%d.%m.%Y')
-        if self.NumberFormatLocal == 'дд.мм.гггг':
-            dt = date(1899,12,30) + timedelta(days=int(self.Value2))
-            return dt.strftime('%d.00.%Y')  # exact PR10 Russian Excel defect
-        if self.NumberFormatLocal == 'чч:мм':
-            total = round(float(self.Value2)*1440)
-            return f'{total//60:02d}:{total%60:02d}'
+        if self.NumberFormat=='BuiltinTime20':
+            minutes=round(float(self.Value2)*1440)
+            return f'{minutes//60}:{minutes%60:02d}'
+        if self.NumberFormatLocal=='дд.мм.гггг':
+            dt=date(1899,12,30)+timedelta(days=int(self.Value2))
+            return dt.strftime('%d.00.%Y')  # PR10/PR11 actual native failure
         return str(self.Value2)
 
 
 class Sheet:
-    def __init__(self, values):
-        self._cells={(i+1,1):Cell(value) for i,value in enumerate(values)}
+    def __init__(self, values, *, native_styles=None):
+        native_styles=native_styles or {}
+        self._cells={(i+1,1):Cell(value,native_style=native_styles.get(i+1))
+                     for i,value in enumerate(values)}
         self.UsedRange=SimpleNamespace(Row=1,Column=1,
                                        Rows=SimpleNamespace(Count=len(values)),
                                        Columns=SimpleNamespace(Count=1))
@@ -99,90 +103,92 @@ class HistoricalAKZ(unittest.TestCase):
         self.assertEqual(values['LAYER_3_TOTAL_RANGE'],'240–390')
         self.assertEqual(values['AIR'],'24')
 
-    def test_excel_true_date_time_numeric_and_unformatted_text(self):
+    def test_excel_native_date_time_serials_preserve_source_formats(self):
+        # Original 3-coat Excel uses builtin numFmt 14 for H4/E22 and
+        # builtin numFmt 20 for E23. Do not set mask strings from Python.
         cells=['{{AKZ_DATE}}','{{AKZ_LAYER_1_APPLICATION_DATE}}',
                '{{AKZ_LAYER_1_TIME_START}}','{{AKZ_LAYER_1_WET_AVG}}',
                'Акт АКЗ от {{AKZ_DATE}}']
-        sheet=Sheet(cells)
+        sheet=Sheet(cells,native_styles={1:'date14',2:'date14',3:'time20'})
         values={
             'AKZ_DATE':'19.10.2026',
             'AKZ_LAYER_1_APPLICATION_DATE':'2026-10-19',
             'AKZ_LAYER_1_TIME_START':'08:00',
             'AKZ_LAYER_1_WET_AVG':'130.4',
         }
+        formats=[(sheet.Cells(row,1).NumberFormat,
+                  sheet.Cells(row,1).NumberFormatLocal) for row in (1,2,3)]
         tokens_excel(sheet,values)
-        expected=(date(2026,10,19)-date(1899,12,30)).days
-        self.assertEqual(sheet.Cells(1,1).Value2,expected)
-        self.assertEqual(sheet.Cells(2,1).Value2,expected)
-        self.assertEqual(sheet.Cells(1,1).NumberFormat,'dd.mm.yyyy')
-        self.assertEqual(sheet.Cells(1,1).NumberFormatLocal,'Общий')
+        serial=(date(2026,10,19)-date(1899,12,30)).days
+        self.assertEqual(sheet.Cells(1,1).Value2,serial)
+        self.assertEqual(sheet.Cells(2,1).Value2,serial)
         self.assertEqual(sheet.Cells(1,1).Text,'19.10.2026')
-        self.assertEqual(sheet.Cells(3,1).NumberFormatLocal,'чч:мм')
-        self.assertEqual(sheet.Cells(3,1).Text,'08:00')
+        self.assertEqual(sheet.Cells(2,1).Text,'19.10.2026')
+        self.assertEqual(sheet.Cells(3,1).Text,'8:00')  # legitimate native h:mm
         self.assertAlmostEqual(sheet.Cells(3,1).Value2,1/3)
         self.assertAlmostEqual(sheet.Cells(4,1).Value2,130.4)
         self.assertEqual(sheet.Cells(5,1).Value2,'Акт АКЗ от 19.10.2026')
+        self.assertEqual(formats,[(sheet.Cells(row,1).NumberFormat,
+                      sheet.Cells(row,1).NumberFormatLocal) for row in (1,2,3)])
 
-    def test_ru_excel_refuses_literal_english_time_after_format(self):
+    def test_literal_english_time_mask_refused_without_modification(self):
         class WrongVisibleCell(Cell):
             @property
             def Text(self):
-                return 'hh:mm'  # reproduced broken ru-RU display
-
+                return 'hh:mm'
         sheet=Sheet(['{{AKZ_LAYER_1_TIME_START}}'])
-        sheet._cells[(1,1)] = WrongVisibleCell('{{AKZ_LAYER_1_TIME_START}}')
-        with self.assertRaisesRegex(Stop, 'ни один проверенный формат'):
+        invalid=WrongVisibleCell('{{AKZ_LAYER_1_TIME_START}}',native_style='time20')
+        sheet._cells[(1,1)]=invalid
+        with self.assertRaisesRegex(Stop,'корректного встроенного формата'):
             tokens_excel(sheet, {'AKZ_LAYER_1_TIME_START':'08:00'})
+        self.assertEqual(invalid.NumberFormat,'BuiltinTime20')
 
-    def test_regression_month_zero_falls_back_to_invariant_date_format(self):
-        # PR10 observed 19.00.2026 from a Cyrillic NumberFormatLocal mask.
+    def test_regression_month_zero_refused_not_masked(self):
         sheet=Sheet(['{{AKZ_DATE}}'])
         cell=sheet.Cells(1,1)
         cell.NumberFormatLocal='дд.мм.гггг'
-        tokens_excel(sheet, {'AKZ_DATE':'19.10.2026'})
-        self.assertEqual(cell.Text, '19.10.2026')
-        self.assertEqual(cell.NumberFormat, 'dd.mm.yyyy')
+        with self.assertRaisesRegex(Stop,'19.00.2026'):
+            tokens_excel(sheet,{'AKZ_DATE':'19.10.2026'})
+        self.assertEqual(cell.NumberFormat,'General')
+        self.assertEqual(cell.NumberFormatLocal,'дд.мм.гггг')
+        self.assertEqual(cell.Value2,(date(2026,10,19)-date(1899,12,30)).days)
 
-    def test_preexisting_correct_date_format_remains_unchanged(self):
-        # Prefer the approved template's existing working native format.
-        sheet=Sheet(['{{AKZ_DATE}}'])
+    def test_builtin_date_format_remains_unchanged(self):
+        sheet=Sheet(['{{AKZ_DATE}}'],native_styles={1:'date14'})
         cell=sheet.Cells(1,1)
-        cell.NumberFormat='dd.mm.yyyy'
         tokens_excel(sheet, {'AKZ_DATE':'19.10.2026'})
-        self.assertEqual(cell.NumberFormat, 'dd.mm.yyyy')
-        self.assertEqual(cell.NumberFormatLocal, 'Общий')
-        self.assertEqual(cell.Text, '19.10.2026')
+        self.assertEqual(cell.NumberFormat,'BuiltinDate14')
+        self.assertEqual(cell.NumberFormatLocal,'BuiltinDate14')
+        self.assertEqual(cell.Text,'19.10.2026')
 
-    def test_excel_format_com_failure_is_not_silenced(self):
+    def test_excel_date_format_com_read_error_is_not_silenced(self):
         class FailingCell(Cell):
             @property
             def NumberFormatLocal(self):
-                return self._local_format
+                raise RuntimeError('Excel 1004')
             @NumberFormatLocal.setter
             def NumberFormatLocal(self, fmt):
-                if fmt!='Общий':raise RuntimeError('Excel 1004')
-                self._local_format=fmt
-            @property
-            def NumberFormat(self):
-                return self._format
-            @NumberFormat.setter
-            def NumberFormat(self, fmt):
-                if fmt!='General':raise RuntimeError('Excel 1004')
-                self._format=fmt
+                pass
         sheet=Sheet(['{{AKZ_DATE}}'])
-        sheet._cells[(1,1)] = FailingCell('{{AKZ_DATE}}')
-        with self.assertRaisesRegex(Stop, 'ни один проверенный формат'):
+        sheet._cells[(1,1)]=FailingCell('{{AKZ_DATE}}')
+        with self.assertRaisesRegex(Stop,'не удалось прочитать исходный формат'):
             tokens_excel(sheet, {'AKZ_DATE':'19.10.2026'})
 
-    def test_ru_date_and_time_leave_neighboring_excel_formulas_untouched(self):
-        sheet=Sheet(['{{AKZ_DATE}}', '=E22+1', '{{AKZ_LAYER_1_TIME_END}}'])
+    def test_date_in_unformatted_cell_is_refused(self):
+        sheet=Sheet(['{{AKZ_DATE}}'])
+        with self.assertRaisesRegex(Stop,'исходная ячейка'):
+            tokens_excel(sheet,{'AKZ_DATE':'19.10.2026'})
+
+    def test_excel_date_time_leave_neighboring_formulas_untouched(self):
+        sheet=Sheet(['{{AKZ_DATE}}','=E22+1','{{AKZ_LAYER_1_TIME_END}}'],
+                    native_styles={1:'date14',3:'time20'})
         sheet.Cells(2,1).HasFormula=True
-        tokens_excel(sheet, {'AKZ_DATE':'2026-10-19',
-                             'AKZ_LAYER_1_TIME_END':'10:30'})
-        self.assertEqual(sheet.Cells(2,1).Value2, '=E22+1')
-        self.assertEqual(sheet.Cells(3,1).Text, '10:30')
-        self.assertAlmostEqual(sheet.Cells(3,1).Value2, 10.5/24)
-        self.assertEqual(sheet.Cells(1,1).NumberFormat, 'dd.mm.yyyy')
+        tokens_excel(sheet,{'AKZ_DATE':'2026-10-19',
+                            'AKZ_LAYER_1_TIME_END':'10:30'})
+        self.assertEqual(sheet.Cells(2,1).Value2,'=E22+1')
+        self.assertEqual(sheet.Cells(3,1).Text,'10:30')
+        self.assertAlmostEqual(sheet.Cells(3,1).Value2,10.5/24)
+        self.assertEqual(sheet.Cells(1,1).NumberFormat,'BuiltinDate14')
 
     def test_three_layer_act_require_input_fields_before_copy(self):
         roles={'akz0':{'path':'test.xlsx'}}
