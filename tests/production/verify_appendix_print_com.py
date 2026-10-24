@@ -134,8 +134,9 @@ def export_copy(app, source, folder, label):
         sheet.PageSetup.PrintArea='$A$1:$G$'+str(last)
         formatted_rows=fit_appendix_body(sheet,first,last)
         set_appendix_print_titles(sheet,first)
+        # Numbers 11/22/33 correspond to actual long-name rows 15/26/37.
         height_samples={str(n):float(sheet.Rows(n).RowHeight)
-                        for n in (5,10,11,22,33,66,110)}
+                        for n in (5,10,15,26,37,66,114)}
         if formatted_rows!=len(synthetic) or max(height_samples.values())<=18:
             raise RuntimeError('Длинные наименования не увеличили высоту строк.')
         book.Save()
