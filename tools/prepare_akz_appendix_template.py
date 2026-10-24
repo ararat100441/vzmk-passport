@@ -16,6 +16,24 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def validate_converted_appendix(sheet):
+    """Object + title + dynamic rows + native printing must all survive."""
+    for cell,expected in (('A2','Объект: {{OBJECT}}'),
+                          ('A3','Отправочная марка'),
+                          ('A5','{{AKZ_MARKS}}'),('A6','Итого')):
+        if str(sheet.Range(cell).Value2 or '').strip()!=expected:
+            raise ValueError('Неверная структура приложения АКЗ: '+cell)
+    title=str(sheet.Range('A1').Value2 or '')
+    if '{{NUMBER}}' not in title or '{{AKZ_DATE}}' not in title:
+        raise ValueError('Нет номера или даты в шапке приложения АКЗ.')
+    merged=str(sheet.Range('A2').MergeArea.Address).replace(chr(36),'').upper()
+    if merged!='A2:G2':
+        raise ValueError('Нет объединённой строки объекта A2:G2.')
+    if not str(sheet.PageSetup.PrintArea or '').strip():
+        raise ValueError('Отсутствует область печати приложения АКЗ.')
+    return True
+
+
 def convert(source, destination):
     source = Path(source).resolve(strict=True)
     dest = Path(destination).absolute()
@@ -59,25 +77,33 @@ def convert(source, destination):
         if len(totals) != 1 or totals[0] <= 4:
             raise ValueError("Expected exactly one historical total row after mark rows.")
 
-        # Remove old marks, quantities, weights, areas and historical total values
-        # from the COPY only. Keep all header cells, merges, borders and native
-        # printer settings. Runtime inserts dynamic rows and recalculates totals.
-        sheet.Range("A4:G" + str(totals[0])).ClearContents()
-        sheet.Range("A1").Value2 = (
+        # New OBJECT line while retaining the original two-tier header.
+        original_total=totals[0]
+        sheet.Rows("2:2").Insert()
+        sheet.Range("A2:G2").Merge()
+        sheet.Range("A2").Value2="Объект: {{OBJECT}}"
+        sheet.Range("A2").WrapText=True
+        sheet.Rows("2:2").RowHeight=75
+        sheet.Range("A5:G"+str(original_total+1)).ClearContents()
+        sheet.Range("A1").Value2=(
             "Приложение № {{NUMBER}} к акту АКЗ № {{NUMBER}} от {{AKZ_DATE}} г."
         )
-        sheet.Range("A4").Value2 = "{{AKZ_MARKS}}"
-        sheet.Range("A5").Value2 = "Итого"
-        sheet.Range("A5:G5").Font.Bold = True
-        sheet.Range("A4:G5").Borders.LineStyle = 1
-        sheet.PageSetup.PrintArea = "$A$1:$G$5"
-        sheet.PageSetup.PrintTitleRows = "$1:$3"
-        sheet.PageSetup.FitToPagesWide = 1
-        sheet.PageSetup.FitToPagesTall = False
-        sheet.PageSetup.Zoom = False
+        sheet.Range("A5").Value2="{{AKZ_MARKS}}"
+        sheet.Range("A6").Value2="Итого"
+        sheet.Range("A6:G6").Font.Bold=True
+        sheet.Range("A5:G6").Borders.LineStyle=1
+        sheet.PageSetup.PrintArea="$A$1:$G$6"
+        sheet.PageSetup.PrintTitleRows="$1:$4"
+        sheet.PageSetup.FitToPagesWide=1
+        sheet.PageSetup.FitToPagesTall=False
+        sheet.PageSetup.Zoom=False
+        validate_converted_appendix(sheet)
         book.Save()
         book.Close(SaveChanges=False)
-        book = None
+        book=None
+        proof=app.Workbooks.Open(str(scratch),UpdateLinks=0,ReadOnly=True,AddToMru=False)
+        try:validate_converted_appendix(proof.Worksheets(1))
+        finally:proof.Close(SaveChanges=False)
         if digest(source) != before:
             raise RuntimeError("Source SHA changed unexpectedly — STOP.")
         if dest.exists():

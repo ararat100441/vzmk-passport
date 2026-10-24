@@ -44,6 +44,62 @@ STATIC = {
 }
 
 
+def validate_three_layer_source(sheet):
+    """Reject issued single-layer acts even if headings resemble 3-layer form."""
+    def value(cell):return sheet.Range(cell).Value2
+    def normalized(cell):
+        return ' '.join(str(value(cell) or '').casefold().replace('ё','е').split())
+    labels={'B3':'сертификат качества','B17':'слой',
+            'B18':'наименование лкм','B19':'серийный','B20':'отвердител',
+            'B22':'дата','C25':'требуемая толщина',
+            'C28':'средняя толщина','B31':'температура поверхности',
+            'B32':'температура воздуха','B33':'влажности','B34':'точка росы'}
+    for cell,label in labels.items():
+        if label not in normalized(cell):
+            raise ValueError('Неизвестная трёхслойная форма АКЗ: '+cell)
+    for col,n in LAYERS:
+        raw=value(col+'17')
+        if type(raw) not in (int,float) or raw!=n:
+            raise ValueError('Не найден самостоятельный слой №'+str(n))
+        for row in (18,19,20,22,27,28):
+            if value(col+str(row)) in (None,''):
+                raise ValueError('Отсутствует графа слоя №'+str(n)+': '+col+str(row))
+        for row in (22,27,28):
+            raw=value(col+str(row))
+            if type(raw) not in (int,float) or not 0<raw<100000:
+                raise ValueError('Неверное значение '+col+str(row))
+        merge=str(sheet.Range(col+'18').MergeArea.Address).replace(chr(36),'').upper()
+        expected=col+'18:'+{'E':'G','H':'I','J':'K'}[col]+'18'
+        if merge!=expected:
+            raise ValueError('Иное объединение ячеек слоя №'+str(n))
+    return True
+
+
+def verify_converted_three_layer_sheet(sheet):
+    """Reject any missing layer token after native Excel save/readback."""
+    for col,n in LAYERS:
+        if sheet.Range(col+'17').Value2!=n:
+            raise ValueError('После сохранения потерян слой №'+str(n))
+        pref='AKZ_LAYER_'+str(n)+'_'
+        for row,field in ((18,'MATERIAL'),(19,'PAINT_BATCH'),
+                          (20,'HARDENER_BATCH'),(21,'COLOR'),
+                          (22,'APPLICATION_DATE'),(23,'TIME_START'),
+                          (24,'TIME_END'),(27,'WET_AVG')):
+            if sheet.Range(col+str(row)).Value2!='{{'+pref+field+'}}':
+                raise ValueError('Нет переменного поля '+col+str(row))
+        for row,field in ((25,'RANGE'),(26,'TOTAL_RANGE'),(28,'DRY_AVG')):
+            if sheet.Range(col+str(row)).Value2!='{{LAYER_'+str(n)+'_'+field+'}}':
+                raise ValueError('Нет поля толщины слоя №'+str(n))
+        for row,field in ((31,'SURFACE'),(32,'AIR'),(33,'HUMIDITY'),(34,'DEW')):
+            if sheet.Range(col+str(row)).Value2!='{{'+field+'}}':
+                raise ValueError('Нет поля климата слоя №'+str(n))
+    if sheet.Range('E7').Value2!='{{OBJECT}}':
+        raise ValueError('Нет объекта АКЗ.')
+    if not str(sheet.PageSetup.PrintArea or '').strip():
+        raise ValueError('Нет области печати АКЗ.')
+    return True
+
+
 def convert(source, destination):
     source=Path(source).resolve(strict=True)
     dest=Path(destination).absolute()
@@ -72,10 +128,7 @@ def convert(source, destination):
             sheet=book.Worksheets(1)
             if sheet.ProtectContents:
                 raise RuntimeError('Лист защищён.')
-            if 'Слой №' not in str(sheet.Range('B17').Value2):
-                raise RuntimeError('Неизвестная форма: не найдена таблица трёх слоёв.')
-            if 'толщина' not in str(sheet.Range('C28').Value2 or '').casefold():
-                raise RuntimeError('Неизвестная форма: нет строки средней сухой толщины.')
+            validate_three_layer_source(sheet)
 
             # Only edit the fresh copy, leaving merges, dimensions, image,
             # print areas, page setup and all approved static labels in place.
@@ -100,11 +153,19 @@ def convert(source, destination):
                 for row,field in fields.items():
                     cell=sheet.Range(column+str(row))
                     cell.Value2='{{'+field+'}}'
-            # Original H4 and per-coat row 22 were Excel dates. They are
-            # restored to true numbers by production_app.office.tokens_excel().
-            # Existing E30/H30/J30 formulas link to the corresponding row 22.
+            # Keep candidate signatures legible during manual print review.
+            for cell in ('E46','E47','F50','I50'):
+                sheet.Range(cell).WrapText=True
+            sheet.Rows('46:47').RowHeight=45
+            sheet.Rows('50:50').RowHeight=78
+            verify_converted_three_layer_sheet(sheet)
             book.Save()
-            book.Close(SaveChanges=False);book=None
+            book.Close(SaveChanges=False)
+            book=None
+            proof=app.Workbooks.Open(Filename=str(scratch),UpdateLinks=0,
+                                     ReadOnly=True,AddToMru=False)
+            try:verify_converted_three_layer_sheet(proof.Worksheets(1))
+            finally:proof.Close(SaveChanges=False)
             if sha(source)!=original:
                 raise RuntimeError('Исходный исторический акт изменился; операция остановлена.')
             if dest.exists():

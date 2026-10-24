@@ -117,6 +117,19 @@ class HistoricalAKZ(unittest.TestCase):
             self.assertTrue(require_akz_form_inputs(
                 profile,{**facts(),'climates':[climate()]},[0]))
 
+    def test_mocked_excel_loader_does_not_import_templates_module(self):
+        # Regression for the 92 PASS / 1 FAIL combined Windows suite:
+        # importing production_app.templates under a mocked loader persisted
+        # the MagicMock as a module-level dependency across later tests.
+        import sys
+        profile={'templates':{'akz0':{'path':'test.xlsx'}}}
+        cells=[SimpleNamespace(value='{{AKZ_HYGROMETER}}')]
+        book=SimpleNamespace(worksheets=[list(cells)],active=[list(cells)],close=lambda:None)
+        with patch.dict(sys.modules,{'production_app.templates':None}):
+            with patch('passport_app.excel.load_book',return_value=book):
+                self.assertTrue(require_akz_form_inputs(
+                    profile,{**facts(),'climates':[climate()]},[0]))
+
     def test_missing_device_approval_refused(self):
         profile={'templates':{'akz0':{'path':'test.xlsx'}}}
         cells=[SimpleNamespace(value='{{AKZ_HYGROMETER}}')]
