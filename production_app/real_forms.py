@@ -192,7 +192,6 @@ def require_akz_form_inputs(profile, facts, variants):
     """Check extra Excel act fields before any documents/registry are prepared."""
     from .facts import validate_layer_details
     from passport_app.excel import load_book
-    from .templates import TOKEN
     supplied=normalize_doc_fields(facts.get('doc_fields'))
     climates={entry['variant']:entry for entry in facts['climates']}
     for variant in variants:
@@ -203,7 +202,7 @@ def require_akz_form_inputs(profile, facts, variants):
             if len(book.worksheets)!=1:
                 raise Stop('Акт АКЗ должен содержать один лист.')
             tokens={name for row in book.active for cell in row
-                    for name in TOKEN.findall(str(cell.value or ''))}
+                    for name in re.findall(r'\{\{([A-Z_0-9]+)\}\}',str(cell.value or ''))}
         finally:
             book.close()
         missing=(tokens & set(DOC_FIELD_LABELS))-set(supplied)
