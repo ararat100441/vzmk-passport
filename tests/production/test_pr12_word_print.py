@@ -261,7 +261,16 @@ class OfficeContracts(unittest.TestCase):
     def test_reopened_compact_print_titles_preserved(self):
         sheet=FakeExcelSheet(start=5)
         sheet.PageSetup.PrintTitleRows="'Приложение №1'!$3:$4"
+        sheet.heights[3]=28
+        sheet.heights[4]=28
         self.assertEqual(verify_appendix_print_layout(sheet,'3:4'),'3:4')
+
+    def test_page_three_header_too_short_after_reopen_is_refused(self):
+        sheet=FakeExcelSheet(start=5)
+        sheet.PageSetup.PrintTitleRows='$3:$4'
+        # Correct PrintTitleRows alone never certifies print legibility.
+        with self.assertRaisesRegex(Stop,'слишком низкий'):
+            verify_appendix_print_layout(sheet,'3:4')
 
     def test_missing_print_area_refused(self):
         sheet=FakeExcelSheet(start=5)
