@@ -56,6 +56,7 @@ def main():
             b=app.Workbooks.Add(-4167)
             try:
                 s=b.Worksheets(1)
+                s.Columns('A:B').ColumnWidth=20  # prevent #### from default width
                 assignments={
                     'A1':'{{AKZ_DATE}}',
                     'A2':'{{AKZ_LAYER_1_APPLICATION_DATE}}',
