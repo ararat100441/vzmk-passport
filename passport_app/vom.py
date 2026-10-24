@@ -18,6 +18,23 @@ def number(value, coordinate):
     return result
 
 
+def validate_flat_shipping_amounts(quantity,mass_unit,mass_total,area_unit,area_total,row):
+    """Cross-check inferred E/F/G/H fields in a one-line shipping invoice.
+
+    The layout is not labeled with second-row subheaders. Its meanings are
+    accepted only when each total agrees with quantity × per-item value.
+    """
+    if quantity<=0:
+        raise PassportError('Количество в отгрузочной ВОМ должно быть больше нуля: '
+                            +str(row))
+    if abs(quantity*mass_unit-mass_total)>Decimal('0.011'):
+        raise PassportError('Масса всей строки не равна количество × масса 1 шт: '
+                            +str(row))
+    if abs(quantity*area_unit-area_total)>Decimal('0.011'):
+        raise PassportError('Площадь всей строки не равна количество × площадь 1 шт: '
+                            +str(row))
+
+
 @dataclass(frozen=True)
 class Vom:
     path: Path
@@ -53,6 +70,8 @@ def read_vom(path):
             nums = [number(c.value, c.coordinate) for c in cells[2:]]
             if nums[0] != nums[0].to_integral_value():
                 raise PassportError(f'Количество должно быть целым неотрицательным: строка {r}.')
+            if getattr(layout,'flat_shipping_header',False):
+                validate_flat_shipping_amounts(*nums,r)
             rows.append((mark, name, *nums))
             source_rows.append(r)
             trimmed = (name or '').strip()
