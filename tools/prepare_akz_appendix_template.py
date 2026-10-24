@@ -93,7 +93,8 @@ def convert(source, destination):
         sheet.Range("A6:G6").Font.Bold=True
         sheet.Range("A5:G6").Borders.LineStyle=1
         sheet.PageSetup.PrintArea="$A$1:$G$6"
-        sheet.PageSetup.PrintTitleRows="$1:$4"
+        # Repeat only the two compact table header rows, not title/object.
+        sheet.PageSetup.PrintTitleRows="$3:$4"
         sheet.PageSetup.FitToPagesWide=1
         sheet.PageSetup.FitToPagesTall=False
         sheet.PageSetup.Zoom=False

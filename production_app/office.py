@@ -5,7 +5,7 @@ from pathlib import Path
 import re,shutil
 from passport_app.excel import excel_session,open_excel,load_book
 from passport_app.vik import word_session,open_word
-from passport_app.appendix import generate_appendix
+from passport_app.appendix import generate_appendix,inspect_template
 from .storage import Stop,sha
 from .model import filename,columns
 from .word_controls import fill_word_controls
@@ -72,14 +72,111 @@ def replace_word(doc,values):
             r.Text=str(value)
 
 def word_table(doc,token,headers,rows):
-    r=doc.Content.Duplicate
-    if not r.Find.Execute(FindText=token,MatchCase=True,Wrap=0):raise Stop('Шаблон УЗК не содержит '+token)
-    r.Text='';table=doc.Tables.Add(r,len(rows)+1,len(headers))
-    table.Borders.Enable=True
-    for c,value in enumerate(headers,1):table.Cell(1,c).Range.Text=value
-    table.Rows(1).HeadingFormat=True;table.Rows(1).Range.Font.Bold=True
-    for n,row in enumerate(rows,2):
-        for c,value in enumerate(row,1):table.Cell(n,c).Range.Text=str(value)
+    """Insert an independent Word table, never merge with requisites table.
+
+    Word may join two adjacent tables when Tables.Add replaces the only
+    paragraph between them. Preserve a paragraph BEFORE the insertion point.
+    The marker must occupy its own main-story paragraph, outside all tables.
+    """
+    if not headers or not isinstance(rows, (list,tuple)):
+        raise Stop('Некорректные заголовки/строки Word.')
+    if str(doc.Content.Text).count(token) != 1:
+        raise Stop('Маркер таблицы Word должен встречаться один раз: '+token)
+
+    def find_anchor():
+        anchor=doc.Content.Duplicate
+        if not anchor.Find.Execute(
+            FindText=token,MatchCase=True,MatchWildcards=False,Wrap=0
+        ):
+            raise Stop('Шаблон Word не содержит '+token)
+        if anchor.Tables.Count:
+            raise Stop('Маркер таблицы Word находится внутри другой таблицы.')
+        if anchor.Paragraphs.Count != 1:
+            raise Stop('Маркер Word должен занимать отдельный абзац.')
+        paragraph=anchor.Paragraphs(1).Range
+        if paragraph.Text.strip(' \t\r\n\x07') != token:
+            raise Stop('Маркер Word должен быть единственным текстом абзаца.')
+        return anchor,paragraph
+
+    before_count=doc.Tables.Count
+    anchor,paragraph=find_anchor()
+    # Word intentionally treats consecutive tables as a single table. Insert
+    # a durable separator paragraph before the anchor paragraph. Re-find the
+    # marker after insertion because Word mutates character positions.
+    paragraph.InsertParagraphBefore()
+    anchor,_=find_anchor()
+    anchor.Text=''
+    table=doc.Tables.Add(anchor,len(rows)+1,len(headers))
+    if doc.Tables.Count != before_count+1:
+        raise Stop('Word присоединил новую таблицу к существующей; выпуск остановлен.')
+    try:
+        if table.Rows(1).Cells.Count != len(headers):
+            raise Stop('Word изменил структуру первой строки таблицы: '
+                       +str(table.Rows(1).Cells.Count)+' вместо '
+                       +str(len(headers)))
+        table.Borders.Enable=True
+        # Fit the 8-column UZK table to the landscape document width.
+        # Word constants: wdAutoFitWindow=2.
+        table.AutoFitBehavior(2)
+        for col,value in enumerate(headers,1):
+            table.Cell(1,col).Range.Text=str(value)
+        table.Rows(1).HeadingFormat=True
+        table.Rows(1).Range.Font.Bold=True
+        for n,row in enumerate(rows,2):
+            if len(row) != len(headers):
+                raise Stop('Строка Word №'+str(n-1)+' имеет неверное число колонок.')
+            for col,value in enumerate(row,1):
+                table.Cell(n,col).Range.Text=str(value)
+        if (doc.Tables.Count != before_count+1 or
+                table.Rows(1).Cells.Count != len(headers)):
+            raise Stop('Структура таблицы Word изменилась после заполнения.')
+    except Stop:
+        raise
+    except Exception as exc:
+        raise Stop('Ошибка Word при формировании отдельной таблицы '
+                   +token+': '+str(exc)) from exc
+    return table
+
+
+
+def verify_appendix_print_layout(sheet,expected=None):
+    """Read-only native Excel check for repeated compact headings."""
+    actual=str(sheet.PageSetup.PrintTitleRows or '').replace('$','')
+    # Excel may prepend the sheet name to the A1-style range.
+    actual=actual.rsplit('!',1)[-1].strip().upper()
+    if actual not in ('3:3','3:4'):
+        raise Stop('Excel повторяет длинные строки названия/объекта или не '
+                   'сохранил компактную шапку таблицы: '+actual)
+    if expected is not None and actual!=expected:
+        raise Stop('Excel не сохранил ожидаемую шапку '+expected+
+                   '; фактически '+actual)
+    if not str(sheet.PageSetup.PrintArea or '').strip():
+        raise Stop('Отсутствует область печати приложения.')
+    return actual
+
+
+def set_appendix_print_titles(sheet,first_data_row):
+    """Repeat ONLY compact table labels, not long title/object on later pages.
+
+    First page prints title+object from PrintArea (starting A1); only two
+    preceding column-header rows are repeated on subsequent pages. Both
+    historical Appendix #1 and converted АКЗ appendix start marks at row 5.
+    """
+    if type(first_data_row) is not int or first_data_row < 4:
+        raise Stop('Не найдены двухстрочные заголовки приложения.')
+    # Generic one-line header begins at row 3; historical two-tier header
+    # occupies rows 3-4. The long OBJECT row 2 is never repeated.
+    first_header=max(3,first_data_row-2)
+    last_header=first_data_row-1
+    if (not str(sheet.Cells(first_header,1).Value2 or '').strip()
+            or not str(sheet.Cells(first_data_row,1).Value2 or '').strip()):
+        raise Stop('Нет заголовка или строки марок для печати.')
+    sheet.PageSetup.PrintTitleRows='$'+str(first_header)+':$'+str(last_header)
+    sheet.PageSetup.FitToPagesWide=1
+    sheet.PageSetup.FitToPagesTall=False
+    sheet.PageSetup.Zoom=False
+    verify_appendix_print_layout(sheet,str(first_header)+':'+str(last_header))
+    return first_header,last_header
 
 
 # The approved VZMK historical 3-layer XLSX uses *built-in* Excel number
@@ -237,8 +334,8 @@ def akz_rows(sheet,rows):
     for col in ('E','G'):sheet.Range(f'{col}{first}:{col}{total}').NumberFormatLocal='0'+str(sheet.Application.DecimalSeparator)+'00'
     sheet.Range(f'A{first}:G{total}').Borders.LineStyle=1
     sheet.Range(f'A{total}:G{total}').Font.Bold=True
-    sheet.PageSetup.PrintArea=f'$A$1:$G${total}';sheet.PageSetup.PrintTitleRows=f'$1:${first-1}'
-    sheet.PageSetup.FitToPagesWide=1;sheet.PageSetup.FitToPagesTall=False;sheet.PageSetup.Zoom=False
+    sheet.PageSetup.PrintArea=f'$A$1:$G${total}'
+    set_appendix_print_titles(sheet,first)
 
 def render(profile,project,registry,row,vom,facts,folder,training=False):
     """Approved tokens prevent stale facts from another issued passport."""
@@ -263,7 +360,18 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                 if climate is None:continue
             target=folder/(filename(facts['number'])+' - '+role+'.xlsx');shutil.copyfile(ref['path'],target)
             if role=='appendix':
+                # The first-passport template is valid BEFORE number/date change.
+                # A second inspect_template AFTER generation would reject the
+                # newly numbered passport as no longer the first template.
+                layout,_,_=inspect_template(target,project)
                 generate_appendix(app,target,project,vom,{'number':facts['number'],'date':date.fromisoformat(facts['date']),'object':values['OBJECT']})
+                # Set compact repeating table headers on NEW production copy only.
+                b=open_excel(app,target)
+                try:
+                    set_appendix_print_titles(b.Worksheets(layout.sheet),layout.start)
+                    b.Save()
+                finally:
+                    b.Close(SaveChanges=False)
             else:
                 b=open_excel(app,target)
                 try:
@@ -329,7 +437,8 @@ def verify_documents(outputs,number,training=False,draft=True):
                     formulas=' '.join(str(v) for r in s.UsedRange.Formula for v in r if v is not None)
                     if TOKEN.search(text) or any(t in (text+' '+formulas).upper() for t in forbidden):raise Stop('Неподтверждённые/случайные данные Excel: '+str(path))
                     if not training and ('ТЕСТ' in text.upper() or 'TEST' in text.upper()):raise Stop('TEST в рабочем документе: '+str(path))
-                    if not s.PageSetup.PrintArea and out['role'].startswith('akz_appendix'):raise Stop('Нет области печати АКЗ.')
+                    if out['role']=='appendix' or out['role'].startswith('akz_appendix'):
+                        verify_appendix_print_layout(s)
                     errors=None
                     try:errors=s.UsedRange.SpecialCells(-4123,16)
                     except Exception:pass
