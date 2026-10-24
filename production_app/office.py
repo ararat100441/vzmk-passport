@@ -405,16 +405,27 @@ def akz_rows(sheet,rows):
     sheet.PageSetup.PrintArea=f'$A$1:$G${total}'
     set_appendix_print_titles(sheet,first)
 
-def render(profile,project,registry,row,vom,facts,folder,training=False):
-    """Approved tokens prevent stale facts from another issued passport."""
+def document_values(registry,row,vom,facts):
+    """Use the verified registry row for printed requisites and mass.
+
+    verify_registry has already compared this row with the shipment total.
+    Replacing its mass with the unrounded Decimal sum exposes Excel binary
+    tails (15822.13999999999951) in Word despite a 15822.14 registry value.
+    """
     values=fields(registry,row);values.update(RESPONSIBLE=facts['responsible'],
         EVIDENCE='; '.join(Path(e['path']).name+' SHA256 '+e['sha256'] for e in facts['evidence']))
     for k in ('start_date','vik_date','uzk_date','akz_date'):
         actual=date.fromisoformat(facts[k]).strftime('%d.%m.%Y')
         if values[k.upper()]!=actual:raise Stop('Фактическая дата '+k+' ('+actual+') не совпадает с формулой/данными реестра ('+values[k.upper()]+'). Ничего не подставлено автоматически.')
-    values['MASS']=str(vom.mass);values['CONNECTIONS']=vom.connections
+    values['CONNECTIONS']=vom.connections
     values['NUMBER']=facts['number']
     values.update(values_for_documents(facts,{c['variant'] for c in facts['climates']}))
+    return values
+
+
+def render(profile,project,registry,row,vom,facts,folder,training=False):
+    """Approved tokens prevent stale facts from another issued passport."""
+    values=document_values(registry,row,vom,facts)
     prefix='УЧЕБНЫЙ КОМПЛЕКТ — НЕ ДЛЯ ВЫПУСКА' if training else 'ЧЕРНОВИК — НЕ ДЛЯ ВЫПУСКА'
     by_mark={str(m['mark']):m for m in facts['marks']}
     totals={}
