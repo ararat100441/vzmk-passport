@@ -44,6 +44,161 @@ STATIC = {
 }
 
 
+
+def validate_three_layer_source(sheet):
+    """Only the audited, three-independent-column VZMK act is supported."""
+    def val(address):
+        return sheet.Range(address).Value2
+    def label(address):
+        return ' '.join(str(val(address) or '').casefold().replace('ё','е').split())
+    labels={'B17':'слой','B18':'наименование лкм','B19':'серийный',
+            'B20':'отвердител','B22':'дата','C25':'требуемая толщина',
+            'C28':'средняя толщина','B31':'температура поверхности',
+            'B32':'температура воздуха','B33':'влажности','B34':'точка росы'}
+    for address,expected in labels.items():
+        if expected not in label(address):
+            raise ValueError('Неверная трёхслойная форма АКЗ: '+address+' / '+expected)
+    if 'сертификат качества' not in label('B3'):
+        raise ValueError('Не найден заголовок сертификата качества АКЗ.')
+    for column,number in LAYERS:
+        mark=val(column+'17')
+        if type(mark) not in (int,float) or mark!=number:
+            raise ValueError('Отсутствует самостоятельный слой №'+str(number)
+                             +' в ячейке '+column+'17.')
+        for row in (18,19,20,22,27,28):
+            measured=val(column+str(row))
+            if measured in (None,''):
+                raise ValueError('Нет данных колонки слоя №'+str(number)
+                                 +': '+column+str(row))
+        for row in (22,27,28):
+            measured=val(column+str(row))
+            if type(measured) not in (int,float) or not (0<measured<100000):
+                raise ValueError('Неожиданное числовое значение '+column+str(row))
+        merged=str(sheet.Range(column+'18').MergeArea.Address).replace('
+    source=Path(source).resolve(strict=True)
+    dest=Path(destination).absolute()
+    if source.suffix.lower()!='.xlsx' or dest.suffix.lower()!='.xlsx':
+        raise ValueError('Требуется исходный и новый файл XLSX.')
+    if dest.exists() or source==dest:
+        raise FileExistsError('Новый шаблон должен иметь ещё не существующее имя.')
+    if not dest.parent.is_dir():
+        raise FileNotFoundError('Создайте отдельную папку для шаблона.')
+    original=sha(source)
+    scratch=dest.parent/('.vzmk-three-coat-'+uuid4().hex+'.xlsx')
+    shutil.copyfile(source,scratch)
+    app=None;book=None
+    try:
+        import pythoncom
+        import win32com.client
+        pythoncom.CoInitialize()
+        try:
+            app=win32com.client.DispatchEx('Excel.Application')
+            app.Visible=False;app.DisplayAlerts=False;app.EnableEvents=False
+            app.AskToUpdateLinks=False;app.AutomationSecurity=3
+            book=app.Workbooks.Open(Filename=str(scratch),UpdateLinks=0,
+                                    ReadOnly=False,AddToMru=False)
+            if book.Worksheets.Count!=1 or book.ReadOnly:
+                raise RuntimeError('Ожидался один редактируемый лист.')
+            sheet=book.Worksheets(1)
+            if sheet.ProtectContents:
+                raise RuntimeError('Лист защищён.')
+            validate_three_layer_source(sheet)
+
+            # Only edit the fresh copy, leaving merges, dimensions, image,
+            # print areas, page setup and all approved static labels in place.
+            for cell,token in STATIC.items():
+                sheet.Range(cell).Value2=token
+            for column,n in LAYERS:
+                pref='AKZ_LAYER_'+str(n)+'_'
+                fields={
+                    18:pref+'MATERIAL',
+                    19:pref+'PAINT_BATCH',
+                    20:pref+'HARDENER_BATCH',
+                    21:pref+'COLOR',
+                    22:pref+'APPLICATION_DATE',
+                    23:pref+'TIME_START',
+                    24:pref+'TIME_END',
+                    25:'LAYER_'+str(n)+'_RANGE',
+                    26:'LAYER_'+str(n)+'_TOTAL_RANGE',
+                    27:pref+'WET_AVG',
+                    28:'LAYER_'+str(n)+'_DRY_AVG',
+                    31:'SURFACE',32:'AIR',33:'HUMIDITY',34:'DEW',
+                }
+                for row,field in fields.items():
+                    cell=sheet.Range(column+str(row))
+                    cell.Value2='{{'+field+'}}'
+            # Original H4 and per-coat row 22 were Excel dates. They are
+            # restored to true numbers by production_app.office.tokens_excel().
+            # Existing E30/H30/J30 formulas link to the corresponding row 22.
+            # Keep signature blocks legible in the candidate printout.
+            for address in ('E46','E47','F50','I50'):
+                sheet.Range(address).WrapText=True
+            sheet.Rows('46:47').RowHeight=45
+            sheet.Rows('50:50').RowHeight=78
+            verify_converted_three_layer_sheet(sheet)
+            book.Save()
+            book.Close(SaveChanges=False);book=None
+            proof=app.Workbooks.Open(Filename=str(scratch),UpdateLinks=0,
+                                     ReadOnly=True,AddToMru=False)
+            try:verify_converted_three_layer_sheet(proof.Worksheets(1))
+            finally:proof.Close(SaveChanges=False)
+            if sha(source)!=original:
+                raise RuntimeError('Исходный исторический акт изменился; операция остановлена.')
+            if dest.exists():
+                raise FileExistsError('Целевое имя занято перед публикацией.')
+            os.rename(scratch,dest)
+            return {'candidate':str(dest),'approved':False,
+                    'source_sha256_unchanged':True,'candidate_sha256':sha(dest)}
+        finally:
+            if book is not None:
+                try:book.Close(SaveChanges=False)
+                except Exception:pass
+            if app is not None:
+                try:app.Quit()
+                except Exception:pass
+            pythoncom.CoUninitialize()
+    finally:
+        # Keep failed scratch copies for diagnosis, but never change source.
+        pass
+
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser()
+    parser.add_argument('source',help='Исторический трёхслойный акт, только чтение')
+    parser.add_argument('destination',help='Новый утверждаемый XLSX')
+    args=parser.parse_args()
+    print(json.dumps(convert(args.source,args.destination),ensure_ascii=False,indent=2))
+,'').upper()
+        end={'E':'G','H':'I','J':'K'}[column]
+        if merged!=column+'18:'+end+'18':
+            raise ValueError('Иная структура объединённых ячеек '+column+'18')
+    return True
+
+
+def verify_converted_three_layer_sheet(sheet):
+    """Check each placeholder after native Excel Save/Open."""
+    for column,number in LAYERS:
+        if sheet.Range(column+'17').Value2!=number:
+            raise ValueError('После сохранения потерян слой №'+str(number))
+        prefix='AKZ_LAYER_'+str(number)+'_'
+        for row,field in ((18,'MATERIAL'),(19,'PAINT_BATCH'),(20,'HARDENER_BATCH'),
+                          (21,'COLOR'),(22,'APPLICATION_DATE'),(23,'TIME_START'),
+                          (24,'TIME_END'),(27,'WET_AVG')):
+            if sheet.Range(column+str(row)).Value2!='{{'+prefix+field+'}}':
+                raise ValueError('После сохранения потеряно поле '+column+str(row))
+        for row,field in ((25,'RANGE'),(26,'TOTAL_RANGE'),(28,'DRY_AVG')):
+            if sheet.Range(column+str(row)).Value2!='{{LAYER_'+str(number)+'_'+field+'}}':
+                raise ValueError('После сохранения потерян диапазон/средняя слоя '+str(number))
+        for row,field in ((31,'SURFACE'),(32,'AIR'),(33,'HUMIDITY'),(34,'DEW')):
+            if sheet.Range(column+str(row)).Value2!='{{'+field+'}}':
+                raise ValueError('После сохранения потерян климат слоя №'+str(number))
+    if sheet.Range('E7').Value2!='{{OBJECT}}':
+        raise ValueError('Потерян обязательный реквизит объекта АКЗ.')
+    if not str(sheet.PageSetup.PrintArea or '').strip():
+        raise ValueError('Потеряна область печати АКЗ.')
+    return True
+
+
 def convert(source, destination):
     source=Path(source).resolve(strict=True)
     dest=Path(destination).absolute()
