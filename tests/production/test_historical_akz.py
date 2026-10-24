@@ -1,6 +1,6 @@
 """Synthetic three-layer АКЗ acceptance: no historical measurements are reused."""
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -41,6 +41,17 @@ class Cell:
         self.Value2=value
         self.HasFormula=False
         self.NumberFormat='General'
+        self.NumberFormatLocal='Общий'
+
+    @property
+    def Text(self):
+        if self.NumberFormatLocal == 'дд.мм.гггг':
+            dt = date(1899,12,30) + timedelta(days=int(self.Value2))
+            return dt.strftime('%d.%m.%Y')
+        if self.NumberFormatLocal == 'чч:мм':
+            total = round(float(self.Value2)*1440)
+            return f'{total//60:02d}:{total%60:02d}'
+        return str(self.Value2)
 
 
 class Sheet:
@@ -100,10 +111,49 @@ class HistoricalAKZ(unittest.TestCase):
         expected=(date(2026,10,19)-date(1899,12,30)).days
         self.assertEqual(sheet.Cells(1,1).Value2,expected)
         self.assertEqual(sheet.Cells(2,1).Value2,expected)
-        self.assertEqual(sheet.Cells(1,1).NumberFormat,'dd.mm.yyyy')
+        self.assertEqual(sheet.Cells(1,1).NumberFormatLocal,'дд.мм.гггг')
+        self.assertEqual(sheet.Cells(1,1).NumberFormat,'General')
+        self.assertEqual(sheet.Cells(1,1).Text,'19.10.2026')
+        self.assertEqual(sheet.Cells(3,1).NumberFormatLocal,'чч:мм')
+        self.assertEqual(sheet.Cells(3,1).Text,'08:00')
         self.assertAlmostEqual(sheet.Cells(3,1).Value2,1/3)
         self.assertAlmostEqual(sheet.Cells(4,1).Value2,130.4)
         self.assertEqual(sheet.Cells(5,1).Value2,'Акт АКЗ от 19.10.2026')
+
+    def test_ru_excel_refuses_literal_english_time_after_format(self):
+        class WrongVisibleCell(Cell):
+            @property
+            def Text(self):
+                return 'hh:mm'  # reproduced broken ru-RU display
+
+        sheet=Sheet(['{{AKZ_LAYER_1_TIME_START}}'])
+        sheet._cells[(1,1)] = WrongVisibleCell('{{AKZ_LAYER_1_TIME_START}}')
+        with self.assertRaisesRegex(Stop, 'неправильное отображение'):
+            tokens_excel(sheet, {'AKZ_LAYER_1_TIME_START':'08:00'})
+
+    def test_excel_format_com_failure_is_not_silenced(self):
+        class FailingCell(Cell):
+            @property
+            def NumberFormatLocal(self):
+                return 'Общий'
+            @NumberFormatLocal.setter
+            def NumberFormatLocal(self, format_code):
+                if format_code!='Общий':
+                    raise RuntimeError('Excel 1004')
+        sheet=Sheet(['{{AKZ_DATE}}'])
+        sheet._cells[(1,1)] = FailingCell('{{AKZ_DATE}}')
+        with self.assertRaisesRegex(Stop, 'локальный формат'):
+            tokens_excel(sheet, {'AKZ_DATE':'19.10.2026'})
+
+    def test_ru_date_and_time_leave_neighboring_excel_formulas_untouched(self):
+        sheet=Sheet(['{{AKZ_DATE}}', '=E22+1', '{{AKZ_LAYER_1_TIME_END}}'])
+        sheet.Cells(2,1).HasFormula=True
+        tokens_excel(sheet, {'AKZ_DATE':'2026-10-19',
+                             'AKZ_LAYER_1_TIME_END':'10:30'})
+        self.assertEqual(sheet.Cells(2,1).Value2, '=E22+1')
+        self.assertEqual(sheet.Cells(3,1).Text, '10:30')
+        self.assertAlmostEqual(sheet.Cells(3,1).Value2, 10.5/24)
+        self.assertEqual(sheet.Cells(1,1).NumberFormatLocal, 'дд.мм.гггг')
 
     def test_three_layer_act_require_input_fields_before_copy(self):
         roles={'akz0':{'path':'test.xlsx'}}
