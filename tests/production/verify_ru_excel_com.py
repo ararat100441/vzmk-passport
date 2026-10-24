@@ -1,4 +1,4 @@
-"""Native Excel Gate A: preserve ORIGINAL builtin XLSX date/time styles.
+r"""Native Excel Gate A: preserve ORIGINAL builtin XLSX date/time styles.
 
 Usage on Windows:
     py -3.12 -B tests/production/verify_ru_excel_com.py ^
