@@ -5,7 +5,7 @@ from pathlib import Path
 import re,shutil
 from passport_app.excel import excel_session,open_excel,load_book
 from passport_app.vik import word_session,open_word
-from passport_app.appendix import generate_appendix
+from passport_app.appendix import generate_appendix,inspect_template
 from .storage import Stop,sha
 from .model import filename,columns
 from .word_controls import fill_word_controls
@@ -147,7 +147,9 @@ def set_appendix_print_titles(sheet,first_data_row):
     """
     if type(first_data_row) is not int or first_data_row < 4:
         raise Stop('Не найдены двухстрочные заголовки приложения.')
-    first_header=first_data_row-2
+    # Generic one-line header begins at row 3; historical two-tier header
+    # occupies rows 3-4. The long OBJECT row 2 is never repeated.
+    first_header=max(3,first_data_row-2)
     last_header=first_data_row-1
     if (not str(sheet.Cells(first_header,1).Value2 or '').strip()
             or not str(sheet.Cells(first_data_row,1).Value2 or '').strip()):
@@ -317,8 +319,8 @@ def akz_rows(sheet,rows):
     for col in ('E','G'):sheet.Range(f'{col}{first}:{col}{total}').NumberFormatLocal='0'+str(sheet.Application.DecimalSeparator)+'00'
     sheet.Range(f'A{first}:G{total}').Borders.LineStyle=1
     sheet.Range(f'A{total}:G{total}').Font.Bold=True
-    sheet.PageSetup.PrintArea=f'$A$1:$G${total}';sheet.PageSetup.PrintTitleRows=f'$1:${first-1}'
-    sheet.PageSetup.FitToPagesWide=1;sheet.PageSetup.FitToPagesTall=False;sheet.PageSetup.Zoom=False
+    sheet.PageSetup.PrintArea=f'$A$1:$G${total}'
+    set_appendix_print_titles(sheet,first)
 
 def render(profile,project,registry,row,vom,facts,folder,training=False):
     """Approved tokens prevent stale facts from another issued passport."""
@@ -344,6 +346,14 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
             target=folder/(filename(facts['number'])+' - '+role+'.xlsx');shutil.copyfile(ref['path'],target)
             if role=='appendix':
                 generate_appendix(app,target,project,vom,{'number':facts['number'],'date':date.fromisoformat(facts['date']),'object':values['OBJECT']})
+                # Set compact repeating table headers on NEW production copy only.
+                layout,_,_=inspect_template(target,project)
+                b=open_excel(app,target)
+                try:
+                    set_appendix_print_titles(b.Worksheets(layout.sheet),layout.start)
+                    b.Save()
+                finally:
+                    b.Close(SaveChanges=False)
             else:
                 b=open_excel(app,target)
                 try:
