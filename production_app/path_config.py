@@ -63,6 +63,7 @@ def apply_settings(cfg,*,registry,output,uzk_registry,installed_root=None):
         'output':str(output),
         'first_passport_documents':str(output),
         'uzk_registry':str(uzk_registry),
+        'use_shared_uzk':True,
         'auto_first_passport':True,
         'training':False,
     }
