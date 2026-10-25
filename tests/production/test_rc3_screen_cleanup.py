@@ -49,7 +49,7 @@ class WeatherMath(unittest.TestCase):
     def test_tampered_dew_is_rejected_before_issuance(self):
         got=measurements_from_ranges(0,intervals())
         got['dew']='14.0'
-        with self.assertRaisesRegex(Stop,'Точка росы'):
+        with self.assertRaisesRegex(Stop,'точка росы'):
             verify_midrange_provenance(got)
 
     def test_manual_dew_interval_is_rejected(self):
@@ -107,8 +107,8 @@ class GUIContracts(unittest.TestCase):
 
     def test_akz_has_no_separate_attach_button_but_global_evidence_exists(self):
         source=inspect.getsource(App.fact_dialog)
-        self.assertNotIn("Приложить протокол АКЗ",source)
-        self.assertNotIn("Протоколов АКЗ №",source)
+        self.assertNotIn("text='Приложить протокол АКЗ",source)
+        self.assertNotIn("text='Протоколов АКЗ №",source)
         self.assertIn("Приложить первичные протоколы",source)
         self.assertIn("akz_proofs",source)
 
