@@ -2,7 +2,7 @@ import os,subprocess,sys,traceback
 from pathlib import Path
 from uuid import uuid4
 import tkinter as tk
-from tkinter import ttk,filedialog,messagebox
+from tkinter import ttk,filedialog,messagebox,simpledialog
 from .storage import local_root,read,save,sha,Stop
 from . import model,core,akz_presets,VERSION
 from .real_forms import DOC_FIELD_LABELS, UZK_COLUMNS, UZK_HEADERS
@@ -713,6 +713,23 @@ class App:
                                 str(number)+'? Если нет, файл останется '
                                 'общим подтверждающим документом.'):
                             variant=number
+                    elif len(used_variants)>1:
+                        answer=simpledialog.askstring(
+                            'Назначение первичного документа',
+                            Path(source).name+'\n'
+                            'Укажите № АКЗ, который подтверждает документ '
+                            '('+', '.join(map(str,used_variants))+'). '
+                            'Если документ не по АКЗ, оставьте пустым.',
+                            parent=window,
+                        )
+                        if answer and answer.strip():
+                            try:choice=int(answer.strip())
+                            except ValueError as exc:
+                                raise Stop('Некорректный № АКЗ для протокола.') from exc
+                            if choice not in used_variants:
+                                raise Stop('В документе выбран АКЗ, не '
+                                           'назначенный текущим маркам.')
+                            variant=choice
                     if variant is not None:
                         item.update(role='AKZ',variant=variant)
                         akz_proofs[variant].append(item)
