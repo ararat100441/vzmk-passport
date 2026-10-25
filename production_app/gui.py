@@ -36,7 +36,10 @@ class App:
         self.vom_widget=ttk.Entry(form,textvariable=self.vom);self.vom_widget.grid(row=2,column=1,sticky='ew',padx=8,pady=5)
         ttk.Button(form,text='Выбрать ВОМ…',command=lambda:self.choose(self.vom,False)).grid(row=2,column=2)
         tools=ttk.Frame(root,padding=(14,0));tools.pack(fill='x')
-        for text,command in [('Шаблоны объекта',self.profile),('Фактические результаты',self.fact_dialog),('Черновик справочника',self.catalog),('Открыть подготовленные документы',self.open_documents),('Восстановление',self.recovery)]:ttk.Button(tools,text=text,command=command).pack(side='left',padx=(0,6),pady=5)
+        # The first issued passport supplies the visual reference. The clean
+        # approved forms remain an internal software asset, not a daily dialog.
+        for text,command in [('Фактические результаты',self.fact_dialog),('Черновик справочника',self.catalog),('Открыть подготовленные документы',self.open_documents),('Восстановление',self.recovery)]:
+            ttk.Button(tools,text=text,command=command).pack(side='left',padx=(0,6),pady=5)
         steps=ttk.Frame(root,padding=14);steps.pack(fill='x')
         # A single user action; native Office/registry safety stages remain.
         button=ttk.Button(steps,text='Сформировать пакет',command=self.check)
@@ -88,32 +91,91 @@ class App:
 
     def settings(self):
         if self.active:return
-        dialog=tk.Toplevel(self.root);dialog.title('Рабочие пути — явный выбор');self.fit(dialog,1000,440);dialog.transient(self.root);dialog.grab_set()
-        vars={k:tk.StringVar(value=self.cfg.get(k,'')) for k in ('registry','documents','output','first_passport_documents')}
-        for row,(key,label) in enumerate([('registry','Рабочий реестр ВЗМК.xlsx'),('documents','Корень очищенных форм'),('output','Папка сохранения паспортов'),('first_passport_documents','Архив первых паспортов (необязательно)')]):
-            ttk.Label(dialog,text=label).grid(row=row,column=0,padx=12,pady=12,sticky='w');ttk.Entry(dialog,textvariable=vars[key],width=85).grid(row=row,column=1)
-            ttk.Button(dialog,text='Выбрать…',command=lambda k=key:self.choose(vars[k],k!='registry')).grid(row=row,column=2,padx=8)
-        ttk.Label(dialog,text='Архив первых паспортов: Рабoта/Документы, где находится Гараж казахстан/Паспорт/1_2026... Если поле пустое, приложение проверит уже выбранную папку результата. Исходники только для чтения. Для испытаний создайте учебную копию.',wraplength=920).grid(row=4,column=0,columnspan=3,pady=12)
+        from .path_config import visible_settings,apply_settings
+        shown=visible_settings(self.cfg)
+        dialog=tk.Toplevel(self.root)
+        dialog.title('Рабочие пути — три источника')
+        self.fit(dialog,1060,330)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        selected={key:tk.StringVar(value=value)
+                  for key,value in shown.items()}
+        inputs=[
+            ('registry','Рабочий реестр ВЗМК.xlsx'),
+            ('output','Папка рабочих документов (первые и новые паспорта)'),
+            ('uzk_registry','ОБЩИЙ реестр УЗК.xlsm — для всех проектов'),
+        ]
+        for row,(key,label) in enumerate(inputs):
+            ttk.Label(dialog,text=label).grid(
+                row=row,column=0,padx=12,pady=12,sticky='w')
+            ttk.Entry(dialog,textvariable=selected[key],width=84).grid(
+                row=row,column=1,sticky='ew')
+            ttk.Button(dialog,text='Выбрать…',
+                       command=lambda k=key:self.choose(
+                           selected[k],k=='output')).grid(
+                           row=row,column=2,padx=8)
+        ttk.Label(
+            dialog,text='Программа сама находит первый паспорт в '
+            'папке проекта / Паспорт и сохраняет новый там же, '
+            'отдельно по номеру и дате. Очищенные технические формы '
+            'хранятся внутри установленной программы и не выбираются '
+            'при обычной работе. УЗК.xlsm используется только для чтения.',
+            wraplength=1010,
+        ).grid(row=3,column=0,columnspan=3,padx=14,pady=8)
+
         def store(training=False):
             try:
-                cfg=self.cfg|{k:v.get() for k,v in vars.items()}|{'training':False}
+                if (self.cfg.get('training') and not training and
+                        selected['registry'].get()==self.cfg.get('registry')):
+                    raise Stop('Для выхода из учебного режима явно выберите '
+                               'рабочий реестр ВЗМК, а не текущую копию.')
+                installed=Path(sys.executable).resolve().parent if getattr(
+                    sys,'frozen',False) else None
+                cfg=apply_settings(
+                    self.cfg,
+                    registry=selected['registry'].get(),
+                    output=selected['output'].get(),
+                    uzk_registry=selected['uzk_registry'].get(),
+                    installed_root=installed,
+                )
                 model.validate_paths(cfg)
                 if training:
-                    parent=filedialog.askdirectory(title='Куда создать НОВУЮ учебную копию?')
+                    parent=filedialog.askdirectory(
+                        title='Куда создать НОВУЮ учебную копию?')
                     if not parent:return
                     cfg=core.training_copy(cfg,parent)
-                self.cfg=cfg;save(local_root()/'settings.json',cfg);self.invalidate();self.facts={};dialog.destroy();self.refresh()
+                self.cfg=cfg
+                save(local_root()/'settings.json',cfg)
+                self.invalidate();self.facts={}
+                dialog.destroy();self.refresh()
             except Exception as exc:self.error(exc)
-        ttk.Button(dialog,text='Сохранить выбранные рабочие пути',command=store).grid(row=5,column=1,sticky='w')
-        ttk.Button(dialog,text='Создать и выбрать учебную копию',command=lambda:store(True)).grid(row=5,column=1,sticky='e')
+
+        ttk.Button(dialog,text='Сохранить рабочие пути',
+                   command=store).grid(row=4,column=1,sticky='w',pady=12)
+        ttk.Button(dialog,text='Создать учебную копию',
+                   command=lambda:store(True)).grid(
+                   row=4,column=1,sticky='e',pady=12)
 
     def refresh(self):
         if self.active:return
-        self.paths.configure(text=('УЧЕБНАЯ КОПИЯ\n' if self.cfg.get('training') else 'РАБОЧИЙ РЕЖИМ — запись только после подтверждения\n')+'\n'.join(f'{label}: {self.cfg.get(k,"не выбран")}' for k,label in [('registry','Реестр'),('documents','Документы'),('output','Результат')]))
+        from .shared_uzk import find_shared_uzk
+        try:uzk=find_shared_uzk(self.cfg,require=False)
+        except Stop:uzk=None
+        mode=('УЧЕБНАЯ КОПИЯ' if self.cfg.get('training')
+              else 'РАБОЧИЙ РЕЖИМ — запись только после подтверждения')
+        self.paths.configure(
+            text=mode+'\n'
+            'Реестр: '+str(self.cfg.get('registry') or 'не выбран')+'\n'
+            'Документы и паспорта: '+str(self.cfg.get('output') or 'не выбрана')+'\n'
+            'Общий УЗК: '+str(uzk or 'не выбран'),
+        )
         if not self.cfg.get('registry'):return
         try:
-            r=model.read_registry(self.cfg['registry']);self.projects['values']=sorted(r.projects);self.invalidate()
-            self.progress.configure(text='Реестр прочитан. Выберите объект; запись не производилась.')
+            r=model.read_registry(self.cfg['registry'])
+            self.projects['values']=sorted(r.projects)
+            self.invalidate()
+            self.progress.configure(
+                text='Реестр прочитан. Выберите проект; запись не производилась.')
             if self.project.get():self.select_project()
         except Exception as exc:self.error(exc)
 
