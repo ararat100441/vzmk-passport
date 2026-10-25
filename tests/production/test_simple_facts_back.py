@@ -193,6 +193,7 @@ class GUIContracts(unittest.TestCase):
         code=inspect.getsource(gui.App.fact_dialog)
         self.assertIn("text='← Назад'",code)
         self.assertIn("footer.pack(side='bottom'",code)
+        self.assertIn("_pending_editor_commit",code)
         self.assertIn("save_screen_draft(",code)
         self.assertNotIn("Проверить и принять введённые данные",code)
         for removed in (
@@ -204,6 +205,17 @@ class GUIContracts(unittest.TestCase):
             "Обновить назначения из справочника",
         ):
             self.assertNotIn(removed,code)
+
+    def test_no_training_copy_button_in_regular_settings(self):
+        code=inspect.getsource(gui.App.settings)
+        self.assertNotIn("text='Создать учебную копию'",code)
+        self.assertIn("Восстановление после сбоя",code)
+
+    def test_inline_mark_edit_committed_before_back(self):
+        code=inspect.getsource(gui.App.editable)
+        self.assertIn('tree._pending_editor_commit=done',code)
+        on_back=inspect.getsource(gui.App.fact_dialog)
+        self.assertIn("if callable(pending):pending()",on_back)
 
     def test_main_generate_prepares_draft_before_validating(self):
         code=inspect.getsource(gui.App.check)
