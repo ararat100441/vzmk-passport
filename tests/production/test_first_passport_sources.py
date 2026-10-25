@@ -179,6 +179,54 @@ class FirstPassportSources(unittest.TestCase):
                                 actual['first_passport_sources']['sources'][role]['path'])
         self.assertEqual(cfg['profiles'][project().name]['templates'],templates)
 
+    def test_auto_mode_does_not_require_old_appendix_assignment(self):
+        from production_app import model
+        from production_app.storage import sha
+        prepared=self.passport.parent/'Prepared'
+        prepared.mkdir()
+        templates={}
+        for role in ('vik','uzk','quality'):
+            path=prepared/(role+'.docx')
+            path.write_bytes(role.encode())
+            templates[role]={'path':str(path),'sha256':sha(path)}
+        cfg={'documents':str(self.root),'registry':str(self.root/'registry.xlsx'),
+             'auto_first_passport':True,
+             'profiles':{project().name:{
+                 'root':str(self.passport.parent),'templates':templates,
+             }}}
+        with patch('production_app.first_passport.inspect_template',
+                   return_value=object()):
+            with patch('production_app.model.read_registry',return_value=object()):
+                with patch('production_app.model.select',return_value=project()):
+                    result=model.profile(cfg,project().name)
+        self.assertEqual(Path(result['templates']['appendix']['path']),self.app)
+        self.assertEqual(cfg['profiles'][project().name]['templates'],templates)
+
+    def test_auto_mode_ignores_stale_old_cached_appendix(self):
+        from production_app import model
+        from production_app.storage import sha
+        prepared=self.passport.parent/'Prepared'
+        prepared.mkdir()
+        templates={}
+        for role in ('appendix','vik','uzk','quality'):
+            path=prepared/(role+'.xlsx')
+            path.write_bytes(role.encode())
+            templates[role]={'path':str(path),'sha256':sha(path)}
+        templates['appendix']['sha256']='outdated-first-appendix-checksum'
+        cfg={'documents':str(self.root),'registry':str(self.root/'registry.xlsx'),
+             'auto_first_passport':True,
+             'profiles':{project().name:{
+                 'root':str(self.passport.parent),'templates':templates,
+             }}}
+        with patch('production_app.first_passport.inspect_template',
+                   return_value=object()):
+            with patch('production_app.model.read_registry',return_value=object()):
+                with patch('production_app.model.select',return_value=project()):
+                    result=model.profile(cfg,project().name)
+        self.assertEqual(Path(result['templates']['appendix']['path']),self.app)
+        self.assertNotEqual(result['templates']['appendix']['sha256'],
+                            'outdated-first-appendix-checksum')
+
     def test_explicit_manual_mode_keeps_existing_approved_appendix(self):
         from production_app import model
         prepared=self.passport.parent/'Prepared'
