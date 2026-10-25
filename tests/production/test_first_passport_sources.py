@@ -14,7 +14,8 @@ from zipfile import ZipFile
 from openpyxl import Workbook
 
 from production_app.first_passport import (
-    discover_first_passport,validate_source_pins,
+    discover_first_passport,discover_first_passport_for_config,
+    validate_source_pins,
 )
 from production_app.storage import Stop
 
@@ -141,6 +142,57 @@ class FirstPassportSources(unittest.TestCase):
         result=self.scan()
         self.assertIsNone(result['catalog'])
         self.assertTrue(validate_source_pins(result))
+
+    def test_deployed_rc3_templates_and_real_document_roots_are_distinct(self):
+        # The deployed screenshot has 'documents'=.../Templates,
+        # while actual FIRST passports reside at cfg['output'].
+        cleaned=self.root/'CleanTemplates'
+        (cleaned/'Гараж Казахстан').mkdir(parents=True)
+        cfg={'documents':str(cleaned),'output':str(self.root)}
+        with patch('production_app.first_passport.inspect_template',
+                   return_value=object()):
+            result=discover_first_passport_for_config(
+                cfg,project(),require_all=True)
+        self.assertEqual(Path(result['passport_root']),self.passport)
+        self.assertEqual(Path(result['sources']['appendix']['path']),self.app)
+
+    def test_explicit_archive_root_overrides_unrelated_output(self):
+        cleaned=self.root/'CleanTemplates'
+        cleaned.mkdir()
+        unrelated=self.root/'EmptyOutput'
+        unrelated.mkdir()
+        cfg={'documents':str(cleaned),'output':str(unrelated),
+             'first_passport_documents':str(self.root)}
+        with patch('production_app.first_passport.inspect_template',
+                   return_value=object()):
+            result=discover_first_passport_for_config(cfg,project())
+        self.assertEqual(Path(result['passport_root']),self.passport)
+
+    def test_missing_archive_in_selected_paths_refuses_random_fallback(self):
+        cleaned=self.root/'CleanTemplates'
+        (cleaned/'Гараж Казахстан').mkdir(parents=True)
+        unrelated=self.root/'EmptyOutput'
+        unrelated.mkdir()
+        cfg={'documents':str(cleaned),'output':str(unrelated)}
+        with self.assertRaisesRegex(Stop,'Архив первых паспортов'):
+            discover_first_passport_for_config(cfg,project())
+
+    def test_two_potential_archives_are_ambiguous_until_user_selects_one(self):
+        cleaned=self.root/'CleanTemplates'
+        archive=cleaned/'Гараж Казахстан'/'Паспорт'
+        archive.mkdir(parents=True)
+        # Two actual archives selected by user: must not silently choose.
+        cfg={'documents':str(cleaned),'output':str(self.root)}
+        with self.assertRaisesRegex(Stop,'корневых папок: 2'):
+            discover_first_passport_for_config(cfg,project())
+
+    def test_explicit_archive_rejects_missing_project_even_when_output_has_one(self):
+        cleaned=self.root/'CleanTemplates'
+        cleaned.mkdir()
+        cfg={'documents':str(cleaned),'output':str(self.root),
+             'first_passport_documents':str(cleaned)}
+        with self.assertRaisesRegex(Stop,'единственная папка'):
+            discover_first_passport_for_config(cfg,project())
 
     def test_profile_uses_first_appendix_not_cached_surrogate(self):
         from production_app import model
