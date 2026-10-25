@@ -113,7 +113,11 @@ class GUIContracts(unittest.TestCase):
         source=inspect.getsource(App.fact_dialog)
         self.assertNotIn("text='Приложить протокол АКЗ",source)
         self.assertNotIn("text='Протоколов АКЗ №",source)
-        self.assertIn("Приложить первичные протоколы",source)
+        # The entire region below AKZ climate is removed from daily UI.
+        self.assertNotIn("Приложить первичные протоколы",source)
+        self.assertNotIn("Добавить фактическое соединение",source)
+        self.assertNotIn("Дополнительные реквизиты утверждённых форм",source)
+        self.assertIn("← Назад",source)
         self.assertIn("akz_proofs",source)
 
     def test_open_documents_uses_last_completed_folder_for_current_project(self):
