@@ -15,6 +15,8 @@ from production_app.shared_uzk import (
     read_shared_uzk,planned_control,verify_planned_quantities,find_shared_uzk
 )
 from production_app.path_config import apply_settings,visible_settings
+from production_app.prepared_forms import prepared_project
+from production_app.model import output_passport_directory
 from production_app.first_passport import _first_roots
 
 
@@ -146,6 +148,65 @@ class SharedUzk(unittest.TestCase):
         project.first_date=date(2026,8,2)
         self.assertIn(special,_first_roots(root,project))
         self.assertNotIn(actual,_first_roots(root,project))
+
+    def test_output_directory_is_existing_project_passport_folder(self):
+        documents=self.root/'Документы';documents.mkdir()
+        project=documents/'Гараж казахстан'
+        folder=project/'Паспорт';folder.mkdir(parents=True)
+        cfg={'output':str(documents),'training':False}
+        profile={'first_passport_sources':{'passport_root':str(folder)}}
+        self.assertEqual(output_passport_directory(
+            cfg,'Гараж Казахстан',profile),folder)
+        example=output_passport_directory(
+            cfg,'Гараж Казахстан',profile)/'11_2026 от 25.10.2026'
+        self.assertEqual(example.parent,folder)
+        self.assertFalse(example.exists())
+        self.assertEqual(list(folder.iterdir()),[])
+
+    def test_training_output_does_not_write_in_real_archive(self):
+        documents=self.root/'Документы';documents.mkdir()
+        actual=documents/'Гараж казахстан'/'Паспорт'
+        actual.mkdir(parents=True)
+        training=self.root/'Training';training.mkdir()
+        cfg={'output':str(training),'training':True}
+        profile={'first_passport_sources':{'passport_root':str(actual)}}
+        dest=output_passport_directory(cfg,'Гараж Казахстан',profile)
+        self.assertEqual(dest,training/'Гараж Казахстан'/'Паспорт')
+        self.assertFalse(dest.exists())
+
+    def test_wrong_output_root_is_refused_for_real_passport(self):
+        documents=self.root/'Документы';documents.mkdir()
+        actual=documents/'Гараж казахстан'/'Паспорт'
+        actual.mkdir(parents=True)
+        different=self.root/'Разное';different.mkdir()
+        with self.assertRaisesRegex(Stop,'вне папки объекта'):
+            output_passport_directory(
+                {'output':str(different),'training':False},
+                'Гараж Казахстан',
+                {'first_passport_sources':{'passport_root':str(actual)}})
+
+    def test_internal_clean_forms_found_without_manual_profile(self):
+        forms=self.root/'Templates'/'Гараж Казахстан';forms.mkdir(parents=True)
+        for name in ('ВЗМК_ВИК_ШАБЛОН.docx','ВЗМК_УЗК_ШАБЛОН.docx',
+                     'ВЗМК_Документ_о_качестве.docx',
+                     'akz0.xlsx','akz_appendix0.xlsx'):
+            (forms/name).write_bytes(name.encode())
+        result=prepared_project(
+            {'documents':str(forms.parent)},'Гараж Казахстан')
+        self.assertEqual(
+            set(result['templates']),
+            {'vik','uzk','quality','akz0','akz_appendix0'})
+        self.assertTrue(all(Path(item['path']).parent==forms
+                            for item in result['templates'].values()))
+        self.assertEqual(result['forms_origin'],
+                         'AUTO_DISCOVERED_PREPARED_INTERNAL')
+
+    def test_no_internal_forms_never_reuses_filled_first_passport(self):
+        forms=self.root/'Templates'/'Гараж Казахстан';forms.mkdir(parents=True)
+        (forms/'1_2026 - ВИК.docx').write_bytes(b'FULLY HISTORICAL ACT')
+        with self.assertRaisesRegex(Stop,'Нет очищенных форм'):
+            prepared_project(
+                {'documents':str(forms.parent)},'Гараж Казахстан')
 
     def test_daily_ui_no_template_button_and_no_csv(self):
         import inspect
