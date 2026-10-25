@@ -1,13 +1,15 @@
-"""Read current passport dates from the VZMK registry, never from old acts.
+"""Read passport dates from the VZMK registry, with project-specific provenance.
 
-For an existing passport, read the exact registered row. For a new passport,
-calculate the new row in a disposable *private* Excel copy using the existing
-append_row engine; the passport's ending date is today's proposal and must
-be shown to the user for explicit review. Every other current-work date MUST
-come from a formula in the registered first-row model. Stale literal dates
-of the first passport are not valid inspection dates for a new shipment.
+For EVERY passport of a project, manufacturing START_DATE is the SAME:
+copy the exact date from the FIRST issued passport's registered row (H353 in
+Garage Kazakhstan), even when this is a fixed Excel date, not a formula.
 
-Actual source registry and VOM remain read-only; no official row is inserted.
+For a NEW passport the ending date is proposed from the current date and
+shown at confirmation. VIK/UZK/AKZ dates must come from live formulas in
+a disposable registry copy, never stale control dates of the first passport.
+For existing passports use their exact registered row.
+
+The source VZMK registry, VOM and issued documents remain read-only.
 """
 from datetime import date,datetime
 from pathlib import Path
@@ -21,7 +23,7 @@ from .storage import Stop, sha
 
 MAP={'start_date':'START_DATE','date':'END_DATE','vik_date':'VIK_DATE',
      'uzk_date':'UZK_DATE','akz_date':'AKZ_DATE'}
-CONTROL=('start_date','vik_date','uzk_date','akz_date')
+CURRENT_CONTROL=('vik_date','uzk_date','akz_date')
 
 
 def _coerce_date(value,label):
@@ -39,6 +41,21 @@ def row_dates(workbook,registry,row):
             for key,column in MAP.items()}
 
 
+def first_passport_start(registry,project):
+    """Read manufacturing start from the FIRST registered passport, never
+    the next shipment's date and never from another project's row.
+    A fixed date is expected and VALID under the approved VZMK procedure.
+    """
+    book=load_book(registry.path,values=True)
+    try:
+        columns=model.columns(registry)
+        value=book[registry.sheet].cell(
+            project.first_row,columns['START_DATE']).value
+        return _coerce_date(value,'начала изготовления первого паспорта')
+    finally:
+        book.close()
+
+
 def resolve_registry_dates(cfg,project_name,passport_number,vom,new,*,day=None):
     path=Path(cfg['registry']).resolve(strict=True)
     baseline=sha(path)
@@ -50,20 +67,22 @@ def resolve_registry_dates(cfg,project_name,passport_number,vom,new,*,day=None):
         day=day or date.today()
         if type(day) is not date:
             raise Stop('Неверная дата нового паспорта.')
-        # A copied historical literal is not a current date. Explicitly
-        # block such a source and explain which current registry field needs
-        # an approved formula/confirmed mechanism before issuing a passport.
+        # The project manufacturing start is intentionally constant across
+        # all passports; other inspection dates must still be NEW.
+        approved_start=first_passport_start(registry,project)
         formula_book=load_book(path)
         try:
             columns=model.columns(registry)
             original=formula_book[registry.sheet]
-            for key in CONTROL:
+            for key in CURRENT_CONTROL:
                 cell=original.cell(project.first_row,columns[MAP[key]])
                 if cell.data_type!='f':
                     raise Stop('В первом паспорте колонка '+MAP[key]+
-                               ' содержит старую фиксированную дату, а не '
-                               'формулу. Нужен подтверждённый источник даты '
-                               'для НОВОЙ отгрузки; старую дату не переносим.')
+                               ' содержит фиксированную дату старого контроля. '
+                               'Для НОВОЙ отгрузки нужна подтверждённая '
+                               'формула или иной согласованный источник даты '
+                               'текущего контроля. Дата начала изготовления '
+                               'при этом берётся из первого паспорта.')
         finally:
             formula_book.close()
 
@@ -85,6 +104,10 @@ def resolve_registry_dates(cfg,project_name,passport_number,vom,new,*,day=None):
             finally:book.close()
         if dates['date']!=day.isoformat():
             raise Stop('Дата новой строки не совпадает с предложенной датой выпуска.')
+        if dates['start_date']!=approved_start:
+            raise Stop('Дата начала изготовления нового паспорта не совпала '
+                       'с датой первого паспорта проекта. Источники не '
+                       'изменены, выпуск остановлен.')
         origin='NEW_ROW_CALCULATED_IN_DISPOSABLE_REGISTRY_COPY'
     else:
         candidates=[e['row'] for e in registry.projects.get(project_name,[])
@@ -97,4 +120,10 @@ def resolve_registry_dates(cfg,project_name,passport_number,vom,new,*,day=None):
         origin='EXACT_EXISTING_REGISTRY_ROW'
     if sha(path)!=baseline:
         raise Stop('Реестр изменился во время чтения дат.')
-    return dates|{'registry_date_origin':origin}
+    return dates|{
+        'registry_date_origin':origin,
+        'start_date_origin':(
+            'FIRST_PASSPORT_REGISTERED_START_DATE' if new
+            else 'EXACT_EXISTING_REGISTRY_ROW'
+        ),
+    }
