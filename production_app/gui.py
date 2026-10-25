@@ -628,24 +628,32 @@ class App:
         self.review_preview()
 
     def review_preview(self):
-        if not self.preview_pdf:return
+        if not self.preview_pdf or not self.plan:return
         try:
+            d=read(self.plan)
             os.startfile(self.preview_pdf)
         except Exception as exc:
-            self.error('Не удалось открыть черновой PDF: '+str(exc))
+            self.error('Не удалось открыть подготовленный PDF: '+str(exc))
             return
-        if not messagebox.askyesno(
-            'Просмотр комплекта перед выпуском',
-            'Открылся ЧЕРНОВОЙ PDF (не официальный выпуск).\n'
-            'Проверьте страницы, номера, марки, даты, результаты '
-            'контроля и АКЗ.\n\n'
-            'После подтверждения программа снова проверит файлы, '
-            'сохранит выпуск и обновит реестр с резервной копией.\n'
-            'Подтверждаете выпуск?',
-        ):
-            self.write('Документы подготовлены, но выпуск не подтверждён. '
-                       'Реестр не изменён. Для продолжения нажмите '
-                       '«Просмотреть и подтвердить».')
+        mode='УЧЕБНЫЙ РЕЖИМ' if self.cfg.get('training') else 'РАБОЧИЙ ВЫПУСК'
+        message=(mode+'\n'
+                 'Проект: '+str(d['project'])+'\n'
+                 'Номер: '+str(d['number'])+'\n'
+                 'Дата паспорта: '+str(d['date'])+'\n'
+                 'Реестр: '+str(d['registry'])+'\n'
+                 'Папка результата: '+str(d['target'])+'\n'
+                 ('Будет добавлена одна строка в реестр.\n' if d['new']
+                  else 'Новых строк реестра не будет.\n')+
+                 '\nОткрылся предварительный PDF с пометкой ЧЕРНОВИК. '
+                 'Проверьте ВСЕ страницы, марки, фактические результаты '
+                 'контроля, материалы, толщины и даты.\n\n'
+                 'Это ЕДИНСТВЕННОЕ подтверждение официального выпуска. '
+                 'После «Да» будут подготовлены итоговые документы, '
+                 'выполнены проверки и запись в реестр с резервной копией.\n'
+                 'Подтверждаете выпуск?')
+        if not messagebox.askyesno('Предварительный просмотр и выпуск',message):
+            self.write('Подтверждение отложено; предварительный PDF доступен. '
+                       'Реестр не изменён.')
             return
         self.issue()
 
@@ -655,10 +663,12 @@ class App:
             if folder.is_dir():os.startfile(folder)
     def issue(self):
         if not self.plan or not self.preview_pdf:return
-        d=read(self.plan)
-        message=f"{'УЧЕБНАЯ КОПИЯ' if self.cfg.get('training') else 'РАБОЧИЙ ВЫПУСК'}\nОбъект: {d['project']}\nПаспорт: {d['number']}\nРеестр: {d['registry']}\nРезервная копия: {Path(d['registry']).parent/'.vzmk-operations'/d['id']/'backup.xlsx'}\nРезультат: {d['target']}\n"+('Будет добавлена ОДНА новая строка.' if d['new'] else 'Существующий паспорт: строки реестра не добавляются.')+'\n\nПодтверждаете, что просмотрели ВСЕ документы, фактические результаты и полномочия ответственного?'
-        if not messagebox.askyesno('Отдельное подтверждение выпуска',message):return
-        self.run('confirm',{'path':self.plan,'responsible':self.facts.get('responsible',''),'reviewed':True},lambda r:self.run('release',{'path':self.plan},self.released))
+        # Only entered from explicit consent in review_preview(), with exact
+        # project/date/registry/output shown. Do not ask a SECOND approval.
+        self.run('confirm',{'path':self.plan,
+                            'responsible':self.facts.get('responsible',''),
+                            'reviewed':True},
+                 lambda r:self.run('release',{'path':self.plan},self.released))
     def released(self,r):self.run('commit',{'path':self.plan,'release_result':self.result_path},self.committed)
     def committed(self,r):self.run('readback',{'journal':r['journal']},lambda v:self.run('complete',{'journal':r['journal'],'readback_result':self.result_path},self.completed))
     def completed(self,r):
