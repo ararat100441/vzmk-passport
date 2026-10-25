@@ -1,4 +1,4 @@
-"""Read-only inventory: locate originals of FIRST passport by actual registry.
+r"""Read-only inventory: locate originals of FIRST passport by actual registry.
 
 Usage in the VZMK source checkout on Windows:
 
