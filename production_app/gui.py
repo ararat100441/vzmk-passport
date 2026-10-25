@@ -154,9 +154,8 @@ class App:
 
         ttk.Button(dialog,text='Сохранить рабочие пути',
                    command=store).grid(row=4,column=1,sticky='w',pady=12)
-        ttk.Button(dialog,text='Создать учебную копию',
-                   command=lambda:store(True)).grid(
-                   row=4,column=1,sticky='e',pady=12)
+        # Training-copy machinery remains available to automated tests, but
+        # it is not a daily work button in the simplified PTO interface.
         def open_recovery():
             dialog.destroy()
             self.recovery()
@@ -630,6 +629,11 @@ class App:
             ranges, without issuing any certificate or changing Excel.
             """
             try:
+                # A visible Treeview cell may still be in an Entry editor.
+                # Explicitly commit it; mouse clicks on a Tk button do not
+                # consistently trigger FocusOut on every Windows theme.
+                pending=getattr(grid,'_pending_editor_commit',None)
+                if callable(pending):pending()
                 from .simple_facts import save_screen_draft
                 visible=[
                     dict(zip(cols,grid.item(item,'values')))
@@ -684,6 +688,7 @@ class App:
         window.bind('<Escape>',lambda event:go_back())
 
     def editable(self,tree,immutable=set(),on_change=None):
+        tree._pending_editor_commit=None
         def edit(event):
             item=tree.identify_row(event.y);column=tree.identify_column(event.x)
             if not item or not column:return
@@ -693,8 +698,13 @@ class App:
             entry.insert(0,tree.item(item,'values')[col]);entry.focus_set()
             def done(e=None):
                 if not entry.winfo_exists():return
-                values=list(tree.item(item,'values'));values[col]=entry.get();tree.item(item,values=values);entry.destroy()
+                values=list(tree.item(item,'values'))
+                values[col]=entry.get()
+                tree.item(item,values=values)
+                entry.destroy()
+                tree._pending_editor_commit=None
                 if on_change:on_change()
+            tree._pending_editor_commit=done
             entry.bind('<Return>',done);entry.bind('<FocusOut>',done)
         tree.bind('<Double-1>',edit)
 
