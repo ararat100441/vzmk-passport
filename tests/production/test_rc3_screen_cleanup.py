@@ -104,7 +104,8 @@ class GUIContracts(unittest.TestCase):
         self.assertIn(
             "cols=('mark','profile','akz','uzk_quantity')",source)
         self.assertIn('hidden_fields',source)
-        self.assertIn('hidden_fields.get(mark,{})',source)
+        self.assertIn('hidden_fields',source)
+        self.assertIn('save_screen_draft(',source)
         self.assertIn('self.editable(grid,immutable={0,3}',source)
         for title in ("'Краска'", "'Результат УЗК'", "'Протокол ВИК'"):
             self.assertNotIn(title,source)
