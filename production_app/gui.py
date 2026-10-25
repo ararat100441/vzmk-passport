@@ -242,10 +242,12 @@ class App:
         d=tk.Toplevel(self.root);d.title('Фактические результаты — '+self.project.get()+' '+self.number.get());self.fit(d,1160,760)
         d.transient(self.root);d.grab_set()
         window=d;window.bind('<Escape>',lambda e:window.destroy());d=self.scroll_content(window)
-        variables={k:tk.StringVar(value=self.facts.get(k,'')) for k in ('responsible','start_date','date','vik_date','uzk_date','akz_date')}
-        top=ttk.Frame(d);top.pack(fill='x',padx=10,pady=8)
-        for n,(key,label) in enumerate([('responsible','Ответственный'),('start_date','Начало YYYY-MM-DD'),('date','Окончание'),('vik_date','ВИК'),('uzk_date','УЗК'),('akz_date','АКЗ')]):
-            ttk.Label(top,text=label).grid(row=0,column=n);ttk.Entry(top,textvariable=variables[key],width=25 if n==0 else 16).grid(row=1,column=n,padx=5)
+        ttk.Label(d,text=(
+            'Реквизиты и даты берутся из реестра ВЗМК. '
+            'Для нового паспорта его текущие даты должны быть '
+            'получены по утверждённым формулам/источникам, '
+            'старые даты первого паспорта не копируются.'
+        ),wraplength=1090).pack(anchor='w',padx=10,pady=6)
         ttk.Label(d,text='Двойной щелчок по ячейке для ввода. Пустой АКЗ остаётся пустым. УЗК: ГОДЕН / НЕ ТРЕБУЕТСЯ; для исключений обязательно основание.').pack(pady=4)
         cols=('mark','profile','paint','akz','uzk_quantity','uzk_result','basis','vik_result','vik_basis')
         table_frame=ttk.Frame(d);table_frame.pack(fill='both',expand=True,padx=10)
@@ -255,38 +257,51 @@ class App:
         grid.pack(side='left',fill='both',expand=True)
         old={r['mark']:r for r in self.facts.get('marks',[])}
         for mark in dict.fromkeys(str(r[0]) for r in v.rows):grid.insert('', 'end',values=[mark]+[old.get(mark,{}).get(c,'') if old.get(mark,{}).get(c) is not None else '' for c in cols[1:]])
-        self.editable(grid,immutable={0})
+        # Apply CURRENT project's approved assignment catalogue when present;
+        # never use another object's catalogue or invent AKZ0 for empty cells.
+        from .catalog_assignments import current_assignments
+        try:
+            active_profile=model.profile(self.cfg,self.project.get())
+            catalogue=active_profile.get('catalog')
+            if catalogue:
+                assignments=current_assignments(
+                    catalogue,active_profile['catalog_sha256'],
+                    (r[0] for r in v.rows))
+                for item in grid.get_children():
+                    vals=list(grid.item(item,'values'))
+                    chosen=assignments.get(str(vals[0]).strip(),{})
+                    for key in ('profile','paint','akz'):
+                        index=cols.index(key)
+                        # User-entered unsaved edits from an earlier view win.
+                        if not str(vals[index]).strip() and key in chosen:
+                            vals[index]=str(chosen[key])
+                    grid.item(item,values=vals)
+                ttk.Label(d,text='Назначения загружены из справочника проекта: '+
+                          str(catalogue)+'. Проверьте их перед выпуском.',
+                          wraplength=1090).pack(anchor='w',padx=12)
+        except Stop as exc:
+            self.write('Справочник назначений не подставлен: '+str(exc))
         def import_assignments():
             try:
-                profile=self.cfg.get('profiles',{}).get(self.project.get(),{});path=profile.get('catalog')
-                if not path:raise Stop('У объекта нет привязанного справочника. Создайте черновик и подтвердите назначения.')
-                if sha(path)!=profile['catalog_sha256']:raise Stop('Справочник изменился. Повторно подтвердите его в настройках объекта.')
-                if not messagebox.askyesno('Подтверждение источника назначений',str(path)+'\nПодтверждаете профиль, краску и АКЗ из этого справочника? Результаты УЗК и замеры АКЗ не заполняются.'):return
-                from openpyxl import load_workbook
-                w=load_workbook(path,data_only=True)
-                try:
-                    s=w.active;header=None;aliases={'марка':'mark','отправочная марка':'mark','профиль':'profile','краска':'paint','№ акз':'akz'}
-                    for row in s.iter_rows(max_row=10):
-                        found={aliases[str(c.value).strip().lower()]:c.column for c in row if str(c.value).strip().lower() in aliases}
-                        if 'mark' in found:header=(row[0].row,found);break
-                    if header is None:raise Stop('Не найдена таблица справочника.')
-                    hr,cols=header;mapping={}
-                    for row in range(hr+1,s.max_row+1):
-                        mark=s.cell(row,cols['mark']).value
-                        if mark is None:continue
-                        key=str(mark)
-                        if key in mapping:raise Stop('Неоднозначная марка в справочнике: '+key)
-                        mapping[key]={c:s.cell(row,n).value for c,n in cols.items()}
-                    for item in grid.get_children():
-                        values=list(grid.item(item,'values'));source=mapping.get(values[0])
-                        if source:
-                            for c in ('profile','paint','akz'):
-                                if source.get(c) is not None:values[cols_tuple.index(c)]=str(source[c])
-                            grid.item(item,values=values)
-                finally:w.close()
+                profile=model.profile(self.cfg,self.project.get())
+                path=profile.get('catalog')
+                if not path:
+                    raise Stop('Справочник не найден у выбранного проекта.')
+                mapping=current_assignments(
+                    path,profile['catalog_sha256'],
+                    (grid.item(item,'values')[0] for item in grid.get_children()))
+                for item in grid.get_children():
+                    vals=list(grid.item(item,'values'))
+                    source=mapping.get(str(vals[0]).strip(),{})
+                    for key in ('profile','paint','akz'):
+                        if key in source:
+                            vals[cols.index(key)]=str(source[key])
+                    grid.item(item,values=vals)
+                refresh_akz()
+                self.write('Назначения перечитаны из '+path)
             except Exception as exc:self.error(exc)
-        cols_tuple=cols
-        ttk.Button(d,text='Импортировать подтверждённые назначения из справочника',command=import_assignments).pack(pady=3)
+        ttk.Button(d,text='Обновить назначения из справочника',
+                   command=import_assignments).pack(pady=3)
         ttk.Label(d,text='АКЗ: один набор климата на три слоя в день. Для трёхслойного акта средние значения сухой толщины вводятся ниже, по этапам 1/2/3.').pack(pady=6)
         if presets['variants']:
             ttk.Label(d,text='Предзаполнены ПОСЛЕДНИЕ показатели выбранного объекта. Дата прежнего контроля: '+
