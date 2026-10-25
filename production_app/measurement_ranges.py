@@ -46,8 +46,6 @@ def measurements_from_ranges(variant,inputs,*,coats=1):
     if not isinstance(layer_intervals,list) or len(layer_intervals)!=coats:
         raise Stop('Укажите текущие фактические диапазоны всех используемых слоёв.')
     sorted_layers={}
-    total=Decimal(0)
-    dry=[]
     for row in layer_intervals:
         if not isinstance(row,dict) or type(row.get('layer')) is not int:
             raise Stop('Неверный номер слоя в фактическом диапазоне.')
@@ -58,17 +56,23 @@ def measurements_from_ranges(variant,inputs,*,coats=1):
         b=numeric(row.get('max'),'фактическая толщина слоя до',Decimal('.001'))
         if a>b:
             raise Stop('Толщина слоя от превышает до.')
-        avg=(a+b)/2
-        total+=avg
         sorted_layers[i]={'layer':i,'min':format(a,'f'),
                           'max':format(b,'f')}
-        dry.append({'layer':i,'average':format(total,'f')})
     if set(sorted_layers)!=set(range(1,coats+1)):
         raise Stop('Не указаны все слои АКЗ.')
+    total=Decimal(0)
+    dry=[]
+    for i in range(1,coats+1):
+        row=sorted_layers[i]
+        total+=(Decimal(row['min'])+Decimal(row['max']))/2
+        dry.append({'layer':i,'average':format(total,'f')})
     result['thickness']=format(total,'f')
     result['measurement_intervals']['layers']=[
         sorted_layers[i] for i in range(1,coats+1)]
-    if coats>1:
+    if coats==2:
+        raise Stop('Двухслойный акт пока не поддерживает расчёт по диапазонам; '
+                   'требуется утверждённая форма и методика для двух слоёв.')
+    if coats==3:
         # Legacy three-layer forms require 3 cumulative dry-coat averages.
         # Their measured intervals are distinguishable from allowed spec
         # limits and shall not be taken from reusable project presets.
