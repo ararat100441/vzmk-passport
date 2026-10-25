@@ -272,8 +272,10 @@ class AgreedUX(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/'registry.xlsx'
             w=Workbook();s=w.active
+            # Same fixed manufacturing start for every passport of project.
+            s['A2']=date(2026,6,10)
             s['B2']=date(2026,9,9)
-            for col in ('A','C','D','E'):
+            for col in ('C','D','E'):
                 s[col+'2']='=B2'
             w.save(p);w.close()
             original=sha(p)
@@ -299,7 +301,8 @@ class AgreedUX(unittest.TestCase):
             def fake_append(excel,copy_path,reg,proj,vom,day):
                 x=load_workbook(copy_path)
                 try:
-                    for col in range(1,6):
+                    x.active['A3']=x.active['A2'].value  # first passport start
+                    for col in range(2,6):
                         x.active.cell(3,col).value=day
                     x.save(copy_path)
                 finally:x.close()
@@ -319,6 +322,9 @@ class AgreedUX(unittest.TestCase):
                     {'registry':str(p)},'PROJECT','11/2026',
                     None,True,day=start)
             self.assertEqual(dates['date'],'2026-10-25')
+            self.assertEqual(dates['start_date'],'2026-06-10')
+            self.assertEqual(dates['start_date_origin'],
+                             'FIRST_PASSPORT_REGISTERED_START_DATE')
             self.assertEqual(dates['vik_date'],'2026-10-25')
             self.assertEqual(
                 dates['registry_date_origin'],
@@ -343,7 +349,7 @@ class AgreedUX(unittest.TestCase):
                                return_value={
                                   'START_DATE':1,'VIK_DATE':2,
                                   'UZK_DATE':3,'AKZ_DATE':4}):
-                        with self.assertRaisesRegex(Stop,'старую фиксированную'):
+                        with self.assertRaisesRegex(Stop,'фиксированную дату старого контроля'):
                             resolve_registry_dates({'registry':str(p)},
                                   'PROJECT','11/2026',None,True,
                                   day=date(2026,10,25))
