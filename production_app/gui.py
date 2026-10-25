@@ -345,22 +345,39 @@ class App:
             'получены по утверждённым формулам/источникам, '
             'старые даты первого паспорта не копируются.'
         ),wraplength=1090).pack(anchor='w',padx=10,pady=6)
-        ttk.Label(d,text='Двойной щелчок по ячейке для ввода. Пустой АКЗ остаётся пустым. УЗК: ГОДЕН / НЕ ТРЕБУЕТСЯ; для исключений обязательно основание.').pack(pady=4)
-        cols=('mark','profile','paint','akz','uzk_quantity','uzk_result','basis','vik_result','vik_basis')
-        table_frame=ttk.Frame(d);table_frame.pack(fill='both',expand=True,padx=10)
+        ttk.Label(d,text='Марка и расчётное количество УЗК заполняются из ВОМ и общего реестра. Профиль и № АКЗ — из справочника проекта. Редактирование: двойной щелчок. Старые заключения контроля автоматически не назначаются.').pack(pady=4)
+        cols=('mark','profile','akz','uzk_quantity')
+        headings={'mark':'Марка','profile':'Профиль',
+                  'akz':'№ АКЗ','uzk_quantity':'УЗК, шт'}
+        table_frame=ttk.Frame(d)
+        table_frame.pack(fill='both',expand=True,padx=10)
         grid=ttk.Treeview(table_frame,columns=cols,show='headings',height=12)
-        for c in cols:grid.heading(c,text={'mark':'Марка','profile':'Профиль','paint':'Краска','akz':'№ АКЗ','uzk_quantity':'УЗК, шт','uzk_result':'Результат УЗК','basis':'Основание / протокол УЗК','vik_result':'Результат ВИК','vik_basis':'Протокол ВИК'}.get(c,c));grid.column(c,width=90 if c in ('akz','uzk_quantity') else 160)
-        y=ttk.Scrollbar(table_frame,orient='vertical',command=grid.yview);grid.configure(yscrollcommand=y.set);y.pack(side='right',fill='y')
+        for key in cols:
+            grid.heading(key,text=headings[key])
+            grid.column(key,width=105 if key in ('akz','uzk_quantity')
+                        else 240)
+        y=ttk.Scrollbar(table_frame,orient='vertical',command=grid.yview)
+        grid.configure(yscrollcommand=y.set)
+        y.pack(side='right',fill='y')
         grid.pack(side='left',fill='both',expand=True)
-        old={r['mark']:r for r in self.facts.get('marks',[])}
+        old={str(r['mark']):dict(r) for r in self.facts.get('marks',[])}
+        # Data not displayed in this simple table stays intact internally.
+        # No deleted column is interpreted as a positive control finding.
+        hidden_fields={}
         for mark in dict.fromkeys(str(r[0]) for r in v.rows):
-            values=[mark]+[
-                old.get(mark,{}).get(k,'')
-                if old.get(mark,{}).get(k) is not None else ''
-                for k in cols[1:]
+            previous=old.get(mark,{})
+            hidden_fields[mark]={
+                k:previous[k] for k in ('paint','uzk_result','basis',
+                                          'vik_result','vik_basis')
+                if k in previous
+            }
+            values=[
+                mark,
+                str(previous.get('profile') or ''),
+                str(previous.get('akz'))
+                if previous.get('akz') not in (None,'') else '',
+                str(uzk_plan[mark]['uzk_quantity']),
             ]
-            values[cols.index('uzk_quantity')]=str(
-                uzk_plan[mark]['uzk_quantity'])
             grid.insert('','end',values=values)
         ttk.Label(
             d,text='Общий УЗК (только чтение): '+str(source)+
@@ -384,10 +401,16 @@ class App:
                     vals=list(grid.item(item,'values'))
                     chosen=assignments.get(str(vals[0]).strip(),{})
                     for key in ('profile','paint','akz'):
-                        index=cols.index(key)
-                        # User-entered unsaved edits from an earlier view win.
-                        if not str(vals[index]).strip() and key in chosen:
-                            vals[index]=str(chosen[key])
+                        if key not in chosen:continue
+                        if key=='paint':
+                            # The paint remains an internal material mapping
+                            # used by the AKZ generator, not a visible column.
+                            if not str(hidden_fields[vals[0]].get('paint','')).strip():
+                                hidden_fields[vals[0]]['paint']=chosen[key]
+                        else:
+                            index=cols.index(key)
+                            if not str(vals[index]).strip():
+                                vals[index]=str(chosen[key])
                     grid.item(item,values=vals)
                 ttk.Label(d,text='Назначения загружены из справочника проекта: '+
                           str(catalogue)+'. Проверьте их перед выпуском.',
@@ -407,7 +430,10 @@ class App:
                     vals=list(grid.item(item,'values'))
                     source=mapping.get(str(vals[0]).strip(),{})
                     for key in ('profile','paint','akz'):
-                        if key in source:
+                        if key not in source:continue
+                        if key=='paint':
+                            hidden_fields[vals[0]]['paint']=source[key]
+                        else:
                             vals[cols.index(key)]=str(source[key])
                     grid.item(item,values=vals)
                 refresh_akz()
@@ -576,7 +602,7 @@ class App:
             else:
                 akz_notice.configure(text='В справочнике нет подтверждённых '
                     'назначений АКЗ. Выберите действующие виды для марок.')
-        self.editable(grid,immutable={0,4},on_change=refresh_akz)
+        self.editable(grid,immutable={0,3},on_change=refresh_akz)
         refresh_akz()
 
         # Actual per-weld inspection evidence is entered in this existing
@@ -654,9 +680,13 @@ class App:
                     'responsible':'',
                 }
                 for item in grid.get_children():
-                    row=dict(zip(cols,grid.item(item,'values')))
+                    shown=dict(zip(cols,grid.item(item,'values')))
+                    mark=str(shown['mark'])
+                    row={**hidden_fields.get(mark,{}),**shown}
                     raw=str(row['akz']).strip()
                     row['akz']=int(raw) if raw else None
+                    # Empty results stay unconfirmed. Removing table columns
+                    # is never permission to silently set VIK/UZK to ГОДЕН.
                     data['marks'].append(row)
                 used={r['akz'] for r in data['marks'] if r['akz'] is not None}
                 for variant in sorted(used):
