@@ -34,7 +34,7 @@ def read_assignments(path, expected_sha=None):
             raise Stop('В справочнике должен быть один лист с назначениями.')
         sheet=book.active
         columns=None
-        for cells in sheet.iter_rows(min_row=1,max_row=min(sheet.max_row,20),values_only=True):
+        for row_index,cells in enumerate(sheet.iter_rows(min_row=1,max_row=min(sheet.max_row,20),values_only=True),start=1):
             captions=[_caption(value) for value in cells]
             matches={}
             for key,aliases in ALIASES.items():
@@ -45,7 +45,6 @@ def read_assignments(path, expected_sha=None):
                     matches[key]=pos[0]
             if 'mark' in matches and any(key in matches for key in ('profile','paint','akz')):
                 columns=matches
-                row_index=sheet._current_row or 1
                 break
         if columns is None:
             raise Stop('Не найден заголовок «Марка» и назначения профиля/краски/АКЗ.')
