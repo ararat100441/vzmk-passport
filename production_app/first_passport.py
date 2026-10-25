@@ -60,16 +60,27 @@ def _unique_subdirectory(root, title, *, optional=False):
 
 
 def _first_roots(passport_root, project):
-    """First passport is usually in Passport root, not a new numbered folder."""
+    """First passport documents may be at root OR inside its dated folder.
+
+    Accept only exact first-number/date spellings, e.g.
+    1_2026 от 09.09.2026, 1 от 09.09.2026, 1_1_2026 от 12.06.2026.
+    Never treat passport 11/2026 or a different series as number 1.
+    """
     roots=[passport_root]
-    day=project.first_date.strftime('%d.%m.%Y')
+    stamp=project.first_date.strftime('%d.%m.%Y')
+    number=str(project.first_number)
+    token=number.replace('/','_')
+    n=number.split('/')[0]
+    candidates={
+        token,
+        token+' от '+stamp,
+        token+' - '+stamp,
+        n+' от '+stamp,
+        n+' - '+stamp,
+    }
+    desired={_key(c) for c in candidates}
     for item in passport_root.iterdir():
-        if not item.is_dir():
-            continue
-        # Limit to the actual first passport folder for this year/date;
-        # never scan documents of later passports or other projects.
-        if re.fullmatch(r'1(?:\s*(?:от|[-_])\s*'+re.escape(day)+r')?',item.name,
-                        re.I):
+        if item.is_dir() and _key(item.name) in desired:
             roots.append(_safe_child(passport_root,item))
     return roots
 
