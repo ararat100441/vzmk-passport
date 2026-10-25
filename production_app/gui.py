@@ -449,14 +449,14 @@ class App:
             if not path:return
             try:
                 records=load_uzk_csv(path)
-                # Validate before replacing the current input.
-                from .real_forms import validate_uzk_details
-                preview={**self.facts, **{k:var.get() for k,var in variables.items()},
-                         'start_date':variables['start_date'].get(),
-                         'date':variables['date'].get(),
-                         'uzk_date':variables['uzk_date'].get(),
-                         'uzk_details':records}
-                validate_uzk_details(preview,v)
+                # The exact control dates will come from the VZMK registry
+                # during CHECK, never from a manually entered top row.
+                allowed={str(row[0]) for row in v.rows}
+                for record in records:
+                    if record.get('mark') not in allowed:
+                        raise Stop('В подробном УЗК нет марки из ВОМ: '+
+                                   str(record.get('mark')))
+                # Full weld dates/parameters/protocol validation stays in CHECK.
                 imported_uzk[:]=records
                 uzk_label.configure(text='Загружено соединений: '+str(len(imported_uzk)))
                 self.write('Приняты подробные строки УЗК из '+str(path)+': '+str(len(imported_uzk)))
@@ -493,51 +493,83 @@ class App:
             proof_label.configure(text='Протоколов: '+str(len(proofs)))
         ttk.Button(d,text='Приложить первичные протоколы…',command=add).pack()
         approved=tk.BooleanVar(value=self.facts.get('confirmed',False));rights=tk.BooleanVar(value=self.facts.get('authorized',False));forms=tk.BooleanVar(value=self.facts.get('forms_approved',False))
-        for variable,text in [(approved,'Подтверждаю фактические результаты; это не TEST/SAMPLE_ONLY'),(rights,'Подтверждаю полномочия ответственного исполнителя'),(forms,'Формы документов утверждены ответственным лицом')]:ttk.Checkbutton(d,text=text,variable=variable).pack(anchor='w',padx=12)
+        for variable,text in [(approved,'Подтверждаю фактические результаты; это не TEST/SAMPLE_ONLY'),(rights,'Подтверждаю право на выпуск и достоверность данных'),(forms,'Формы документов утверждены ответственным лицом')]:ttk.Checkbutton(d,text=text,variable=variable).pack(anchor='w',padx=12)
         def store():
             try:
-                data={k:var.get() for k,var in variables.items()}|{'project':self.project.get(),'number':self.number.get(),'kind':'TRAINING' if self.cfg.get('training') else 'ACTUAL','confirmed':approved.get(),'authorized':rights.get(),'forms_approved':forms.get(),'evidence':proofs,'marks':[],'climates':[]}
+                data={
+                    'project':self.project.get(),'number':self.number.get(),
+                    'kind':'TRAINING' if self.cfg.get('training') else 'ACTUAL',
+                    'confirmed':approved.get(),'authorized':rights.get(),
+                    'forms_approved':forms.get(),'evidence':proofs,
+                    'marks':[],'climates':[],
+                    'auto_registry_dates':True,
+                    'no_responsible_input':True,
+                    'responsible':'',
+                }
                 for item in grid.get_children():
                     row=dict(zip(cols,grid.item(item,'values')))
-                    row['akz']=int(row['akz']) if row['akz']!='' else None;data['marks'].append(row)
-                ranges_by_variant={n:[] for n in range(4)}
-                averages_by_variant={n:[] for n in range(4)}
-                for item in layers_grid.get_children():
-                    row=dict(zip(lcols,layers_grid.item(item,'values')))
-                    if any(str(row[k]).strip() for k in ('min','max','average')):
-                        n=int(row['variant'])
-                        ranges_by_variant[n].append({'layer':int(row['layer']),'min':row['min'],'max':row['max']})
-                        averages_by_variant[n].append({'layer':int(row['layer']),'average':row['average']})
-                detailed_by_variant={n:[] for n in range(4)}
-                for item in layer_data.get_children():
-                    row=dict(zip(detailcols,layer_data.item(item,'values')))
-                    if any(str(row[k]).strip() for k in detailcols[2:]):
-                        n=int(row['variant'])
-                        detailed_by_variant[n].append({'layer':int(row['layer']),
-                                                     **{k:row[k] for k in detailcols[2:]}})
+                    raw=str(row['akz']).strip()
+                    row['akz']=int(raw) if raw else None
+                    data['marks'].append(row)
                 used={r['akz'] for r in data['marks'] if r['akz'] is not None}
-                for item in climates.get_children():
-                    row=dict(zip(ccols,climates.item(item,'values')))
-                    n=int(row['variant'])
-                    if n not in used:continue
-                    row['variant']=n
-                    if ranges_by_variant[n]:
-                        row['layers']=ranges_by_variant[n]
-                        row['dry_averages']=averages_by_variant[n]
-                    if detailed_by_variant[n]:row['layer_details']=detailed_by_variant[n]
-                    data['climates'].append(row)
+                for variant in sorted(used):
+                    if variant not in variant_forms:
+                        raise Stop('Для АКЗ №'+str(variant)+
+                                   ' нет утверждённой рабочей формы.')
+                    info=variant_forms[variant]
+                    coats=info['coats']
+                    if coats not in (1,3):
+                        raise Stop('Нет подтверждённого формата 1/3 слоя для АКЗ №'+
+                                   str(variant))
+                    ranges={}
+                    for key in ('air','surface','humidity','dew'):
+                        ranges[key]={edge:info['fields'][key][edge].get().strip()
+                                     for edge in ('min','max')}
+                    ranges['layer_intervals']=[]
+                    for index in range(1,coats+1):
+                        key='layer_'+str(index)
+                        row={'layer':index}
+                        row.update({edge:info['fields'][key][edge].get().strip()
+                                    for edge in ('min','max')})
+                        ranges['layer_intervals'].append(row)
+                    climate=measurements_from_ranges(
+                        variant,ranges,coats=coats)
+                    colors=sorted({str(mark.get('paint','')).strip()
+                                   for mark in data['marks']
+                                   if mark.get('akz')==variant and
+                                      str(mark.get('paint','')).strip()})
+                    climate['material']=', '.join(colors)
+                    # A protocol reference is never generated from a filename
+                    # unless the operator actually attached that real file.
+                    climate['basis']='; '.join(
+                        Path(proof['path']).name for proof in proofs)
+                    details=info['details']
+                    if details is not None:
+                        detailkeys=('layer','material','paint_batch','hardener_batch',
+                                    'color','application_date','time_start',
+                                    'time_end','wet_average')
+                        rows=[]
+                        for item in details.get_children():
+                            vals=dict(zip(detailkeys,details.item(item,'values')))
+                            if any(str(vals[k]).strip() for k in detailkeys[1:]):
+                                vals['layer']=int(vals['layer'])
+                                rows.append(vals)
+                        if rows:climate['layer_details']=rows
+                    data['climates'].append(climate)
                 data['uzk_details']=list(imported_uzk)
                 data['doc_fields']={}
                 for item in extra.get_children():
                     key,_,value=extra.item(item,'values')
                     if str(value).strip():data['doc_fields'][key]=str(value).strip()
                 from .facts import validate
-                validate(data,v,self.project.get(),self.number.get(),self.cfg.get('training',False))
+                validate(data,v,self.project.get(),self.number.get(),
+                         self.cfg.get('training',False),
+                         defer_registry_dates=True)
                 self.facts=data;self.invalidate();window.destroy();self.write('Фактические данные сохранены локально в текущей заявке. Исходники не изменены.')
             except Exception as exc:self.error(exc)
         ttk.Button(d,text='Проверить и принять введённые данные',command=store).pack(pady=10)
 
-    def editable(self,tree,immutable=set()):
+    def editable(self,tree,immutable=set(),on_change=None):
         def edit(event):
             item=tree.identify_row(event.y);column=tree.identify_column(event.x)
             if not item or not column:return
@@ -548,6 +580,7 @@ class App:
             def done(e=None):
                 if not entry.winfo_exists():return
                 values=list(tree.item(item,'values'));values[col]=entry.get();tree.item(item,values=values);entry.destroy()
+                if on_change:on_change()
             entry.bind('<Return>',done);entry.bind('<FocusOut>',done)
         tree.bind('<Double-1>',edit)
 
