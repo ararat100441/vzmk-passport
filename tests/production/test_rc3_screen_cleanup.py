@@ -149,7 +149,7 @@ class GUIContracts(unittest.TestCase):
         self.assertIn("'humidity':'Влажность, %'",source)
         self.assertNotIn("'dew':'Точка росы, °C'",source)
         self.assertIn("magnus_dew_point(",source)
-        self.assertIn("for key in ('air','surface','humidity'):",source)
+        self.assertIn("for k in ('air','surface','humidity'):",source)
         self.assertNotIn("for key in ('air','surface','humidity','dew'):",source)
 
 
