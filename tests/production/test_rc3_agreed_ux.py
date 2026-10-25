@@ -265,6 +265,68 @@ class AgreedUX(unittest.TestCase):
             self.assertEqual(dates['akz_date'],'2026-10-19')
             self.assertEqual(dates['registry_date_origin'],'EXACT_EXISTING_REGISTRY_ROW')
 
+    def test_new_registry_dates_from_private_copy_without_source_write(self):
+        from contextlib import contextmanager
+        from openpyxl import load_workbook
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)/'registry.xlsx'
+            w=Workbook();s=w.active
+            s['B2']=date(2026,9,9)
+            for col in ('A','C','D','E'):
+                s[col+'2']='=B2'
+            w.save(p);w.close()
+            original=sha(p)
+            start=date(2026,10,25)
+            headings={'START_DATE':1,'END_DATE':2,'VIK_DATE':3,
+                      'UZK_DATE':4,'AKZ_DATE':5}
+            project=SimpleNamespace(first_row=2,next_number='11/2026')
+
+            def fake_registry(path):
+                x=load_workbook(path,data_only=False)
+                try:
+                    appended=x.active['B3'].value is not None
+                finally:x.close()
+                numbers=[{'number':'1/2026','row':2}]
+                if appended:numbers.append({'number':'11/2026','row':3})
+                return SimpleNamespace(path=Path(path),digest=sha(path),
+                     sheet='Sheet',projects={'PROJECT':numbers})
+
+            @contextmanager
+            def fake_excel():
+                yield object()
+
+            def fake_append(excel,copy_path,reg,proj,vom,day):
+                x=load_workbook(copy_path)
+                try:
+                    for col in range(1,6):
+                        x.active.cell(3,col).value=day
+                    x.save(copy_path)
+                finally:x.close()
+                return 3,{}
+
+            with patch('production_app.registry_dates.read_registry',
+                       side_effect=fake_registry),\
+                 patch('production_app.registry_dates.model.select',
+                       return_value=project),\
+                 patch('production_app.registry_dates.model.columns',
+                       return_value=headings),\
+                 patch('production_app.registry_dates.excel_session',
+                       side_effect=fake_excel),\
+                 patch('production_app.registry_dates.append_row',
+                       side_effect=fake_append):
+                dates=resolve_registry_dates(
+                    {'registry':str(p)},'PROJECT','11/2026',
+                    None,True,day=start)
+            self.assertEqual(dates['date'],'2026-10-25')
+            self.assertEqual(dates['vik_date'],'2026-10-25')
+            self.assertEqual(
+                dates['registry_date_origin'],
+                'NEW_ROW_CALCULATED_IN_DISPOSABLE_REGISTRY_COPY')
+            self.assertEqual(sha(p),original)
+            x=load_workbook(p)
+            try:self.assertIsNone(x.active['B3'].value)
+            finally:x.close()
+
     def test_new_passport_must_not_reuse_old_nonformula_inspection_dates(self):
         with tempfile.TemporaryDirectory() as td:
             p=Path(td)/'registry.xlsx'
