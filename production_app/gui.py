@@ -302,67 +302,142 @@ class App:
             except Exception as exc:self.error(exc)
         ttk.Button(d,text='Обновить назначения из справочника',
                    command=import_assignments).pack(pady=3)
-        ttk.Label(d,text='АКЗ: один набор климата на три слоя в день. Для трёхслойного акта средние значения сухой толщины вводятся ниже, по этапам 1/2/3.').pack(pady=6)
-        if presets['variants']:
-            ttk.Label(d,text='Предзаполнены ПОСЛЕДНИЕ показатели выбранного объекта. Дата прежнего контроля: '+
-                      ', '.join(sorted({v.get('last_akz_date','') for v in presets['variants'].values() if v.get('last_akz_date')}))+
-                      '. Это подсказки: перед новым выпуском сверьте их с фактическими измерениями.',wraplength=1080).pack(pady=4)
-        ccols=('variant','air','surface','humidity','dew','thickness','material','basis')
-        climates=ttk.Treeview(d,columns=ccols,show='headings',height=4)
-        for c in ccols:
-            climates.heading(c,text={'variant':'№ АКЗ','air':'Воздух °C','surface':'Поверхн. °C','humidity':'Влажность %','dew':'Роса °C','thickness':'Толщина (старый формат), мкм','material':'Материал','basis':'Послойный протокол'}[c]);climates.column(c,width=130)
-        climates.pack(fill='x',padx=10);self.editable(climates,immutable={0})
-        prev={int(c['variant']):c for c in self.facts.get('climates',[])}
-        defaults=presets['variants']
-        for n in range(4):
-            fresh=prev.get(n)
-            cached=(defaults.get(str(n)) or presets.get('latest',{})).get('climate',{})
-            values=(fresh if fresh is not None else cached)
-            climates.insert('','end',values=[n]+[values.get(c,'') if c in akz_presets.CLIMATE_FIELDS or fresh is not None else '' for c in ccols[1:]])
-        ttk.Label(d,text='АКЗ: допустимый диапазон каждого слоя и фактически измеренная СРЕДНЯЯ СУХАЯ ТОЛЩИНА после слоя (нарастающим итогом). Минимальные и максимальные фактические замеры НЕ требуются.',wraplength=1070).pack(pady=6)
-        lcols=('variant','layer','min','max','average')
-        layer_frame=ttk.Frame(d);layer_frame.pack(fill='x',padx=10)
-        layers_grid=ttk.Treeview(layer_frame,columns=lcols,show='headings',height=7)
-        for col,label,width in [('variant','№ АКЗ',80),('layer','Слой',80),('min','От, мкм',160),('max','До, мкм',160),('average','Средняя сухая после слоя, мкм',250)]:
-            layers_grid.heading(col,text=label);layers_grid.column(col,width=width)
-        layer_scroll=ttk.Scrollbar(layer_frame,orient='vertical',command=layers_grid.yview)
-        layers_grid.configure(yscrollcommand=layer_scroll.set)
-        layer_scroll.pack(side='right',fill='y');layers_grid.pack(fill='x')
-        self.editable(layers_grid,immutable={0,1})
-        for n in range(4):
-            current={int(x['layer']):x for x in prev.get(n,{}).get('layers',[])}
-            observed={int(x['layer']):x for x in prev.get(n,{}).get('dry_averages',[])}
-            cached={int(x['layer']):x for x in (defaults.get(str(n)) or presets.get('latest',{})).get('layers',[])}
-            for layer in (1,2,3):
-                value=current.get(layer,cached.get(layer,{}))
-                # Measured averages are NEVER loaded from old project presets.
-                layers_grid.insert('','end',values=(n,layer,value.get('min',''),value.get('max',''),
-                                                   observed.get(layer,{}).get('average','')))
-        ttk.Label(d,text='Трёхслойный АКЗ: по каждому слою отдельно заполняйте подтверждённый ЛКМ, партии, цвет, дату, начало/окончание и СРЕДНЮЮ мокрую толщину. Средние сухие толщины вводятся выше.',wraplength=1060).pack(pady=6)
-        detailcols=('variant','layer','material','paint_batch','hardener_batch','color',
-                    'application_date','time_start','time_end','wet_average')
-        layer_data_frame=ttk.Frame(d);layer_data_frame.pack(fill='both',padx=10,pady=4)
-        layer_data=ttk.Treeview(layer_data_frame,columns=detailcols,show='headings',height=8)
-        detail_labels={'variant':'№ АКЗ','layer':'Слой','material':'ЛКМ','paint_batch':'Партия ЛКМ',
-                       'hardener_batch':'Партия отвердителя','color':'Цвет',
-                       'application_date':'Дата нанесения YYYY-MM-DD','time_start':'Начало HH:MM',
-                       'time_end':'Окончание HH:MM','wet_average':'Средняя мокрая, мкм'}
-        for col in detailcols:
-            layer_data.heading(col,text=detail_labels[col])
-            layer_data.column(col,width=85 if col in ('variant','layer') else 160)
-        detail_y=ttk.Scrollbar(layer_data_frame,orient='vertical',command=layer_data.yview)
-        detail_x=ttk.Scrollbar(layer_data_frame,orient='horizontal',command=layer_data.xview)
-        layer_data.configure(yscrollcommand=detail_y.set,xscrollcommand=detail_x.set)
-        detail_y.pack(side='right',fill='y')
-        detail_x.pack(side='bottom',fill='x')
-        layer_data.pack(fill='both',expand=True)
-        self.editable(layer_data,immutable={0,1})
-        for n in range(4):
-            previous={int(x['layer']):x for x in prev.get(n,{}).get('layer_details',[])}
-            for layer in (1,2,3):
-                data=previous.get(layer,{})
-                layer_data.insert('','end',values=(n,layer)+
-                    tuple(data.get(k,'') for k in detailcols[2:]))
+        # Show only variants actually assigned by the current VOM/catalogue.
+        # If the project has ONE approved AKZ form but marks are unassigned,
+        # show its blank ranges as a convenience — do not assign AKZ to marks.
+        from .akz_ui import available_variants,display_variants,source_coats
+        from .measurement_ranges import measurements_from_ranges
+        current_profile=active_profile if 'active_profile' in locals() else (
+            self.cfg.get('profiles',{}).get(self.project.get(),{}))
+        variants=available_variants(current_profile)
+        if not variants and (self.first_reference or {}).get('sources',{}).get('akz0'):
+            variants=[0]  # reference for display only, not confirmed assignment
+        variant_forms={}
+        prev={int(entry['variant']):entry
+              for entry in self.facts.get('climates',[])}
+        akz_notice=ttk.Label(d,wraplength=1080,justify='left')
+        akz_notice.pack(fill='x',padx=12,pady=5)
+        for n in variants:
+            formref=current_profile.get('templates',{}).get('akz'+str(n))
+            if formref:
+                try:coats=source_coats(formref)
+                except Stop as exc:
+                    self.write('Не удалось проверить число слоёв АКЗ №'+str(n)+
+                               ': '+str(exc))
+                    coats=None
+            else:coats=None
+            group=ttk.LabelFrame(d,text='АКЗ №'+str(n)+
+                                 (' — '+str(coats)+' слой(я)' if coats else
+                                  ' — требуется рабочая форма'),
+                                 padding=8)
+            old_interval=prev.get(n,{}).get('measurement_intervals',{})
+            fields={}
+            instructions=ttk.Label(
+                group,
+                text='Только фактические диапазоны текущих измерений: '
+                     '«От» и «До». Расчётное среднее = (От + До) / 2. '
+                     'Это не заменяет первичный протокол.',
+                wraplength=1060,
+            )
+            instructions.grid(row=0,column=0,columnspan=3,sticky='w',pady=4)
+            ttk.Label(group,text='Параметр').grid(row=1,column=0,sticky='w')
+            ttk.Label(group,text='От').grid(row=1,column=1,sticky='w')
+            ttk.Label(group,text='До').grid(row=1,column=2,sticky='w')
+            labels={'air':'Воздух, °C','surface':'Поверхность, °C',
+                    'humidity':'Влажность, %','dew':'Точка росы, °C'}
+            measurements=list(labels.items())+[
+                ('layer_'+str(i),'Фактическая толщина слоя '+str(i)+', мкм')
+                for i in range(1,(coats or 0)+1)]
+            for line,(key,title) in enumerate(measurements,start=2):
+                stored=(old_interval.get('layers',[]) if key.startswith('layer_')
+                        else old_interval.get(key))
+                if isinstance(stored,list):
+                    number=int(key.split('_')[1])
+                    stored=next((item for item in stored
+                                 if item.get('layer')==number),{})
+                stored=stored or {}
+                ttk.Label(group,text=title).grid(
+                    row=line,column=0,sticky='w',padx=4,pady=3)
+                pair={}
+                for column,label in ((1,'min'),(2,'max')):
+                    var=tk.StringVar(value=str(stored.get(label,'')))
+                    entry=ttk.Entry(group,textvariable=var,width=20)
+                    entry.grid(row=line,column=column,sticky='w',padx=4,pady=3)
+                    pair[label]=var
+                fields[key]=pair
+            # Detailed 3-coat material batches remain accessible ONLY when
+            # an actual approved 3-layer form is selected. They are never
+            # shown for the one-layer Kazakhstan act.
+            details=None
+            if coats==3:
+                ttk.Label(group,text='Дополнительные факты трёхслойного акта '
+                          '(ЛКМ, партии, цвет, дата и время) — по текущим '
+                          'первичным протоколам.',wraplength=1020).grid(
+                          row=len(measurements)+2,column=0,columnspan=3,
+                          sticky='w')
+                detailkeys=('layer','material','paint_batch','hardener_batch',
+                            'color','application_date','time_start','time_end',
+                            'wet_average')
+                detail_frame=ttk.Frame(group)
+                detail_frame.grid(row=len(measurements)+3,column=0,
+                                  columnspan=3,sticky='ew')
+                details=ttk.Treeview(
+                    detail_frame,columns=detailkeys,show='headings',height=3)
+                for key in detailkeys:
+                    details.heading(key,text=key)
+                    details.column(key,width=75 if key=='layer' else 150)
+                details.pack(fill='x')
+                self.editable(details,immutable={0})
+                previous={int(r['layer']):r
+                          for r in prev.get(n,{}).get('layer_details',[])}
+                for layer in (1,2,3):
+                    record=previous.get(layer,{})
+                    details.insert('','end',values=(layer,)+tuple(
+                        record.get(k,'') for k in detailkeys[1:]))
+            variant_forms[n]={'frame':group,'fields':fields,
+                              'coats':coats,'details':details}
+
+        def assigned_marks():
+            result=[]
+            for item in grid.get_children():
+                vals=grid.item(item,'values')
+                raw=str(vals[cols.index('akz')]).strip()
+                if not raw:
+                    value=None
+                else:
+                    try:value=int(raw)
+                    except (TypeError,ValueError):value=raw
+                result.append({'mark':str(vals[0]),'akz':value})
+            return result
+
+        def refresh_akz():
+            try:visible=display_variants(assigned_marks(),current_profile)
+            except Stop as exc:
+                akz_notice.configure(text='Некорректный № АКЗ: '+str(exc))
+                return
+            # With a single original 1-coat form, show its blank group even
+            # before the catalogue fills any current mark assignments.
+            if not visible and len(variant_forms)==1:
+                visible=list(variant_forms)
+            for n,data in variant_forms.items():
+                if n in visible:data['frame'].pack(fill='x',padx=10,pady=6)
+                else:data['frame'].pack_forget()
+            unsupported=[n for n in visible if n not in variant_forms]
+            if unsupported:
+                akz_notice.configure(text='Для текущих марок назначены АКЗ '+
+                    ', '.join(map(str,unsupported))+
+                    ', но нет соответствующих утверждённых рабочих форм. '
+                    'Ничего не подставлено автоматически.')
+            elif visible:
+                akz_notice.configure(text='Показаны только применяемые '
+                    'АКЗ: '+', '.join(map(str,visible))+
+                    '. Пустые назначения марок не приравниваются к АКЗ №0.')
+            else:
+                akz_notice.configure(text='В справочнике нет подтверждённых '
+                    'назначений АКЗ. Выберите действующие виды для марок.')
+        self.editable(grid,immutable={0},on_change=refresh_akz)
+        refresh_akz()
+
         ttk.Label(d,text='Подробный УЗК: строки по сварным соединениям из подтверждённой ведомости контроля, НЕ из старых актов. Повторяющиеся марки допустимы.',wraplength=1070).pack(pady=5)
         imported_uzk=list(self.facts.get('uzk_details',[]))
         uzk_line=ttk.Frame(d);uzk_line.pack(fill='x',padx=10)
