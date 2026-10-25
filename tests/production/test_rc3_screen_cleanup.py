@@ -104,7 +104,8 @@ class GUIContracts(unittest.TestCase):
         self.assertIn(
             "cols=('mark','profile','akz','uzk_quantity')",source)
         self.assertIn('hidden_fields',source)
-        self.assertIn('hidden_fields.get(mark,{})',source)
+        self.assertIn('hidden_fields',source)
+        self.assertIn('save_screen_draft(',source)
         self.assertIn('self.editable(grid,immutable={0,3}',source)
         for title in ("'Краска'", "'Результат УЗК'", "'Протокол ВИК'"):
             self.assertNotIn(title,source)
@@ -113,7 +114,11 @@ class GUIContracts(unittest.TestCase):
         source=inspect.getsource(App.fact_dialog)
         self.assertNotIn("text='Приложить протокол АКЗ",source)
         self.assertNotIn("text='Протоколов АКЗ №",source)
-        self.assertIn("Приложить первичные протоколы",source)
+        # The entire region below AKZ climate is removed from daily UI.
+        self.assertNotIn("Приложить первичные протоколы",source)
+        self.assertNotIn("Добавить фактическое соединение",source)
+        self.assertNotIn("Дополнительные реквизиты утверждённых форм",source)
+        self.assertIn("← Назад",source)
         self.assertIn("akz_proofs",source)
 
     def test_open_documents_uses_last_completed_folder_for_current_project(self):
@@ -145,7 +150,7 @@ class GUIContracts(unittest.TestCase):
         self.assertIn("'humidity':'Влажность, %'",source)
         self.assertNotIn("'dew':'Точка росы, °C'",source)
         self.assertIn("magnus_dew_point(",source)
-        self.assertIn("for key in ('air','surface','humidity'):",source)
+        self.assertIn("for k in ('air','surface','humidity'):",source)
         self.assertNotIn("for key in ('air','surface','humidity','dew'):",source)
 
 

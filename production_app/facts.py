@@ -118,9 +118,9 @@ def validate_dry_averages(layers, averages):
     return results
 
 
-def validate(facts,vom,project,number,training=False,require_review=False,*,defer_registry_dates=False):
+def validate(facts,vom,project,number,training=False,require_review=False,*,defer_registry_dates=False,defer_approvals=False):
     if facts.get('project')!=project or facts.get('number')!=number:raise Stop('Результаты контроля относятся к другому объекту/паспорту.')
-    if facts.get('confirmed') is not True or facts.get('authorized') is not True:
+    if not defer_approvals and (facts.get('confirmed') is not True or facts.get('authorized') is not True):
         raise Stop('Нет подтверждения фактических результатов и права на выпуск.')
     # For the agreed simple interface, no personal name is requested.
     # Old templates still contain RESPONSiBLE field: it is left blank,
@@ -130,7 +130,7 @@ def validate(facts,vom,project,number,training=False,require_review=False,*,defe
             raise Stop('Не указано ответственное лицо.')
     if facts.get('kind')!='ACTUAL' and not training:raise Stop('TEST/SAMPLE_ONLY/учебные данные запрещены для рабочего выпуска.')
     if facts.get('kind') not in ('ACTUAL','TRAINING'):raise Stop('Не указан тип результатов контроля.')
-    if facts.get('forms_approved') is not True:raise Stop('Ответственное лицо не утвердило формы документов.')
+    if not defer_approvals and facts.get('forms_approved') is not True:raise Stop('Ответственное лицо не утвердило формы документов.')
     if not defer_registry_dates:
         for field in ('start_date','date','vik_date','uzk_date','akz_date'):
             try:date.fromisoformat(facts[field])
