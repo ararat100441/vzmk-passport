@@ -466,8 +466,50 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
             finally:b.Close(SaveChanges=False)
             outputs.append({'role':role,'path':str(target)})
     with word_session() as app:
+        first_sources=(profile.get('first_passport_sources',{})
+                       .get('sources',{}))
         for role in ('vik','uzk','quality'):
             ref=profile['templates'][role];target=folder/(filename(facts['number'])+' - '+role+'.docx')
+            original=first_sources.get(role)
+            if original and role in ('vik','uzk'):
+                from .highlighted_reference import (
+                    create_vik_copy,create_uzk_copy,
+                    supports_vik_first,supports_uzk_first,
+                )
+                source=original['path']
+                if sha(source)!=original['sha256']:
+                    raise Stop('Исторический исходник '+role+
+                               ' изменился после проверки.')
+                if role=='vik' and supports_vik_first(source):
+                    # Current item NAMES, never a semicolon list of mark IDs.
+                    create_vik_copy(
+                        source,target,number=facts['number'],
+                        vik_date=facts['vik_date'],
+                        item_names=[row[1] for row in vom.rows],
+                    )
+                    doc=open_word(app,target,readonly=False)
+                    try:
+                        doc.Range(0,0).InsertBefore(prefix+'\r')
+                        doc.Repaginate();doc.Save()
+                    finally:doc.Close(SaveChanges=False)
+                    outputs.append({'role':role,'path':str(target)})
+                    continue
+                if role=='uzk' and supports_uzk_first(source):
+                    if not facts.get('uzk_design'):
+                        raise Stop('Не вычислены расчётные характеристики '
+                                   'текущих марок для исходной формы УЗК.')
+                    create_uzk_copy(
+                        source,target,number=facts['number'],
+                        uzk_date=facts['uzk_date'],
+                        design_rows=facts['uzk_design'],
+                    )
+                    doc=open_word(app,target,readonly=False)
+                    try:
+                        doc.Range(0,0).InsertBefore(prefix+'\r')
+                        doc.Repaginate();doc.Save()
+                    finally:doc.Close(SaveChanges=False)
+                    outputs.append({'role':role,'path':str(target)})
+                    continue
             shutil.copyfile(ref['path'],target);doc=open_word(app,target,readonly=False)
             try:
                 # Native tagged Word fields are allowed only when still blank.
