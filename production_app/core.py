@@ -63,9 +63,12 @@ def plan(cfg,project,number,vom,facts,new):
         raise Stop('Масса ВОМ не совпадает с существующим паспортом.')
     if facts.get('auto_registry_dates'):
         from .registry_dates import resolve_registry_dates
-        # For a new row, today's ending date is only a PROPOSAL. The other
-        # dates must result from valid source formulas on a private registry
-        # copy, never copied historic literals. Show the day at confirmation.
+        # For a new row, today's ending date is a PROPOSAL.
+        # Manufacturing START_DATE intentionally stays equal to the
+        # FIRST passport of this project, including when H353 is a fixed
+        # date. Current VIK/UZK/AKZ dates require valid formulas in the
+        # private registry copy; don't copy historical control results.
+        # The ending date is displayed for final confirmation.
         resolved=resolve_registry_dates(cfg,project,number,v,new)
         facts={**facts,**resolved}
     variants=factual.validate(facts,v,project,number,cfg.get('training',False))
