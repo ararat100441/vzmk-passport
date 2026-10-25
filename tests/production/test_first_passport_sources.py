@@ -142,6 +142,63 @@ class FirstPassportSources(unittest.TestCase):
         self.assertIsNone(result['catalog'])
         self.assertTrue(validate_source_pins(result))
 
+    def test_profile_uses_first_appendix_not_cached_surrogate(self):
+        from production_app import model
+        prepared=self.passport.parent/'Prepared'
+        prepared.mkdir()
+        templates={}
+        for role,filename in (
+            ('appendix','old_cached_app.xlsx'),('vik','clean_vik.docx'),
+            ('uzk','clean_uzk.docx'),('quality','clean_quality.docx'),
+        ):
+            path=prepared/filename
+            path.write_bytes(role.encode('utf8'))
+            from production_app.storage import sha
+            templates[role]={'path':str(path),'sha256':sha(path)}
+        cfg={
+            'documents':str(self.root),
+            'registry':str(self.root/'sample-registry.xlsx'),
+            'auto_first_passport':True,
+            'profiles':{
+                project().name:{
+                    'root':str(self.passport.parent),
+                    'templates':templates
+                }
+            }
+        }
+        with patch('production_app.first_passport.inspect_template',
+                   return_value=object()):
+            with patch('production_app.model.read_registry',return_value=object()):
+                with patch('production_app.model.select',return_value=project()):
+                    actual=model.profile(cfg,project().name)
+        self.assertEqual(Path(actual['templates']['appendix']['path']),self.app)
+        for role in ('vik','uzk','quality'):
+            self.assertEqual(actual['templates'][role]['path'],templates[role]['path'])
+            # Issued old acts never silently become approved empty templates.
+            self.assertNotEqual(actual['templates'][role]['path'],
+                                actual['first_passport_sources']['sources'][role]['path'])
+        self.assertEqual(cfg['profiles'][project().name]['templates'],templates)
+
+    def test_explicit_manual_mode_keeps_existing_approved_appendix(self):
+        from production_app import model
+        prepared=self.passport.parent/'Prepared'
+        prepared.mkdir()
+        templates={}
+        from production_app.storage import sha
+        for role in ('appendix','vik','uzk','quality'):
+            p=prepared/(role+'.xlsx')
+            p.write_bytes(role.encode())
+            templates[role]={'path':str(p),'sha256':sha(p)}
+        cfg={
+            'documents':str(self.root),'auto_first_passport':False,
+            'profiles':{project().name:{
+                'root':str(self.passport.parent),'templates':templates
+            }}
+        }
+        actual=model.profile(cfg,project().name)
+        self.assertEqual(actual['templates']['appendix'],templates['appendix'])
+        self.assertNotIn('first_passport_sources',actual)
+
     def test_does_not_create_or_modify_any_first_source(self):
         before={p:p.read_bytes() for p in self.passport.iterdir() if p.is_file()}
         self.scan()
