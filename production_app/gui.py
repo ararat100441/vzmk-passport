@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
 from .storage import local_root,read,save,sha,Stop
 from . import model,core,akz_presets,VERSION
-from .real_forms import DOC_FIELD_LABELS, UZK_CSV_HEADER, load_uzk_csv
+from .real_forms import DOC_FIELD_LABELS, UZK_COLUMNS, UZK_HEADERS
 
 class App:
     def __init__(self,root):
@@ -313,7 +313,16 @@ class App:
 
     def fact_dialog(self):
         if self.active:return
-        try:v=model.visible_vom(self.vom.get())
+        try:
+            v=model.visible_vom(self.vom.get())
+            from .shared_uzk import find_shared_uzk,planned_control
+            source=find_shared_uzk(self.cfg,require=True)
+            uzk_plan=planned_control(source,self.project.get(),v)
+            # An old saved settings.json may predate the third visible field.
+            # Enable the single shared source in-memory for the current job;
+            # persist it only if the operator saves Settings.
+            self.cfg['uzk_registry']=str(source)
+            self.cfg['use_shared_uzk']=True
         except Exception as exc:self.error(exc);return
         presets={'saved_at':'','variants':{}}
         if not self.cfg.get('training'):
@@ -338,7 +347,23 @@ class App:
         y=ttk.Scrollbar(table_frame,orient='vertical',command=grid.yview);grid.configure(yscrollcommand=y.set);y.pack(side='right',fill='y')
         grid.pack(side='left',fill='both',expand=True)
         old={r['mark']:r for r in self.facts.get('marks',[])}
-        for mark in dict.fromkeys(str(r[0]) for r in v.rows):grid.insert('', 'end',values=[mark]+[old.get(mark,{}).get(c,'') if old.get(mark,{}).get(c) is not None else '' for c in cols[1:]])
+        for mark in dict.fromkeys(str(r[0]) for r in v.rows):
+            values=[mark]+[
+                old.get(mark,{}).get(k,'')
+                if old.get(mark,{}).get(k) is not None else ''
+                for k in cols[1:]
+            ]
+            values[cols.index('uzk_quantity')]=str(
+                uzk_plan[mark]['uzk_quantity'])
+            grid.insert('','end',values=values)
+        ttk.Label(
+            d,text='Общий УЗК (только чтение): '+str(source)+
+                 '. Плановый контроль по ВОМ: '+
+                 str(sum(item['uzk_quantity'] for item in uzk_plan.values()))+
+                 ' шт. Количество вычислено по маркам и не является '
+                 'подтверждением результата контроля.',
+            wraplength=1090,
+        ).pack(anchor='w',padx=12,pady=4)
         # Apply CURRENT project's approved assignment catalogue when present;
         # never use another object's catalogue or invent AKZ0 for empty cells.
         from .catalog_assignments import current_assignments
@@ -545,44 +570,50 @@ class App:
             else:
                 akz_notice.configure(text='В справочнике нет подтверждённых '
                     'назначений АКЗ. Выберите действующие виды для марок.')
-        self.editable(grid,immutable={0},on_change=refresh_akz)
+        self.editable(grid,immutable={0,4},on_change=refresh_akz)
         refresh_akz()
 
-        ttk.Label(d,text='Подробный УЗК: строки по сварным соединениям из подтверждённой ведомости контроля, НЕ из старых актов. Повторяющиеся марки допустимы.',wraplength=1070).pack(pady=5)
-        imported_uzk=list(self.facts.get('uzk_details',[]))
-        uzk_line=ttk.Frame(d);uzk_line.pack(fill='x',padx=10)
-        uzk_label=ttk.Label(uzk_line,text='Загружено соединений: '+str(len(imported_uzk)))
-        uzk_label.pack(side='left',padx=6)
-        def load_details():
-            path=filedialog.askopenfilename(title='Подробная ведомость УЗК CSV',
-                filetypes=[('CSV UTF-8','*.csv')])
-            if not path:return
-            try:
-                records=load_uzk_csv(path)
-                # The exact control dates will come from the VZMK registry
-                # during CHECK, never from a manually entered top row.
-                allowed={str(row[0]) for row in v.rows}
-                for record in records:
-                    if record.get('mark') not in allowed:
-                        raise Stop('В подробном УЗК нет марки из ВОМ: '+
-                                   str(record.get('mark')))
-                # Full weld dates/parameters/protocol validation stays in CHECK.
-                imported_uzk[:]=records
-                uzk_label.configure(text='Загружено соединений: '+str(len(imported_uzk)))
-                self.write('Приняты подробные строки УЗК из '+str(path)+': '+str(len(imported_uzk)))
-            except Exception as exc:self.error(exc)
-        def new_uzk_csv():
-            target=filedialog.asksaveasfilename(title='Новый CSV для подробных строк УЗК',
-                defaultextension='.csv',filetypes=[('CSV UTF-8','*.csv')])
-            if not target:return
-            try:
-                with Path(target).open('x',encoding='utf-8-sig',newline='') as writer:
-                    writer.write(UZK_CSV_HEADER+'\n')
-                self.write('Создан пустой CSV УЗК: '+target+' — внесите фактические строки, затем импортируйте.')
-            except Exception as exc:self.error(exc)
-        ttk.Button(uzk_line,text='Загрузить CSV УЗК…',command=load_details).pack(side='left',padx=6)
-        ttk.Button(uzk_line,text='Создать CSV-шаблон…',command=new_uzk_csv).pack(side='left',padx=6)
-
+        # Actual per-weld inspection evidence is entered in this existing
+        # screen when required by the approved detailed UZK form.
+        # No separate CSV/second workbook creation is needed.
+        ttk.Label(
+            d,text='УЗК: объём рассчитан по общему УЗК.xlsm. '
+                   'Сведения о реально проверенных соединениях (сварщик, '
+                   'дата, прибор, оценка и протокол) вводите здесь только '
+                   'по текущим первичным результатам, если этого требует '
+                   'утверждённый акт. Не переносите заключения первого паспорта.',
+            wraplength=1080,
+        ).pack(padx=12,pady=5)
+        details_frame=ttk.Frame(d)
+        details_frame.pack(fill='x',padx=10)
+        uzk_details=ttk.Treeview(
+            details_frame,columns=UZK_COLUMNS,show='headings',height=5)
+        for key,label in zip(UZK_COLUMNS,UZK_HEADERS):
+            uzk_details.heading(key,text=label)
+            uzk_details.column(
+                key,width=95 if key in ('mark','date','frequency_mhz',
+                                        'angle_deg') else 175)
+        uzk_scroll=ttk.Scrollbar(details_frame,orient='horizontal',
+                                 command=uzk_details.xview)
+        uzk_details.configure(xscrollcommand=uzk_scroll.set)
+        uzk_details.pack(fill='x',expand=True)
+        uzk_scroll.pack(fill='x')
+        self.editable(uzk_details)
+        for record in self.facts.get('uzk_details',[]):
+            uzk_details.insert('','end',
+                               values=tuple(record.get(k,'')
+                                            for k in UZK_COLUMNS))
+        action_frame=ttk.Frame(d)
+        action_frame.pack(anchor='w',padx=12,pady=4)
+        def add_uzk_record():
+            uzk_details.insert('','end',values=('',)*len(UZK_COLUMNS))
+        def remove_uzk_record():
+            for item in uzk_details.selection():
+                uzk_details.delete(item)
+        ttk.Button(action_frame,text='Добавить фактическое соединение',
+                   command=add_uzk_record).pack(side='left',padx=4)
+        ttk.Button(action_frame,text='Удалить выбранное',
+                   command=remove_uzk_record).pack(side='left',padx=4)
         ttk.Label(d,text='Дополнительные реквизиты утверждённых форм (ВИК, качество, УЗК): заполните только необходимые поля по подтверждённым источникам. Старые сведения не подставляются.',wraplength=1080).pack(pady=5)
         extra_columns=('key','description','value')
         extra_frame=ttk.Frame(d);extra_frame.pack(fill='both',padx=10,pady=4)
@@ -670,7 +701,10 @@ class App:
                     data['climates'].append(climate)
                 data['akz_proofs']={str(n):list(akz_proofs[n])
                                     for n in used if akz_proofs[n]}
-                data['uzk_details']=list(imported_uzk)
+                data['uzk_details']=[
+                    dict(zip(UZK_COLUMNS,uzk_details.item(item,'values')))
+                    for item in uzk_details.get_children()
+                ]
                 data['doc_fields']={}
                 for item in extra.get_children():
                     key,_,value=extra.item(item,'values')
