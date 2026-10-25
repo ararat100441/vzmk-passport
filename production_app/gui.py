@@ -338,9 +338,18 @@ class App:
             except Stop as exc:
                 # A damaged optional cache must never block new ACTUAL data.
                 self.write('Подсказки АКЗ не загружены (ввод доступен вручную): '+str(exc))
-        d=tk.Toplevel(self.root);d.title('Фактические результаты — '+self.project.get()+' '+self.number.get());self.fit(d,1160,760)
-        d.transient(self.root);d.grab_set()
-        window=d;window.bind('<Escape>',lambda e:window.destroy());d=self.scroll_content(window)
+        window=tk.Toplevel(self.root)
+        window.title('Фактические результаты — '+self.project.get()+' '+self.number.get())
+        self.fit(window,1160,760)
+        window.transient(self.root)
+        window.grab_set()
+        # Footer is OUTSIDE the scrolling content, so Back stays visible.
+        footer=ttk.Frame(window,padding=(10,6))
+        footer.pack(side='bottom',fill='x')
+        back_button=ttk.Button(footer,text='← Назад',
+                               command=lambda:go_back())
+        back_button.pack(side='right',padx=6)
+        d=self.scroll_content(window)
         ttk.Label(d,text=(
             'Дата начала изготовления одинакова во всех паспортах проекта '
             'и берётся из его первого паспорта в реестре ВЗМК. '
@@ -420,30 +429,6 @@ class App:
                           wraplength=1090).pack(anchor='w',padx=12)
         except Stop as exc:
             self.write('Справочник назначений не подставлен: '+str(exc))
-        def import_assignments():
-            try:
-                profile=model.profile(self.cfg,self.project.get())
-                path=profile.get('catalog')
-                if not path:
-                    raise Stop('Справочник не найден у выбранного проекта.')
-                mapping=current_assignments(
-                    path,profile['catalog_sha256'],
-                    (grid.item(item,'values')[0] for item in grid.get_children()))
-                for item in grid.get_children():
-                    vals=list(grid.item(item,'values'))
-                    source=mapping.get(str(vals[0]).strip(),{})
-                    for key in ('profile','paint','akz'):
-                        if key not in source:continue
-                        if key=='paint':
-                            hidden_fields[vals[0]]['paint']=source[key]
-                        else:
-                            vals[cols.index(key)]=str(source[key])
-                    grid.item(item,values=vals)
-                refresh_akz()
-                self.write('Назначения перечитаны из '+path)
-            except Exception as exc:self.error(exc)
-        ttk.Button(d,text='Обновить назначения из справочника',
-                   command=import_assignments).pack(pady=3)
         # Show only variants actually assigned by the current VOM/catalogue.
         # If the project has ONE approved AKZ form but marks are unassigned,
         # show its blank ranges as a convenience — do not assign AKZ to marks.
@@ -478,6 +463,9 @@ class App:
                                   ' — требуется рабочая форма'),
                                  padding=8)
             old_interval=prev.get(n,{}).get('measurement_intervals',{})
+            # The user may return with only SOME ranges entered. Draft values
+            # win over previously validated ranges, without needing a SAVE.
+            draft=(self.facts.get('akz_drafts') or {}).get(str(n),{})
             fields={}
             instructions=ttk.Label(
                 group,
@@ -496,8 +484,9 @@ class App:
                 ('layer_'+str(i),'Фактическая толщина слоя '+str(i)+', мкм')
                 for i in range(1,(coats or 0)+1)]
             for line,(key,title) in enumerate(measurements,start=2):
-                stored=(old_interval.get('layers',[]) if key.startswith('layer_')
-                        else old_interval.get(key))
+                stored=(draft.get('layer_intervals',old_interval.get('layers',[]))
+                        if key.startswith('layer_') else
+                        draft.get(key,old_interval.get(key)))
                 if isinstance(stored,list):
                     number=int(key.split('_')[1])
                     stored=next((item for item in stored
@@ -586,7 +575,8 @@ class App:
                 details.pack(fill='x')
                 self.editable(details,immutable={0})
                 previous={int(r['layer']):r
-                          for r in prev.get(n,{}).get('layer_details',[])}
+                          for r in draft.get('layer_details',
+                                             prev.get(n,{}).get('layer_details',[]))}
                 for layer in (1,2,3):
                     record=previous.get(layer,{})
                     details.insert('','end',values=(layer,)+tuple(
@@ -635,199 +625,63 @@ class App:
         self.editable(grid,immutable={0,3},on_change=refresh_akz)
         refresh_akz()
 
-        # Actual per-weld inspection evidence is entered in this existing
-        # screen when required by the approved detailed UZK form.
-        # No separate CSV/second workbook creation is needed.
-        ttk.Label(
-            d,text='УЗК: объём рассчитан по общему УЗК.xlsm. '
-                   'Сведения о реально проверенных соединениях (сварщик, '
-                   'дата, прибор, оценка и протокол) вводите здесь только '
-                   'по текущим первичным результатам, если этого требует '
-                   'утверждённый акт. Не переносите заключения первого паспорта.',
-            wraplength=1080,
-        ).pack(padx=12,pady=5)
-        details_frame=ttk.Frame(d)
-        details_frame.pack(fill='x',padx=10)
-        uzk_details=ttk.Treeview(
-            details_frame,columns=UZK_COLUMNS,show='headings',height=5)
-        for key,label in zip(UZK_COLUMNS,UZK_HEADERS):
-            uzk_details.heading(key,text=label)
-            uzk_details.column(
-                key,width=95 if key in ('mark','date','frequency_mhz',
-                                        'angle_deg') else 175)
-        uzk_scroll=ttk.Scrollbar(details_frame,orient='horizontal',
-                                 command=uzk_details.xview)
-        uzk_details.configure(xscrollcommand=uzk_scroll.set)
-        uzk_details.pack(fill='x',expand=True)
-        uzk_scroll.pack(fill='x')
-        self.editable(uzk_details)
-        for record in self.facts.get('uzk_details',[]):
-            uzk_details.insert('','end',
-                               values=tuple(record.get(k,'')
-                                            for k in UZK_COLUMNS))
-        action_frame=ttk.Frame(d)
-        action_frame.pack(anchor='w',padx=12,pady=4)
-        def add_uzk_record():
-            uzk_details.insert('','end',values=('',)*len(UZK_COLUMNS))
-        def remove_uzk_record():
-            for item in uzk_details.selection():
-                uzk_details.delete(item)
-        ttk.Button(action_frame,text='Добавить фактическое соединение',
-                   command=add_uzk_record).pack(side='left',padx=4)
-        ttk.Button(action_frame,text='Удалить выбранное',
-                   command=remove_uzk_record).pack(side='left',padx=4)
-        ttk.Label(d,text='Дополнительные реквизиты утверждённых форм (ВИК, качество, УЗК): заполните только необходимые поля по подтверждённым источникам. Старые сведения не подставляются.',wraplength=1080).pack(pady=5)
-        extra_columns=('key','description','value')
-        extra_frame=ttk.Frame(d);extra_frame.pack(fill='both',padx=10,pady=4)
-        extra=ttk.Treeview(extra_frame,columns=extra_columns,show='headings',height=8)
-        for col,heading,width in [('key','Поле',210),('description','Наименование',430),('value','Подтверждённое значение',470)]:
-            extra.heading(col,text=heading);extra.column(col,width=width)
-        extra_scroll=ttk.Scrollbar(extra_frame,orient='vertical',command=extra.yview)
-        extra.configure(yscrollcommand=extra_scroll.set)
-        extra_scroll.pack(side='right',fill='y');extra.pack(fill='both',expand=True)
-        self.editable(extra,immutable={0,1})
-        previous_fields=self.facts.get('doc_fields',{})
-        for key,label in DOC_FIELD_LABELS.items():
-            extra.insert('','end',values=(key,label,previous_fields.get(key,'')))
-        proofs=list(self.facts.get('evidence',[]));proof_label=ttk.Label(d,text='Протоколов: '+str(len(proofs)));proof_label.pack()
-        def add():
-            # One existing general evidence button; there is no duplicate
-            # "Приложить протокол АКЗ" control inside the climate frame.
-            # A source may be associated with АКЗ only after explicit
-            # confirmation; VIK/UZK protocols are NOT silently reused.
+        def go_back():
+            """Save all entered values to this session, including partial
+            ranges, without issuing any certificate or changing Excel.
+            """
             try:
-                used_variants=sorted({
-                    r['akz'] for r in assigned_marks()
-                    if type(r.get('akz')) is int
-                })
-                for f in filedialog.askopenfilenames(
-                        title='Подтверждённые первичные документы контроля'):
-                    source=str(Path(f).resolve())
-                    if any(item.get('path')==source for item in proofs):
-                        continue
-                    item={'path':source,'sha256':sha(source)}
-                    variant=None
-                    if len(used_variants)==1:
-                        number=used_variants[0]
-                        if messagebox.askyesno(
-                                'Тип первичного документа',
-                                Path(source).name+'\n'
-                                'Этот документ подтверждает текущую АКЗ №'+
-                                str(number)+'? Если нет, файл останется '
-                                'общим подтверждающим документом.'):
-                            variant=number
-                    elif len(used_variants)>1:
-                        answer=simpledialog.askstring(
-                            'Назначение первичного документа',
-                            Path(source).name+'\n'
-                            'Укажите № АКЗ, который подтверждает документ '
-                            '('+', '.join(map(str,used_variants))+'). '
-                            'Если документ не по АКЗ, оставьте пустым.',
-                            parent=window,
-                        )
-                        if answer and answer.strip():
-                            try:choice=int(answer.strip())
-                            except ValueError as exc:
-                                raise Stop('Некорректный № АКЗ для протокола.') from exc
-                            if choice not in used_variants:
-                                raise Stop('В документе выбран АКЗ, не '
-                                           'назначенный текущим маркам.')
-                            variant=choice
-                    if variant is not None:
-                        item.update(role='AKZ',variant=variant)
-                        akz_proofs[variant].append(item)
-                    proofs.append(item)
-                proof_label.configure(text='Протоколов: '+str(len(proofs)))
-            except Exception as exc:
-                self.error(exc)
-        ttk.Button(d,text='Приложить первичные протоколы…',command=add).pack()
-        approved=tk.BooleanVar(value=self.facts.get('confirmed',False));rights=tk.BooleanVar(value=self.facts.get('authorized',False));forms=tk.BooleanVar(value=self.facts.get('forms_approved',False))
-        for variable,text in [(approved,'Подтверждаю фактические результаты; это не TEST/SAMPLE_ONLY'),(rights,'Подтверждаю право на выпуск и достоверность данных'),(forms,'Формы документов утверждены ответственным лицом')]:ttk.Checkbutton(d,text=text,variable=variable).pack(anchor='w',padx=12)
-        def store():
-            try:
-                data={
-                    'project':self.project.get(),'number':self.number.get(),
-                    'kind':'TRAINING' if self.cfg.get('training') else 'ACTUAL',
-                    'confirmed':approved.get(),'authorized':rights.get(),
-                    'forms_approved':forms.get(),'evidence':proofs,
-                    'marks':[],'climates':[],
-                    'auto_registry_dates':True,
-                    'no_responsible_input':True,
-                    'responsible':'',
-                }
-                for item in grid.get_children():
-                    shown=dict(zip(cols,grid.item(item,'values')))
-                    mark=str(shown['mark'])
-                    row={**hidden_fields.get(mark,{}),**shown}
-                    raw=str(row['akz']).strip()
-                    row['akz']=int(raw) if raw else None
-                    # Empty results stay unconfirmed. Removing table columns
-                    # is never permission to silently set VIK/UZK to ГОДЕН.
-                    data['marks'].append(row)
-                used={r['akz'] for r in data['marks'] if r['akz'] is not None}
-                for variant in sorted(used):
-                    if variant not in variant_forms:
-                        raise Stop('Для АКЗ №'+str(variant)+
-                                   ' нет утверждённой рабочей формы.')
-                    info=variant_forms[variant]
-                    coats=info['coats']
-                    if coats not in (1,3):
-                        raise Stop('Нет подтверждённого формата 1/3 слоя для АКЗ №'+
-                                   str(variant))
-                    ranges={}
-                    for key in ('air','surface','humidity'):
-                        ranges[key]={edge:info['fields'][key][edge].get().strip()
-                                     for edge in ('min','max')}
-                    ranges['layer_intervals']=[]
-                    for index in range(1,coats+1):
-                        key='layer_'+str(index)
-                        row={'layer':index}
-                        row.update({edge:info['fields'][key][edge].get().strip()
-                                    for edge in ('min','max')})
-                        ranges['layer_intervals'].append(row)
-                    climate=measurements_from_ranges(
-                        variant,ranges,coats=coats)
-                    colors=sorted({str(mark.get('paint','')).strip()
-                                   for mark in data['marks']
-                                   if mark.get('akz')==variant and
-                                      str(mark.get('paint','')).strip()})
-                    climate['material']=', '.join(colors)
-                    # A protocol reference is never generated from a filename
-                    # unless the operator actually attached that real file.
-                    # Only proof files explicitly selected for this АКЗ
-                    # variant can supply the coating's protocol reference.
-                    climate['basis']='; '.join(
-                        Path(proof['path']).name for proof in akz_proofs[variant])
+                from .simple_facts import save_screen_draft
+                visible=[
+                    dict(zip(cols,grid.item(item,'values')))
+                    for item in grid.get_children()
+                ]
+                climate_drafts={}
+                for n,info in variant_forms.items():
+                    values={
+                        'coats':info['coats'],
+                        'air':{},'surface':{},'humidity':{},
+                        'layer_intervals':[],
+                    }
+                    for k in ('air','surface','humidity'):
+                        values[k]={edge:info['fields'][k][edge].get().strip()
+                                   for edge in ('min','max')}
+                    if info['coats'] in (1,3):
+                        for i in range(1,info['coats']+1):
+                            key='layer_'+str(i)
+                            values['layer_intervals'].append(
+                                {'layer':i,**{
+                                    edge:info['fields'][key][edge].get().strip()
+                                    for edge in ('min','max')
+                                }})
                     details=info['details']
                     if details is not None:
-                        detailkeys=('layer','material','paint_batch','hardener_batch',
-                                    'color','application_date','time_start',
-                                    'time_end','wet_average')
-                        rows=[]
+                        detailkeys=('layer','material','paint_batch',
+                                    'hardener_batch','color',
+                                    'application_date','time_start','time_end',
+                                    'wet_average')
+                        saved_rows=[]
                         for item in details.get_children():
                             vals=dict(zip(detailkeys,details.item(item,'values')))
                             if any(str(vals[k]).strip() for k in detailkeys[1:]):
                                 vals['layer']=int(vals['layer'])
-                                rows.append(vals)
-                        if rows:climate['layer_details']=rows
-                    data['climates'].append(climate)
-                data['akz_proofs']={str(n):list(akz_proofs[n])
-                                    for n in used if akz_proofs[n]}
-                data['uzk_details']=[
-                    dict(zip(UZK_COLUMNS,uzk_details.item(item,'values')))
-                    for item in uzk_details.get_children()
-                ]
-                data['doc_fields']={}
-                for item in extra.get_children():
-                    key,_,value=extra.item(item,'values')
-                    if str(value).strip():data['doc_fields'][key]=str(value).strip()
-                from .facts import validate
-                validate(data,v,self.project.get(),self.number.get(),
-                         self.cfg.get('training',False),
-                         defer_registry_dates=True)
-                self.facts=data;self.invalidate();window.destroy();self.write('Фактические данные сохранены локально в текущей заявке. Исходники не изменены.')
+                                saved_rows.append(vals)
+                        if saved_rows:values['layer_details']=saved_rows
+                    climate_drafts[str(n)]=values
+                draft=save_screen_draft(
+                    self.facts,self.project.get(),self.number.get(),
+                    self.cfg.get('training',False),
+                    visible,hidden_fields,climate_drafts,
+                )
+                self.facts=draft
+                self.invalidate()
+                window.destroy()
+                self.write('Введённые марки и диапазоны АКЗ сохранены '
+                           'в текущей заявке. Реестр не изменён. '
+                           'Проверка достоверности и комплектности '
+                           'выполняется при «Сформировать пакет».')
             except Exception as exc:self.error(exc)
-        ttk.Button(d,text='Проверить и принять введённые данные',command=store).pack(pady=10)
+        window.protocol('WM_DELETE_WINDOW',go_back)
+        window.bind('<Escape>',lambda event:go_back())
 
     def editable(self,tree,immutable=set(),on_change=None):
         def edit(event):
@@ -862,9 +716,16 @@ class App:
             self.error('Откройте «Фактические результаты» и проверьте сведения '
                        'текущей отгрузки. Старые протоколы не подставляются.')
             return
+        from .simple_facts import prepare_for_check
+        try:
+            confirmed_facts=prepare_for_check(self.facts)
+        except Stop as exc:
+            self.error(exc)
+            return
         self.run('check',{'cfg':self.cfg,'project':self.project.get(),
                           'number':self.number.get(),'vom':self.vom.get(),
-                          'facts':self.facts,'new':self.new.get()},self.checked)
+                          'facts':confirmed_facts,
+                          'new':self.new.get()},self.checked)
 
     def checked(self,result):
         self.plan=result['plan']
