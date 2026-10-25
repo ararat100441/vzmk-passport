@@ -14,6 +14,7 @@ class App:
         try:self.cfg=read(local_root()/'settings.json') if (local_root()/'settings.json').exists() else {'profiles':{}}
         except Exception as exc:self.cfg={'profiles':{}};config_error=str(exc)
         self.plan=None;self.facts={};self.active=None;self.result_path=None;self.buttons=[]
+        self.last_output_folder=None
         self.preview_pdf=None
         self.first_reference=None  # read-only first issued passport, never copied as facts
         self.project=tk.StringVar();self.number=tk.StringVar();self.vom=tk.StringVar();self.new=tk.BooleanVar(value=False)
@@ -915,9 +916,23 @@ class App:
         self.issue()
 
     def open_documents(self):
+        """Open the latest completed passport or the current prepared drafts."""
+        candidates=[]
+        if self.last_output_folder:
+            candidates.append(Path(self.last_output_folder))
         if self.plan:
-            folder=Path(self.plan).parent/'documents'
-            if folder.is_dir():os.startfile(folder)
+            candidates.append(Path(self.plan).parent/'documents')
+        for folder in candidates:
+            if folder.is_dir() and not folder.is_symlink():
+                try:
+                    os.startfile(str(folder))
+                except OSError as exc:
+                    self.error('Не удалось открыть папку документов: '+str(exc))
+                return
+        messagebox.showinfo('Документы','Комплект пока не сформирован. '
+                            'После подготовки Word/Excel здесь откроется '
+                            'папка паспорта.')
+
     def issue(self):
         if not self.plan or not self.preview_pdf:return
         # Only entered from explicit consent in review_preview(), with exact
@@ -929,6 +944,8 @@ class App:
     def released(self,r):self.run('commit',{'path':self.plan,'release_result':self.result_path},self.committed)
     def committed(self,r):self.run('readback',{'journal':r['journal']},lambda v:self.run('complete',{'journal':r['journal'],'readback_result':self.result_path},self.completed))
     def completed(self,r):
+        if r.get('folder'):
+            self.last_output_folder=str(r['folder'])
         self.write('ГОТОВО. '+str(r))
         # Store preferences only for an actually completed production issue.
         # Old protocols, measurement thicknesses, dates and approvals never
