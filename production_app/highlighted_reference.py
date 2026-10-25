@@ -274,6 +274,47 @@ def _copy_uzk_rows(document,design_rows,control_date):
     return tuple(mapped)
 
 
+
+def supports_vik_first(first):
+    """Recognize exactly this first-passport two-act VIK layout; read-only."""
+    try:
+        d=Document(first)
+        expected={'PASSPORT_NO':0,'VIK_DATE':0}
+        for node in d.element.body.iter(qn('w:sdt')):
+            pr=node.find(qn('w:sdtPr'))
+            if pr is None:continue
+            tag=pr.find(qn('w:tag'))
+            if tag is None:continue
+            key=tag.get(qn('w:val'))
+            if key in expected:expected[key]+=1
+        matches=sum(1 for p in d.element.body.iter(qn('w:p'))
+                    if VIK_LEFT in _plain(p) and VIK_RIGHT in _plain(p))
+        return expected=={'PASSPORT_NO':2,'VIK_DATE':2} and matches==1
+    except Exception:
+        return False
+
+
+def supports_uzk_first(first):
+    """Recognize exact table/heading pattern; never an arbitrary DOCX."""
+    try:
+        d=Document(first)
+        if len(d.tables)<2 or len(d.tables[0].rows)<6:
+            return False
+        t=d.tables[0]
+        return (
+            len(t.rows[5].cells)==9
+            and t.rows[5].cells[1]._tc is t.rows[5].cells[2]._tc
+            and 'Характеристика сварного соединения' in
+            ' '.join(c.text for c in t.rows[4].cells)
+            and sum(1 for p in d.paragraphs
+                    if re.fullmatch(
+                        r'Акт № [0-9]+/20[0-9]{2} от '
+                        r'[0-9]{2}\.[0-9]{2}\.20[0-9]{2}',p.text))==1
+        )
+    except Exception:
+        return False
+
+
 def create_vik_copy(first,target,*,number,vik_date,item_names):
     source,output,number,day=_inputs(first,target,number,vik_date)
     old_sha=sha(source)
