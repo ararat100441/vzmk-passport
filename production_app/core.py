@@ -51,7 +51,15 @@ def plan(cfg,project,number,vom,facts,new):
     existing=[e for e in r.projects[project] if e['number']==number]
     if new and existing or not new and len(existing)!=1:raise Stop('Дубль/не найден паспорт: '+number)
     v=model.visible_vom(safe(vom))
-    if not new and abs(v.mass-Decimal(str(existing[0]['mass'])))>Decimal('.005'):raise Stop('Масса ВОМ не совпадает с существующим паспортом.')
+    if not new and abs(v.mass-Decimal(str(existing[0]['mass'])))>Decimal('.005'):
+        raise Stop('Масса ВОМ не совпадает с существующим паспортом.')
+    if facts.get('auto_registry_dates'):
+        from .registry_dates import resolve_registry_dates
+        # For a new row, today's ending date is only a PROPOSAL. The other
+        # dates must result from valid source formulas on a private registry
+        # copy, never copied historic literals. Show the day at confirmation.
+        resolved=resolve_registry_dates(cfg,project,number,v,new)
+        facts={**facts,**resolved}
     variants=factual.validate(facts,v,project,number,cfg.get('training',False))
     for n in variants:
         for role in (f'akz{n}',f'akz_appendix{n}'):
@@ -191,15 +199,39 @@ def verify_registry(original,after,project,number,vom,expected_date=None):
     finally:a.close();b.close()
     return e['row']
 
-def verify(path):
+def verify(path,preview=False):
     d=load_plan(path);run=Path(d['run']);prepared=read(run/'prepared.json')
-    if prepared['plan_seal']!=d['seal'] or sha(prepared['registry'])!=prepared['snapshot_sha256']:raise Stop('Изменена подготовленная копия реестра.')
-    if not prepared.get('output_fingerprints'):raise Stop('Комплект подготовлен предыдущей версией. Повторите подготовку новой заявкой.')
+    if prepared['plan_seal']!=d['seal'] or sha(prepared['registry'])!=prepared['snapshot_sha256']:
+        raise Stop('Изменена подготовленная копия реестра.')
+    if not prepared.get('output_fingerprints'):
+        raise Stop('Комплект подготовлен предыдущей версией. Повторите подготовку новой заявкой.')
     verify_pins(prepared['output_fingerprints'])
     report=office.verify_documents(prepared['outputs'],d['number'],d['cfg'].get('training',False))
     hashes=pins([o['path'] for o in prepared['outputs']])
-    save(run/'verified.json',{'plan_seal':d['seal'],'documents':report,'fingerprints':hashes})
-    return {'status':'PASS','files':len(report),'documents':report,'ready_to_confirm':True}
+    preview_path=None
+    if preview:
+        from .print_pdf import create_print_pdf
+        draft=run/'preview'
+        draft.mkdir(exist_ok=False)
+        copied=[]
+        for item in prepared['outputs']:
+            source=Path(item['path'])
+            target=draft/source.name
+            if target.exists():
+                raise Stop('Дублирующийся документ чернового PDF: '+target.name)
+            shutil.copyfile(source,target)
+            copied.append({'role':item['role'],'path':str(target)})
+        # The draft already has the 'ЧЕРНОВИК/УЧЕБНЫЙ' watermark; PDF
+        # remains in PRIVATE job storage and is never published as issued.
+        printout=create_print_pdf(copied,draft,Path(d['target']).name)
+        preview_path=printout['output']['path']
+        hashes.update(pins([preview_path]))
+    save(run/'verified.json',{
+        'plan_seal':d['seal'],'documents':report,'fingerprints':hashes,
+        'preview_pdf':preview_path,
+    })
+    return {'status':'PASS','files':len(report),'documents':report,
+            'preview_pdf':preview_path,'ready_to_confirm':True}
 
 def confirm(path,responsible,reviewed):
     d=load_plan(path);run=Path(d['run']);verified=read(run/'verified.json')

@@ -118,17 +118,28 @@ def validate_dry_averages(layers, averages):
     return results
 
 
-def validate(facts,vom,project,number,training=False,require_review=False):
+def validate(facts,vom,project,number,training=False,require_review=False,*,defer_registry_dates=False):
     if facts.get('project')!=project or facts.get('number')!=number:raise Stop('Результаты контроля относятся к другому объекту/паспорту.')
-    if facts.get('confirmed') is not True or not isinstance(facts.get('responsible'),str) or not facts['responsible'].strip() or facts.get('authorized') is not True:raise Stop('Нет подтверждения фактических результатов и полномочий ответственного.')
+    if facts.get('confirmed') is not True or facts.get('authorized') is not True:
+        raise Stop('Нет подтверждения фактических результатов и права на выпуск.')
+    # For the agreed simple interface, no personal name is requested.
+    # Old templates still contain RESPONSiBLE field: it is left blank,
+    # never populated with a person from the historical first passport.
+    if not facts.get('no_responsible_input'):
+        if not isinstance(facts.get('responsible'),str) or not facts['responsible'].strip():
+            raise Stop('Не указано ответственное лицо.')
     if facts.get('kind')!='ACTUAL' and not training:raise Stop('TEST/SAMPLE_ONLY/учебные данные запрещены для рабочего выпуска.')
     if facts.get('kind') not in ('ACTUAL','TRAINING'):raise Stop('Не указан тип результатов контроля.')
     if facts.get('forms_approved') is not True:raise Stop('Ответственное лицо не утвердило формы документов.')
-    for field in ('start_date','date','vik_date','uzk_date','akz_date'):
-        try:date.fromisoformat(facts[field])
-        except (KeyError,ValueError):raise Stop('Не подтверждена дата: '+field)
-    start,end=date.fromisoformat(facts['start_date']),date.fromisoformat(facts['date'])
-    if start>end or any(not start<=date.fromisoformat(facts[k])<=end for k in ('vik_date','uzk_date','akz_date')):raise Stop('Даты контроля вне подтверждённого периода изготовления.')
+    if not defer_registry_dates:
+        for field in ('start_date','date','vik_date','uzk_date','akz_date'):
+            try:date.fromisoformat(facts[field])
+            except (KeyError,ValueError,TypeError):
+                raise Stop('Не подтверждена дата в реестре: '+field)
+        start,end=date.fromisoformat(facts['start_date']),date.fromisoformat(facts['date'])
+        if start>end or any(not start<=date.fromisoformat(facts[k])<=end
+                            for k in ('vik_date','uzk_date','akz_date')):
+            raise Stop('Даты контроля вне подтверждённого периода изготовления.')
     if require_review and not facts.get('documents_reviewed'):raise Stop('Документы ещё не просмотрены ответственным лицом.')
     expected={}
     for row in vom.rows:expected[str(row[0])]=expected.get(str(row[0]),Decimal(0))+row[2]
@@ -155,7 +166,8 @@ def validate(facts,vom,project,number,training=False,require_review=False):
             raise Stop('Нет первичного протокола/основания УЗК: '+mark)
     from .real_forms import normalize_doc_fields,validate_uzk_details
     normalize_doc_fields(facts.get('doc_fields'))
-    validate_uzk_details(facts,vom)
+    if not defer_registry_dates:
+        validate_uzk_details(facts,vom)
     climates=facts.get('climates',[])
     if {r.get('variant') for r in climates}!=variants or len(climates)!=len(variants):raise Stop('Нет отдельного подтверждённого набора измерений для каждого выбранного АКЗ.')
     for c in climates:
@@ -169,7 +181,9 @@ def validate(facts,vom,project,number,training=False,require_review=False):
             validate_dry_averages(c['layers'],c.get('dry_averages'))
         else:
             numeric(c.get('thickness'),'Средняя толщина',Decimal('0.001'))
-        if c.get('layer_details'):
+        from .measurement_ranges import verify_midrange_provenance
+        verify_midrange_provenance(c)
+        if c.get('layer_details') and not defer_registry_dates:
             validate_layer_details(c['layer_details'],facts)
         if surface<dew+3:raise Stop('Температура поверхности менее чем на 3°C выше точки росы. Выпуск заблокирован.')
         if not str(c.get('material','')).strip() or not str(c.get('basis','')).strip():raise Stop('Нет материала/протокола послойных измерений АКЗ.')

@@ -122,9 +122,10 @@ def profile(cfg,name):
         path=contained(ref['path'],root)
         if not path.is_file() or sha(path)!=ref['sha256']:
             raise Stop('Шаблон изменён/отсутствует: '+str(path))
-    if p.get('catalog'):
+    if p.get('catalog') and not cfg.get('auto_first_passport',False):
         catalog=contained(p['catalog'],root)
-        if not catalog.is_file() or sha(catalog)!=p.get('catalog_sha256'):raise Stop('Изменён/отсутствует справочник марок объекта.')
+        if not catalog.is_file() or sha(catalog)!=p.get('catalog_sha256'):
+            raise Stop('Изменён/отсутствует справочник марок объекта.')
     # The approved EMPTY dynamic Word/AKZ forms remain pinned above. When
     # the user enables automatic first-passport sources, the FIRST Appendix
     # is taken directly from the project's historical issued workbook, which
@@ -143,6 +144,21 @@ def profile(cfg,name):
         result['templates']=dict(templates)
         result['templates']['appendix']=dict(original)
         result['first_passport_sources']=inventory
+        if inventory.get('catalog'):
+            # Engineering assignments come from the selected REAL project
+            # folder, not from the installed application's Templates root.
+            result['catalog']=inventory['catalog']['path']
+            result['catalog_sha256']=inventory['catalog']['sha256']
+            result['catalog_origin']='SELECTED_PROJECT_FIRST_PASSPORT'
+        elif p.get('catalog'):
+            # A user-pinned manual catalogue remains possible for projects
+            # without a standard project-local file.
+            manual=Path(p['catalog'])
+            if not manual.is_file() or sha(manual)!=p.get('catalog_sha256'):
+                raise Stop('Изменён вручную выбранный справочник марок.')
+            result['catalog']=str(manual)
+            result['catalog_sha256']=p['catalog_sha256']
+            result['catalog_origin']='MANUAL_PINNED'
         return result
     return p
 
