@@ -36,7 +36,11 @@ def _key(s):
 
 
 def _safe_child(parent, item):
-    """Resolve a selected direct child without following links outside tree."""
+    """Reject redirects/hard links even when their target is inside the tree."""
+    if item.is_symlink() or (getattr(item,'is_junction',lambda:False)()):
+        raise Stop('Папка или файл первого паспорта является ссылкой: '+str(item))
+    if item.is_file() and item.stat().st_nlink != 1:
+        raise Stop('Hardlink недопустим для исходного файла: '+str(item))
     candidate=item.resolve()
     if not candidate.is_relative_to(parent.resolve()):
         raise Stop('Источник первого паспорта выходит за пределы папки проекта.')
