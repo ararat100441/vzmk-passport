@@ -141,7 +141,7 @@ class Presets(unittest.TestCase):
             'marks':[{'mark':'M1','profile':'','paint':'SYNTHETIC',
                       'akz':0,'uzk_quantity':'0','uzk_result':'НЕ ТРЕБУЕТСЯ',
                       'basis':'SYNTHETIC BASIS'}],
-            'climates':[dict(CLIMATE,layers=[dict(row) for row in LAYERS],dry_averages=[dict(row) for row in DRY_AVERAGES],material='SYNTHETIC',basis='SYNTHETIC BASIS')],
+            'climates':[dict(CLIMATE,surface='22.3',layers=[dict(row) for row in LAYERS],dry_averages=[dict(row) for row in DRY_AVERAGES],material='SYNTHETIC',basis='SYNTHETIC BASIS')],
             'evidence':[{'path':str(proof),'sha256':sha(proof)}]
         }
         vom = SimpleNamespace(rows=(('M1','Part',Decimal(1),Decimal(1),

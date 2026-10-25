@@ -33,10 +33,9 @@ def stored_book(path,headers,rows):
 
 def ranged_input():
     return {
-        'air':{'min':'19','max':'23'},
-        'surface':{'min':'21','max':'27'},
+        'air':{'min':'23','max':'27'},
+        'surface':{'min':'20','max':'22'},
         'humidity':{'min':'50','max':'60'},
-        'dew':{'min':'8','max':'12'},
         'layer_intervals':[{'layer':1,'min':'95','max':'125'}],
     }
 
@@ -96,10 +95,12 @@ class AgreedUX(unittest.TestCase):
 
     def test_climate_and_one_coat_midrange_is_deterministic(self):
         c=measurements_from_ranges(0,ranged_input(),coats=1)
-        self.assertEqual(c['air'],'21')
-        self.assertEqual(c['surface'],'24')
+        self.assertEqual(c['air'],'25')
+        self.assertEqual(c['surface'],'21')
         self.assertEqual(c['humidity'],'55')
-        self.assertEqual(c['dew'],'10')
+        self.assertEqual(c['dew'],'15.3')
+        self.assertEqual(c['dew_method'],'MAGNUS_17.62_243.12')
+        self.assertNotIn('dew',c['measurement_intervals'])
         self.assertEqual(c['thickness'],'110')
         self.assertNotIn('layers',c)
         self.assertTrue(verify_midrange_provenance(c))
@@ -107,10 +108,10 @@ class AgreedUX(unittest.TestCase):
 
     def test_cannot_reuse_design_limit_or_modify_calculated_midrange(self):
         c=measurements_from_ranges(0,ranged_input(),coats=1)
-        c['air']='22'
+        c['air']='26'
         with self.assertRaisesRegex(Stop,'изменена'):
             verify_midrange_provenance(c)
-        c['air']='21'
+        c['air']='25'
         c['midrange_source']='PREVIOUS_PASSPORT'
         with self.assertRaisesRegex(Stop,'источника'):
             verify_midrange_provenance(c)
