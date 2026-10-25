@@ -20,6 +20,7 @@ def save_screen_draft(previous, project, number, training, visible_marks,
         raise Stop('Некорректные строки ВОМ в окне.')
     seen=set()
     rows=[]
+    previous_marks={str(r['mark']):r for r in previous.get('marks',[])}
     for item in visible_marks:
         if not isinstance(item,dict):
             raise Stop('Неизвестная строка ВОМ.')
@@ -27,7 +28,6 @@ def save_screen_draft(previous, project, number, training, visible_marks,
         if not mark or mark in seen:
             raise Stop('В окне дублируется или отсутствует марка.')
         seen.add(mark)
-        previous_marks={str(r['mark']):r for r in previous.get('marks',[])}
         old=previous_marks.get(mark,{})
         hidden=hidden_by_mark.get(mark,{})
         # Keep only known prior facts plus currently visible values; a
