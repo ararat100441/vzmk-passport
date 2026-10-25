@@ -17,7 +17,10 @@ from docx.opc.constants import RELATIONSHIP_TYPE as RT
 
 from production_app.highlighted_reference import (
     create_vik_copy,create_uzk_copy,
+    supports_vik_first,supports_uzk_first,
 )
+from production_app import core,office
+import inspect
 from production_app.storage import Stop,sha
 
 
@@ -121,6 +124,26 @@ class FirstPassportCopiedFields(unittest.TestCase):
         self.uzk=self.root/'1_2026 - УЗК.docx'
         vik_first(self.vik);uzk_first(self.uzk)
     def tearDown(self):self.temp.cleanup()
+
+    def test_only_matched_first_passport_forms_enable_copy(self):
+        self.assertTrue(supports_vik_first(self.vik))
+        self.assertTrue(supports_uzk_first(self.uzk))
+        self.assertFalse(supports_vik_first(self.uzk))
+        self.assertFalse(supports_uzk_first(self.vik))
+
+    def test_native_word_pipeline_uses_first_copy_and_registry_dates(self):
+        renderer=inspect.getsource(office.render)
+        self.assertIn('supports_vik_first(source)',renderer)
+        self.assertIn('supports_uzk_first(source)',renderer)
+        self.assertIn("vik_date=facts['vik_date']",renderer)
+        self.assertIn("uzk_date=facts['uzk_date']",renderer)
+        self.assertIn("number=facts['number']",renderer)
+        self.assertIn('item_names=[row[1] for row in vom.rows]',renderer)
+        self.assertIn('design_rows=facts[',renderer)
+        self.assertIn("InsertBefore(prefix+'\\r')",renderer)
+        planner=inspect.getsource(core.plan)
+        self.assertIn('supports_uzk_first',planner)
+        self.assertIn('historical_uzk',planner)
 
     def test_vik_changes_only_both_headers_and_product_names(self):
         before=sha(self.vik)
