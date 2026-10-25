@@ -445,7 +445,8 @@ class App:
         # If the project has ONE approved AKZ form but marks are unassigned,
         # show its blank ranges as a convenience — do not assign AKZ to marks.
         from .akz_ui import available_variants,display_variants,source_coats
-        from .measurement_ranges import measurements_from_ranges
+        from .measurement_ranges import (measurements_from_ranges,
+                                         magnus_dew_point,midrange)
         current_profile=active_profile if 'active_profile' in locals() else (
             self.cfg.get('profiles',{}).get(self.project.get(),{}))
         variants=available_variants(current_profile)
@@ -487,7 +488,7 @@ class App:
             ttk.Label(group,text='От').grid(row=1,column=1,sticky='w')
             ttk.Label(group,text='До').grid(row=1,column=2,sticky='w')
             labels={'air':'Воздух, °C','surface':'Поверхность, °C',
-                    'humidity':'Влажность, %','dew':'Точка росы, °C'}
+                    'humidity':'Влажность, %'}
             measurements=list(labels.items())+[
                 ('layer_'+str(i),'Фактическая толщина слоя '+str(i)+', мкм')
                 for i in range(1,(coats or 0)+1)]
@@ -508,6 +509,56 @@ class App:
                     entry.grid(row=line,column=column,sticky='w',padx=4,pady=3)
                     pair[label]=var
                 fields[key]=pair
+
+            dew_status=ttk.Label(
+                group,text='Точка росы рассчитывается по температуре воздуха '
+                           'и влажности (формула Магнуса).',
+                wraplength=1010,justify='left')
+            dew_status.grid(row=len(measurements)+2,column=0,
+                            columnspan=3,sticky='w',pady=8)
+            def update_dew_display(*_, inputs=fields, target=dew_status):
+                required=[inputs[k][edge].get().strip()
+                          for k in ('air','surface','humidity')
+                          for edge in ('min','max')]
+                if not all(required):
+                    target.configure(text='Точка росы: будет рассчитана '
+                                     'после ввода воздуха и влажности.')
+                    return
+                try:
+                    mean_air=midrange(
+                        inputs['air']['min'].get(),inputs['air']['max'].get(),
+                        'воздух',-60,80)
+                    mean_surface=midrange(
+                        inputs['surface']['min'].get(),
+                        inputs['surface']['max'].get(),
+                        'поверхность',-60,100)
+                    mean_humidity=midrange(
+                        inputs['humidity']['min'].get(),
+                        inputs['humidity']['max'].get(),
+                        'влажность',0,100)
+                    dew=magnus_dew_point(mean_air,mean_humidity)
+                    if float(mean_air)<=float(mean_surface):
+                        target.configure(
+                            text='Ошибка АКЗ: температура воздуха должна '
+                                 'быть выше температуры поверхности.')
+                    elif float(mean_surface)<float(dew)+3:
+                        target.configure(
+                            text='Ошибка АКЗ: поверхность должна быть '
+                                 'минимум на 3 °C теплее точки росы '
+                                 '('+str(dew)+' °C).')
+                    else:
+                        target.configure(
+                            text='Точка росы автоматически: '+str(dew)+
+                                 ' °C. Воздух: '+str(mean_air)+' °C; '
+                                 'поверхность: '+str(mean_surface)+' °C; '
+                                 'влажность: '+str(mean_humidity)+' %. '
+                                 'Проверка климата — PASS.')
+                except (Stop,ValueError,TypeError) as exc:
+                    target.configure(text='Проверьте диапазоны: '+str(exc))
+            for k in ('air','surface','humidity'):
+                for edge in ('min','max'):
+                    fields[k][edge].trace_add('write',update_dew_display)
+            update_dew_display()
             # Detailed 3-coat material batches remain accessible ONLY when
             # an actual approved 3-layer form is selected. They are never
             # shown for the one-layer Kazakhstan act.
@@ -516,13 +567,13 @@ class App:
                 ttk.Label(group,text='Дополнительные факты трёхслойного акта '
                           '(ЛКМ, партии, цвет, дата и время) — по текущим '
                           'первичным протоколам.',wraplength=1020).grid(
-                          row=len(measurements)+2,column=0,columnspan=3,
+                          row=len(measurements)+3,column=0,columnspan=3,
                           sticky='w')
                 detailkeys=('layer','material','paint_batch','hardener_batch',
                             'color','application_date','time_start','time_end',
                             'wet_average')
                 detail_frame=ttk.Frame(group)
-                detail_frame.grid(row=len(measurements)+3,column=0,
+                detail_frame.grid(row=len(measurements)+4,column=0,
                                   columnspan=3,sticky='ew')
                 details=ttk.Treeview(
                     detail_frame,columns=detailkeys,show='headings',height=3)
@@ -699,7 +750,7 @@ class App:
                         raise Stop('Нет подтверждённого формата 1/3 слоя для АКЗ №'+
                                    str(variant))
                     ranges={}
-                    for key in ('air','surface','humidity','dew'):
+                    for key in ('air','surface','humidity'):
                         ranges[key]={edge:info['fields'][key][edge].get().strip()
                                      for edge in ('min','max')}
                     ranges['layer_intervals']=[]
