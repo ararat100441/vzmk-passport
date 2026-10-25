@@ -168,7 +168,7 @@ class AgreedUX(unittest.TestCase):
               'date':'2026-10-25','registry':'COPY.xlsx','target':'TEMP',
               'new':True}
         with patch.object(gui,'read',return_value=data),\
-             patch.object(gui.os,'startfile') as launch,\
+             patch.object(gui.os,'startfile',create=True) as launch,\
              patch.object(gui.messagebox,'askyesno',return_value=False) as confirm:
             app.review_preview()
         launch.assert_called_once_with(app.preview_pdf)
@@ -188,7 +188,7 @@ class AgreedUX(unittest.TestCase):
               'date':'2026-10-25','registry':'COPY.xlsx','target':'TEMP',
               'new':True}
         with patch.object(gui,'read',return_value=data),\
-             patch.object(gui.os,'startfile'),\
+             patch.object(gui.os,'startfile',create=True),\
              patch.object(gui.messagebox,'askyesno',return_value=True) as confirm:
             app.review_preview()
         app.issue.assert_called_once()
