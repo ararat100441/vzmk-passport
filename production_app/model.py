@@ -97,6 +97,9 @@ def validate_paths(cfg):
     registry=safe(cfg['registry']);documents=safe(cfg['documents']);output=safe(cfg['output'])
     if not registry.is_file() or registry.suffix.lower()!='.xlsx':raise Stop('Выберите существующий реестр .xlsx.')
     if not documents.is_dir() or not output.is_dir():raise Stop('Выберите существующие папки документов и сохранения.')
+    if cfg.get('first_passport_documents'):
+        first=safe(cfg['first_passport_documents'])
+        if not first.is_dir():raise Stop('Выберите существующую папку архива первых паспортов.')
     return registry,documents,output
 
 def profile(cfg,name):
@@ -128,9 +131,9 @@ def profile(cfg,name):
     # the established dynamic appendix engine can already safely process.
     # Do NOT bind filled VIK/UZK/quality/AKZ acts as empty forms.
     if cfg.get('auto_first_passport',False):
-        from .first_passport import discover_first_passport
+        from .first_passport import discover_first_passport_for_config
         project=select(read_registry(cfg['registry']),name)
-        inventory=discover_first_passport(cfg['documents'],project)
+        inventory=discover_first_passport_for_config(cfg,project)
         original=inventory['sources'].get('appendix')
         if original is None:
             raise Stop('Первый паспорт найден, но первое Приложение №1 '
