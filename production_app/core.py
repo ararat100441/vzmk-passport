@@ -51,6 +51,14 @@ def plan(cfg,project,number,vom,facts,new):
     existing=[e for e in r.projects[project] if e['number']==number]
     if new and existing or not new and len(existing)!=1:raise Stop('Дубль/не найден паспорт: '+number)
     v=model.visible_vom(safe(vom))
+    shared_uzk=None
+    if cfg.get('use_shared_uzk'):
+        from .shared_uzk import (
+            find_shared_uzk,planned_control,verify_planned_quantities,
+        )
+        shared_uzk=find_shared_uzk(cfg)
+        expected=planned_control(shared_uzk,project,v)
+        verify_planned_quantities(facts,expected)
     if not new and abs(v.mass-Decimal(str(existing[0]['mass'])))>Decimal('.005'):
         raise Stop('Масса ВОМ не совпадает с существующим паспортом.')
     if facts.get('auto_registry_dates'):
@@ -87,8 +95,10 @@ def plan(cfg,project,number,vom,facts,new):
     ]))
     catalog=profile.get('catalog')
     if catalog and Path(catalog).is_file():inputs.append(catalog)
+    if shared_uzk is not None:inputs.append(shared_uzk)
     # Frozen human entries supply explicitly confirmed assignments when no catalog exists.
-    target=output/project/'Паспорт'/(model.filename(number)+' от '+date.fromisoformat(facts['date']).strftime('%d.%m.%Y'))
+    passport_folder=model.output_passport_directory(cfg,project,profile)
+    target=passport_folder/(model.filename(number)+' от '+date.fromisoformat(facts['date']).strftime('%d.%m.%Y'))
     safe(target)
     if target.exists():raise Stop('Папка готового комплекта уже существует: '+str(target))
     hashes=pins(inputs)

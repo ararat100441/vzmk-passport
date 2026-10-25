@@ -104,7 +104,11 @@ def validate_paths(cfg):
 
 def profile(cfg,name):
     p=cfg.get('profiles',{}).get(name)
-    if not p:raise Stop('Настройте собственные шаблоны объекта: '+name)
+    if not p:
+        if not cfg.get('auto_first_passport',False):
+            raise Stop('Не подключены формы проекта: '+name)
+        from .prepared_forms import prepared_project
+        p=prepared_project(cfg,name)
     root=contained(p['root'],cfg['documents'])
     if not root.is_dir():raise Stop('Папка объекта отсутствует.')
     templates=p.get('templates',{})
@@ -161,6 +165,32 @@ def profile(cfg,name):
             result['catalog_origin']='MANUAL_PINNED'
         return result
     return p
+
+def output_passport_directory(cfg,project,profile=None):
+    """Exact existing <Работа/Документы>/<PROJECT>/Паспорт folder.
+
+    New real passports MUST be siblings of the first passport, including
+    case-preserved names (e.g. 'Гараж казахстан'). For a sandbox write under
+    the isolated training output root as before. Never write in the archive
+    when training=True.
+    """
+    if cfg.get('training'):
+        return safe(cfg['output'])/project/'Паспорт'
+    output=safe(cfg['output'])
+    inventory=(profile or {}).get('first_passport_sources')
+    if inventory:
+        actual=contained(inventory['passport_root'],output)
+        if actual.parent.parent!=output or not actual.is_dir():
+            raise Stop('Папка первого паспорта не является папкой '
+                       'Работа/Документы/<проект>/Паспорт: '+str(actual))
+        if actual.name.casefold()!='паспорт':
+            raise Stop('Неверное имя папки паспортов.')
+        if actual.parent.name.casefold()!=project.casefold():
+            raise Stop('Папка первого паспорта принадлежит другому проекту.')
+        return actual
+    # Compatibility when automatic first-source mode is not enabled.
+    return output/project/'Паспорт'
+
 
 def visible_vom(path):
     # Native parser: remove only hidden/filter-excluded rows in the private copy.
