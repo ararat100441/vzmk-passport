@@ -62,7 +62,16 @@ def plan(cfg,project,number,vom,facts,new):
     require_form_inputs(profile,facts)
     from .real_forms import require_akz_form_inputs
     require_akz_form_inputs(profile,facts,variants)
-    inputs=[registry,v.path,*[t['path'] for t in profile['templates'].values()],*[e['path'] for e in facts['evidence']]]
+    # Pin the exact FIRST passport source files alongside inputs. Even the
+    # historical acts used for visual provenance (not generation) must not
+    # silently change between CHECK and PREPARE. Dedupe pinned paths.
+    first_refs=profile.get('first_passport_sources',{}).get('sources',{})
+    inputs=list(dict.fromkeys([
+        registry,v.path,
+        *[t['path'] for t in profile['templates'].values()],
+        *[t['path'] for t in first_refs.values()],
+        *[e['path'] for e in facts['evidence']],
+    ]))
     catalog=profile.get('catalog')
     if catalog and Path(catalog).is_file():inputs.append(catalog)
     # Frozen human entries supply explicitly confirmed assignments when no catalog exists.
