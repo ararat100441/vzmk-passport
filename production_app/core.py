@@ -71,7 +71,10 @@ def plan(cfg,project,number,vom,facts,new):
         # The ending date is displayed for final confirmation.
         resolved=resolve_registry_dates(cfg,project,number,v,new)
         facts={**facts,**resolved}
-    variants=factual.validate(facts,v,project,number,cfg.get('training',False))
+    variants=factual.validate(
+        facts,v,project,number,cfg.get('training',False),
+        defer_approvals=bool(facts.get('simple_ui')),
+    )
     for n in variants:
         for role in (f'akz{n}',f'akz_appendix{n}'):
             if role not in profile['templates']:raise Stop('Нет собственного шаблона '+role)
@@ -246,11 +249,15 @@ def verify(path,preview=False):
     return {'status':'PASS','files':len(report),'documents':report,
             'preview_pdf':preview_path,'ready_to_confirm':True}
 
-def confirm(path,responsible,reviewed):
+def confirm(path,responsible,reviewed,approved=False):
     d=load_plan(path);run=Path(d['run']);verified=read(run/'verified.json')
-    if not reviewed or responsible!=d['facts']['responsible']:raise Stop('Подтвердите просмотр всех документов и ответственное лицо.')
+    if not reviewed or responsible!=d['facts']['responsible']:
+        raise Stop('Подтвердите просмотр всех документов и ответственное лицо.')
+    if d['facts'].get('simple_ui') and approved is not True:
+        raise Stop('Не подтверждены достоверность текущих результатов, '
+                   'полномочия и утверждённые формы.')
     verify_pins(verified['fingerprints'])
-    confirmation={'plan_seal':d['seal'],'verified_sha256':sha(run/'verified.json'),'responsible':responsible,'reviewed':True,'created_at':datetime.now(timezone.utc).isoformat()}
+    confirmation={'plan_seal':d['seal'],'verified_sha256':sha(run/'verified.json'),'responsible':responsible,'reviewed':True,'approved':approved is True,'created_at':datetime.now(timezone.utc).isoformat()}
     save(run/'confirmation.json',confirmation)
     return {'status':'PASS','confirmation':str(run/'confirmation.json')}
 
@@ -297,7 +304,13 @@ def commit(path,release_result):
     verify_package_print(released,target.name)
     if confirmation['plan_seal']!=d['seal'] or confirmation['verified_sha256']!=sha(run/'verified.json') or not confirmation['reviewed']:raise Stop('Нет действительного подтверждения выпуска.')
     verify_pins(verified['fingerprints']);v=model.visible_vom(d['vom'])
-    factual.validate(d['facts']|{'documents_reviewed':True},v,d['project'],d['number'],d['cfg'].get('training',False),True)
+    approved_facts=d['facts']|{'documents_reviewed':True}
+    if d['facts'].get('simple_ui'):
+        if confirmation.get('approved') is not True:
+            raise Stop('Нет итогового подтверждения полномочий и текущих результатов.')
+        approved_facts.update(confirmed=True,authorized=True,forms_approved=True)
+    factual.validate(approved_facts,v,d['project'],d['number'],
+                     d['cfg'].get('training',False),True)
     with mutex(registry),frozen(p for p in d['fingerprints'] if p!=str(registry)):
         if pending(registry):raise Stop('Незавершённая операция: используйте восстановление.')
         if target.exists():raise Stop('Папка уже существует, перезапись запрещена.')
@@ -329,7 +342,9 @@ def commit(path,release_result):
                     verify_registry(backup,candidate,d['project'],d['number'],v,date.fromisoformat(d['date']))
                     state['candidate_sha256']=sha(candidate)
                 save(private/'ISSUE.json',{'project':d['project'],'number':d['number'],'training':bool(d['cfg'].get('training')),
-                    'facts':d['facts'],'files':state['output_hashes'],'source_registry_sha256':state['original_sha256']})
+                    'facts':approved_facts if d['facts'].get('simple_ui') else d['facts'],
+                    'approved_at':confirmation['created_at'],
+                    'files':state['output_hashes'],'source_registry_sha256':state['original_sha256']})
                 state['issue_sha256']=sha(private/'ISSUE.json')
                 state['phase']='PUBLISH_INTENT';journal_write(journal,state)
                 private.rename(target)
