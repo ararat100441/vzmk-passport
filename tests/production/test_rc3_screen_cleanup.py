@@ -3,8 +3,12 @@
 Only synthetic data. No user's Windows registry or evidence is changed.
 """
 import inspect
+import tempfile
 import unittest
 from decimal import Decimal
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from production_app.gui import App
 from production_app.facts import validate as validate_facts
@@ -111,6 +115,30 @@ class GUIContracts(unittest.TestCase):
         self.assertNotIn("text='Протоколов АКЗ №",source)
         self.assertIn("Приложить первичные протоколы",source)
         self.assertIn("akz_proofs",source)
+
+    def test_open_documents_uses_last_completed_folder_for_current_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app=object.__new__(App)
+            app.last_output_folder=directory
+            app.last_output_project='Гараж Казахстан'
+            app.plan=None
+            app.project=SimpleNamespace(get=lambda:'Гараж Казахстан')
+            with patch('production_app.gui.os.startfile',create=True) as opener:
+                app.open_documents()
+            opener.assert_called_once_with(str(Path(directory)))
+
+    def test_open_documents_does_not_switch_to_previous_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app=object.__new__(App)
+            app.last_output_folder=directory
+            app.last_output_project='Гараж Казахстан'
+            app.plan=None
+            app.project=SimpleNamespace(get=lambda:'ТЭМПО 1')
+            with patch('production_app.gui.os.startfile',create=True) as opener,\
+                 patch('production_app.gui.messagebox.showinfo') as info:
+                app.open_documents()
+            opener.assert_not_called()
+            info.assert_called_once()
 
     def test_dew_is_read_only_display_not_manual_interval(self):
         source=inspect.getsource(App.fact_dialog)
