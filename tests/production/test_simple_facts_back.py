@@ -7,9 +7,12 @@ import inspect
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from production_app import gui,core
+from production_app.facts import validate as validate_facts
+from production_app.storage import read
 from production_app.simple_facts import save_screen_draft,prepare_for_check
 from production_app.storage import Stop,save
 
@@ -133,6 +136,52 @@ class BackDraft(unittest.TestCase):
         originals=[dict(x) for x in MARKS]
         self.save()
         self.assertEqual(MARKS,originals)
+
+    def test_confirmation_requires_explicit_final_approval_for_simple_ui(self):
+        with TemporaryDirectory() as td:
+            run=Path(td)
+            save(run/'verified.json',{
+                'plan_seal':'XYZ','fingerprints':{},
+            })
+            plan={'run':str(run),'seal':'XYZ',
+                  'facts':{'simple_ui':True,'responsible':''}}
+            with patch.object(core,'load_plan',return_value=plan):
+                with self.assertRaisesRegex(Stop,'Не подтверждены'):
+                    core.confirm(run/'plan.json','',True)
+                self.assertFalse((run/'confirmation.json').exists())
+                result=core.confirm(run/'plan.json','',True,approved=True)
+            proof=read(run/'confirmation.json')
+            self.assertTrue(proof['reviewed'])
+            self.assertTrue(proof['approved'])
+            self.assertTrue(Path(result['confirmation']).is_file())
+
+    def test_old_flow_still_accepts_existing_approval_contract(self):
+        with TemporaryDirectory() as td:
+            run=Path(td)
+            save(run/'verified.json',{'plan_seal':'XYZ','fingerprints':{}})
+            plan={'run':str(run),'seal':'XYZ',
+                  'facts':{'responsible':'LEAD'}}
+            with patch.object(core,'load_plan',return_value=plan):
+                core.confirm(run/'plan.json','LEAD',True)
+            self.assertFalse(read(run/'confirmation.json')['approved'])
+
+    def test_deferred_approval_does_not_defer_missing_uzk_facts(self):
+        datum={
+            'project':'P','number':'1/2026',
+            'kind':'TRAINING','confirmed':False,
+            'authorized':False,'forms_approved':False,
+            'responsible':'','no_responsible_input':True,
+            'marks':[{
+                'mark':'M1','profile':'P','akz':None,
+                'uzk_quantity':'1','uzk_result':'',
+            }],
+        }
+        vom=SimpleNamespace(rows=[('M1','Part',1,1,1,1,1)])
+        with self.assertRaisesRegex(Stop,'результата УЗК'):
+            validate_facts(datum,vom,'P','1/2026',
+                           training=True,
+                           defer_registry_dates=True,
+                           defer_approvals=True)
 
     def test_original_and_simple_workflows_distinguished(self):
         old={'project':'Existing','number':'1/2026','climates':[1]}
