@@ -199,15 +199,39 @@ def verify_registry(original,after,project,number,vom,expected_date=None):
     finally:a.close();b.close()
     return e['row']
 
-def verify(path):
+def verify(path,preview=False):
     d=load_plan(path);run=Path(d['run']);prepared=read(run/'prepared.json')
-    if prepared['plan_seal']!=d['seal'] or sha(prepared['registry'])!=prepared['snapshot_sha256']:raise Stop('Изменена подготовленная копия реестра.')
-    if not prepared.get('output_fingerprints'):raise Stop('Комплект подготовлен предыдущей версией. Повторите подготовку новой заявкой.')
+    if prepared['plan_seal']!=d['seal'] or sha(prepared['registry'])!=prepared['snapshot_sha256']:
+        raise Stop('Изменена подготовленная копия реестра.')
+    if not prepared.get('output_fingerprints'):
+        raise Stop('Комплект подготовлен предыдущей версией. Повторите подготовку новой заявкой.')
     verify_pins(prepared['output_fingerprints'])
     report=office.verify_documents(prepared['outputs'],d['number'],d['cfg'].get('training',False))
     hashes=pins([o['path'] for o in prepared['outputs']])
-    save(run/'verified.json',{'plan_seal':d['seal'],'documents':report,'fingerprints':hashes})
-    return {'status':'PASS','files':len(report),'documents':report,'ready_to_confirm':True}
+    preview_path=None
+    if preview:
+        from .print_pdf import create_print_pdf
+        draft=run/'preview'
+        draft.mkdir(exist_ok=False)
+        copied=[]
+        for item in prepared['outputs']:
+            source=Path(item['path'])
+            target=draft/source.name
+            if target.exists():
+                raise Stop('Дублирующийся документ чернового PDF: '+target.name)
+            shutil.copyfile(source,target)
+            copied.append({'role':item['role'],'path':str(target)})
+        # The draft already has the 'ЧЕРНОВИК/УЧЕБНЫЙ' watermark; PDF
+        # remains in PRIVATE job storage and is never published as issued.
+        printout=create_print_pdf(copied,draft,Path(d['target']).name)
+        preview_path=printout['output']['path']
+        hashes.update(pins([preview_path]))
+    save(run/'verified.json',{
+        'plan_seal':d['seal'],'documents':report,'fingerprints':hashes,
+        'preview_pdf':preview_path,
+    })
+    return {'status':'PASS','files':len(report),'documents':report,
+            'preview_pdf':preview_path,'ready_to_confirm':True}
 
 def confirm(path,responsible,reviewed):
     d=load_plan(path);run=Path(d['run']);verified=read(run/'verified.json')
