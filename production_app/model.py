@@ -104,7 +104,11 @@ def validate_paths(cfg):
 
 def profile(cfg,name):
     p=cfg.get('profiles',{}).get(name)
-    if not p:raise Stop('Настройте собственные шаблоны объекта: '+name)
+    if not p:
+        if not cfg.get('auto_first_passport',False):
+            raise Stop('Не подключены формы проекта: '+name)
+        from .prepared_forms import prepared_project
+        p=prepared_project(cfg,name)
     root=contained(p['root'],cfg['documents'])
     if not root.is_dir():raise Stop('Папка объекта отсутствует.')
     templates=p.get('templates',{})
