@@ -113,6 +113,25 @@ def profile(cfg,name):
     if p.get('catalog'):
         catalog=contained(p['catalog'],root)
         if not catalog.is_file() or sha(catalog)!=p.get('catalog_sha256'):raise Stop('Изменён/отсутствует справочник марок объекта.')
+    # The approved EMPTY dynamic Word/AKZ forms remain pinned above. When
+    # the user enables automatic first-passport sources, the FIRST Appendix
+    # is taken directly from the project's historical issued workbook, which
+    # the established dynamic appendix engine can already safely process.
+    # Do NOT bind filled VIK/UZK/quality/AKZ acts as empty forms.
+    if cfg.get('auto_first_passport',False):
+        from .first_passport import discover_first_passport
+        project=select(read_registry(cfg['registry']),name)
+        inventory=discover_first_passport(cfg['documents'],project)
+        original=inventory['sources'].get('appendix')
+        if original is None:
+            raise Stop('Первый паспорт найден, но первое Приложение №1 '
+                       'отсутствует или не подтверждено. Не использован '
+                       'чужой подготовленный шаблон.')
+        result=dict(p)
+        result['templates']=dict(templates)
+        result['templates']['appendix']=dict(original)
+        result['first_passport_sources']=inventory
+        return result
     return p
 
 def visible_vom(path):
