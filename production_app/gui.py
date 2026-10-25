@@ -768,9 +768,12 @@ class App:
                  '\nОткрылся предварительный PDF с пометкой ЧЕРНОВИК. '
                  'Проверьте ВСЕ страницы, марки, фактические результаты '
                  'контроля, материалы, толщины и даты.\n\n'
-                 'Это ЕДИНСТВЕННОЕ подтверждение официального выпуска. '
-                 'После «Да» будут подготовлены итоговые документы, '
-                 'выполнены проверки и запись в реестр с резервной копией.\n'
+                 'Это ЕДИНСТВЕННОЕ подтверждение официального выпуска.\n'
+                 'Нажимая «Да», вы подтверждаете, что текущие результаты '
+                 'контроля достоверны, утверждённые формы действуют, '
+                 'вы вправе выпустить документы и проверили все страницы.\n'
+                 'После «Да» будут выполнены итоговые проверки и запись '
+                 'в реестр с резервной копией.\n'
                  'Подтверждаете выпуск?')
         if not messagebox.askyesno('Предварительный просмотр и выпуск',message):
             self.write('Подтверждение отложено; предварительный PDF доступен. '
@@ -802,7 +805,8 @@ class App:
         # project/date/registry/output shown. Do not ask a SECOND approval.
         self.run('confirm',{'path':self.plan,
                             'responsible':self.facts.get('responsible',''),
-                            'reviewed':True},
+                            'reviewed':True,
+                            'approved':True},
                  lambda r:self.run('release',{'path':self.plan},self.released))
     def released(self,r):self.run('commit',{'path':self.plan,'release_result':self.result_path},self.committed)
     def committed(self,r):self.run('readback',{'journal':r['journal']},lambda v:self.run('complete',{'journal':r['journal'],'readback_result':self.result_path},self.completed))
