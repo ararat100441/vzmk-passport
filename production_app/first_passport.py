@@ -203,6 +203,59 @@ def discover_first_passport(documents_root,project,*,require_all=False):
     }
 
 
+def discover_first_passport_for_config(cfg,project,*,require_all=False):
+    """Separate historical archive from the clean-template directory.
+
+    Installed RC3-interface has:
+      cfg['documents'] = C:\\VZMK-Passport\\...\\Templates
+      cfg['output']    = ...\\Работа\\Документы (actual first passports)
+    Never attempt to read the first passports from the clean form directory.
+    If the user explicitly sets 'first_passport_documents', use that alone.
+    Otherwise use exactly one already user-selected root containing the
+    project/Pasпорт folder. Zero/multiple viable roots => safe STOP.
+    """
+    configured=str(cfg.get('first_passport_documents') or '').strip()
+    if configured:
+        return discover_first_passport(
+            configured,project,require_all=require_all,
+        )
+    roots=[]
+    for kind in ('output','documents'):
+        path=cfg.get(kind)
+        if not path:
+            continue
+        root=safe(path)
+        if not root.is_dir():
+            continue
+        if root not in roots:
+            roots.append(root)
+    found=[]
+    for root in roots:
+        candidates=[p for p in root.iterdir()
+                    if p.is_dir() and _key(p.name)==_key(project.name)]
+        if len(candidates)>1:
+            raise Stop('Несколько папок объекта в '+str(root)+
+                       '. Выберите точную папку первых паспортов в Настройках.')
+        if not candidates:
+            continue
+        project_folder=_safe_child(root,candidates[0])
+        passports=[p for p in project_folder.iterdir()
+                   if p.is_dir() and _key(p.name)==_key('Паспорт')]
+        if len(passports)>1:
+            raise Stop('Несколько папок «Паспорт» у проекта '+project.name)
+        if passports:
+            found.append(root)
+    if len(found)!=1:
+        raise Stop('Не найдена единственная папка первых паспортов для '+
+                   project.name+'. Найдено корневых папок: '+str(len(found))+
+                   '. В «Настройки путей» выберите «Архив первых паспортов»: '
+                   'папку Работа/Документы, где находятся паспорта проекта. '
+                   'Каталог очищенных Templates не является архивом.')
+    return discover_first_passport(
+        found[0],project,require_all=require_all,
+    )
+
+
 def validate_source_pins(inventory):
     """Detect deleted or modified source BEFORE using it as a reference."""
     for role,record in inventory['sources'].items():

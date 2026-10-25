@@ -84,12 +84,12 @@ class App:
 
     def settings(self):
         if self.active:return
-        dialog=tk.Toplevel(self.root);dialog.title('Рабочие пути — явный выбор');self.fit(dialog,1000,350);dialog.transient(self.root);dialog.grab_set()
-        vars={k:tk.StringVar(value=self.cfg.get(k,'')) for k in ('registry','documents','output')}
-        for row,(key,label) in enumerate([('registry','Рабочий реестр ВЗМК.xlsx'),('documents','Корень документов'),('output','Папка сохранения паспортов')]):
+        dialog=tk.Toplevel(self.root);dialog.title('Рабочие пути — явный выбор');self.fit(dialog,1000,440);dialog.transient(self.root);dialog.grab_set()
+        vars={k:tk.StringVar(value=self.cfg.get(k,'')) for k in ('registry','documents','output','first_passport_documents')}
+        for row,(key,label) in enumerate([('registry','Рабочий реестр ВЗМК.xlsx'),('documents','Корень очищенных форм'),('output','Папка сохранения паспортов'),('first_passport_documents','Архив первых паспортов (необязательно)')]):
             ttk.Label(dialog,text=label).grid(row=row,column=0,padx=12,pady=12,sticky='w');ttk.Entry(dialog,textvariable=vars[key],width=85).grid(row=row,column=1)
             ttk.Button(dialog,text='Выбрать…',command=lambda k=key:self.choose(vars[k],k!='registry')).grid(row=row,column=2,padx=8)
-        ttk.Label(dialog,text='Никакие пути DEV автоматически не используются. Для испытаний создайте отдельную учебную копию.',wraplength=900).grid(row=3,column=0,columnspan=3,pady=12)
+        ttk.Label(dialog,text='Архив первых паспортов: Рабoта/Документы, где находится Гараж казахстан/Паспорт/1_2026... Если поле пустое, приложение проверит уже выбранную папку результата. Исходники только для чтения. Для испытаний создайте учебную копию.',wraplength=920).grid(row=4,column=0,columnspan=3,pady=12)
         def store(training=False):
             try:
                 cfg=self.cfg|{k:v.get() for k,v in vars.items()}|{'training':False}
@@ -100,8 +100,8 @@ class App:
                     cfg=core.training_copy(cfg,parent)
                 self.cfg=cfg;save(local_root()/'settings.json',cfg);self.invalidate();self.facts={};dialog.destroy();self.refresh()
             except Exception as exc:self.error(exc)
-        ttk.Button(dialog,text='Сохранить выбранные рабочие пути',command=store).grid(row=4,column=1,sticky='w')
-        ttk.Button(dialog,text='Создать и выбрать учебную копию',command=lambda:store(True)).grid(row=4,column=1,sticky='e')
+        ttk.Button(dialog,text='Сохранить выбранные рабочие пути',command=store).grid(row=5,column=1,sticky='w')
+        ttk.Button(dialog,text='Создать и выбрать учебную копию',command=lambda:store(True)).grid(row=5,column=1,sticky='e')
 
     def refresh(self):
         if self.active:return
@@ -124,11 +124,11 @@ class App:
             # The FIRST ISSUED passport is the automatic reference for THIS
             # project only. Existing approved empty forms remain separate:
             # never inject historical findings or signatures as new facts.
-            from .first_passport import discover_first_passport
+            from .first_passport import discover_first_passport_for_config
             self.cfg['auto_first_passport']=True
             try:
-                self.first_reference=discover_first_passport(
-                    self.cfg['documents'],p)
+                self.first_reference=discover_first_passport_for_config(
+                    self.cfg,p)
                 refs=self.first_reference['sources']
                 self.write('Автоматически найден первый паспорт: '+
                            p.first_number+' / '+
