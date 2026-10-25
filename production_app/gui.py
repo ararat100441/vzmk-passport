@@ -588,30 +588,6 @@ class App:
                     record=previous.get(layer,{})
                     details.insert('','end',values=(layer,)+tuple(
                         record.get(k,'') for k in detailkeys[1:]))
-            attachments=ttk.Frame(group)
-            attachments.grid(row=len(measurements)+5,column=0,
-                             columnspan=3,sticky='w',pady=5)
-            count_label=ttk.Label(
-                attachments,text='Протоколов АКЗ №'+str(n)+': '+
-                                 str(len(akz_proofs[n])))
-            count_label.pack(side='left',padx=5)
-            def pick_akz_proof(variant=n,display=count_label):
-                try:
-                    for raw in filedialog.askopenfilenames(
-                            title='Первичный протокол АКЗ №'+str(variant)):
-                        path=str(Path(raw).resolve())
-                        proof={'path':path,'sha256':sha(path),
-                               'role':'AKZ','variant':variant}
-                        if not any(x.get('path')==path
-                                   for x in akz_proofs[variant]):
-                            akz_proofs[variant].append(proof)
-                        if not any(x.get('path')==path for x in proofs):
-                            proofs.append(proof)
-                    display.configure(text='Протоколов АКЗ №'+str(variant)+
-                                      ': '+str(len(akz_proofs[variant])))
-                except Exception as exc:self.error(exc)
-            ttk.Button(attachments,text='Приложить протокол АКЗ…',
-                       command=pick_akz_proof).pack(side='left',padx=5)
             variant_forms[n]={'frame':group,'fields':fields,
                               'coats':coats,'details':details}
 
@@ -712,9 +688,38 @@ class App:
             extra.insert('','end',values=(key,label,previous_fields.get(key,'')))
         proofs=list(self.facts.get('evidence',[]));proof_label=ttk.Label(d,text='Протоколов: '+str(len(proofs)));proof_label.pack()
         def add():
-            for f in filedialog.askopenfilenames(title='Первичные протоколы фактического контроля'):
-                proofs.append({'path':str(Path(f).resolve()),'sha256':sha(f)})
-            proof_label.configure(text='Протоколов: '+str(len(proofs)))
+            # One existing general evidence button; there is no duplicate
+            # "Приложить протокол АКЗ" control inside the climate frame.
+            # A source may be associated with АКЗ only after explicit
+            # confirmation; VIK/UZK protocols are NOT silently reused.
+            try:
+                used_variants=sorted({
+                    r['akz'] for r in assigned_marks()
+                    if type(r.get('akz')) is int
+                })
+                for f in filedialog.askopenfilenames(
+                        title='Подтверждённые первичные документы контроля'):
+                    source=str(Path(f).resolve())
+                    if any(item.get('path')==source for item in proofs):
+                        continue
+                    item={'path':source,'sha256':sha(source)}
+                    variant=None
+                    if len(used_variants)==1:
+                        number=used_variants[0]
+                        if messagebox.askyesno(
+                                'Тип первичного документа',
+                                Path(source).name+'\n'
+                                'Этот документ подтверждает текущую АКЗ №'+
+                                str(number)+'? Если нет, файл останется '
+                                'общим подтверждающим документом.'):
+                            variant=number
+                    if variant is not None:
+                        item.update(role='AKZ',variant=variant)
+                        akz_proofs[variant].append(item)
+                    proofs.append(item)
+                proof_label.configure(text='Протоколов: '+str(len(proofs)))
+            except Exception as exc:
+                self.error(exc)
         ttk.Button(d,text='Приложить первичные протоколы…',command=add).pack()
         approved=tk.BooleanVar(value=self.facts.get('confirmed',False));rights=tk.BooleanVar(value=self.facts.get('authorized',False));forms=tk.BooleanVar(value=self.facts.get('forms_approved',False))
         for variable,text in [(approved,'Подтверждаю фактические результаты; это не TEST/SAMPLE_ONLY'),(rights,'Подтверждаю право на выпуск и достоверность данных'),(forms,'Формы документов утверждены ответственным лицом')]:ttk.Checkbutton(d,text=text,variable=variable).pack(anchor='w',padx=12)
