@@ -51,7 +51,15 @@ def plan(cfg,project,number,vom,facts,new):
     existing=[e for e in r.projects[project] if e['number']==number]
     if new and existing or not new and len(existing)!=1:raise Stop('Дубль/не найден паспорт: '+number)
     v=model.visible_vom(safe(vom))
-    if not new and abs(v.mass-Decimal(str(existing[0]['mass'])))>Decimal('.005'):raise Stop('Масса ВОМ не совпадает с существующим паспортом.')
+    if not new and abs(v.mass-Decimal(str(existing[0]['mass'])))>Decimal('.005'):
+        raise Stop('Масса ВОМ не совпадает с существующим паспортом.')
+    if facts.get('auto_registry_dates'):
+        from .registry_dates import resolve_registry_dates
+        # For a new row, today's ending date is only a PROPOSAL. The other
+        # dates must result from valid source formulas on a private registry
+        # copy, never copied historic literals. Show the day at confirmation.
+        resolved=resolve_registry_dates(cfg,project,number,v,new)
+        facts={**facts,**resolved}
     variants=factual.validate(facts,v,project,number,cfg.get('training',False))
     for n in variants:
         for role in (f'akz{n}',f'akz_appendix{n}'):
