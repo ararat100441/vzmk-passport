@@ -117,10 +117,12 @@ class AutomaticActs(unittest.TestCase):
             self.assertIn('длина контроля',joint_text(item))
 
     def test_missing_accepted_profile_source_refused(self):
+        empty=self.dir/'EmptyForms'
+        empty.mkdir()
         with self.assertRaisesRegex(Stop,'справочник геометрии'):
             find_approved_geometry(
-                {'registry':str(self.dir/'ВЗМК.xlsx'),
-                 'documents':str(self.dir)},require=True)
+                {'registry':str(empty/'ВЗМК.xlsx'),
+                 'documents':str(empty)},require=True)
 
     def test_explicit_approved_source_no_new_gui_setting(self):
         path=find_approved_geometry({
