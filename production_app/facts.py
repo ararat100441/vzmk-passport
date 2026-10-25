@@ -181,11 +181,12 @@ def validate(facts,vom,project,number,training=False,require_review=False,*,defe
             validate_dry_averages(c['layers'],c.get('dry_averages'))
         else:
             numeric(c.get('thickness'),'Средняя толщина',Decimal('0.001'))
-        from .measurement_ranges import verify_midrange_provenance
+        from .measurement_ranges import (
+            verify_midrange_provenance,validate_temperature_order)
         verify_midrange_provenance(c)
+        validate_temperature_order(c)
         if c.get('layer_details') and not defer_registry_dates:
             validate_layer_details(c['layer_details'],facts)
-        if surface<dew+3:raise Stop('Температура поверхности менее чем на 3°C выше точки росы. Выпуск заблокирован.')
         if not str(c.get('material','')).strip() or not str(c.get('basis','')).strip():raise Stop('Нет материала/протокола послойных измерений АКЗ.')
     proofs=facts.get('evidence',[])
     if not proofs:raise Stop('Приложите первичные протоколы контроля с подтверждёнными результатами.')
