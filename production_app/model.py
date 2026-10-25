@@ -105,14 +105,42 @@ def profile(cfg,name):
     root=contained(p['root'],cfg['documents'])
     if not root.is_dir():raise Stop('Папка объекта отсутствует.')
     templates=p.get('templates',{})
-    required={'appendix','vik','uzk','quality'}
-    if not required.issubset(templates):raise Stop('Не привязаны шаблоны Приложение №1, ВИК, УЗК, качество.')
+    required={'vik','uzk','quality'} if cfg.get('auto_first_passport',False) else {'appendix','vik','uzk','quality'}
+    if not required.issubset(templates):
+        raise Stop('Не хватает подготовленных безопасных Word-форм: '+
+                   ', '.join(sorted(required-set(templates)))+
+                   '. Заполненные акты первого паспорта нельзя выпускать '
+                   'повторно без очистки старых результатов.')
     for role,ref in templates.items():
+        # The actual first Appendix will be validated/read separately below.
+        # An old manually cached appendix must NOT become a prerequisite.
+        if role=='appendix' and cfg.get('auto_first_passport',False):
+            continue
         path=contained(ref['path'],root)
-        if not path.is_file() or sha(path)!=ref['sha256']:raise Stop('Шаблон изменён/отсутствует: '+str(path))
+        if not path.is_file() or sha(path)!=ref['sha256']:
+            raise Stop('Шаблон изменён/отсутствует: '+str(path))
     if p.get('catalog'):
         catalog=contained(p['catalog'],root)
         if not catalog.is_file() or sha(catalog)!=p.get('catalog_sha256'):raise Stop('Изменён/отсутствует справочник марок объекта.')
+    # The approved EMPTY dynamic Word/AKZ forms remain pinned above. When
+    # the user enables automatic first-passport sources, the FIRST Appendix
+    # is taken directly from the project's historical issued workbook, which
+    # the established dynamic appendix engine can already safely process.
+    # Do NOT bind filled VIK/UZK/quality/AKZ acts as empty forms.
+    if cfg.get('auto_first_passport',False):
+        from .first_passport import discover_first_passport
+        project=select(read_registry(cfg['registry']),name)
+        inventory=discover_first_passport(cfg['documents'],project)
+        original=inventory['sources'].get('appendix')
+        if original is None:
+            raise Stop('Первый паспорт найден, но первое Приложение №1 '
+                       'отсутствует или не подтверждено. Не использован '
+                       'чужой подготовленный шаблон.')
+        result=dict(p)
+        result['templates']=dict(templates)
+        result['templates']['appendix']=dict(original)
+        result['first_passport_sources']=inventory
+        return result
     return p
 
 def visible_vom(path):

@@ -14,6 +14,7 @@ class App:
         try:self.cfg=read(local_root()/'settings.json') if (local_root()/'settings.json').exists() else {'profiles':{}}
         except Exception as exc:self.cfg={'profiles':{}};config_error=str(exc)
         self.plan=None;self.facts={};self.active=None;self.result_path=None;self.buttons=[]
+        self.first_reference=None  # read-only first issued passport, never copied as facts
         self.project=tk.StringVar();self.number=tk.StringVar();self.vom=tk.StringVar();self.new=tk.BooleanVar(value=False)
         self.project.trace_add('write',lambda *_:self.inputs_changed())
         self.number.trace_add('write',lambda *_:self.inputs_changed())
@@ -114,12 +115,38 @@ class App:
 
     def select_project(self):
         if self.active:return
-        self.invalidate();self.facts={}
+        self.invalidate();self.facts={};self.first_reference=None
         try:
             r=model.read_registry(self.cfg['registry']);name=self.project.get();entries=r.projects[name]
             self.numbers['values']=[str(e['number']) for e in entries]
             self.number.set(str(entries[0]['number']))
             p=model.select(r,name)
+            # The FIRST ISSUED passport is the automatic reference for THIS
+            # project only. Existing approved empty forms remain separate:
+            # never inject historical findings or signatures as new facts.
+            from .first_passport import discover_first_passport
+            self.cfg['auto_first_passport']=True
+            try:
+                self.first_reference=discover_first_passport(
+                    self.cfg['documents'],p)
+                refs=self.first_reference['sources']
+                self.write('Автоматически найден первый паспорт: '+
+                           p.first_number+' / '+
+                           self.first_reference['passport_root'])
+                for role in ('appendix','vik','uzk','quality','akz0','akz_appendix0'):
+                    if role in refs:
+                        self.write('Источник '+role+': '+refs[role]['path'])
+                if self.first_reference['missing']:
+                    self.write('Не найдены источники первого паспорта: '+
+                               ', '.join(self.first_reference['missing'])+
+                               '. Другие проекты не подставляются.')
+                else:
+                    self.write('Источники первого паспорта найдены. Первое '
+                               'Приложение №1 будет использовано напрямую; '
+                               'старые акты контроля остаются только образцами.')
+            except Stop as exc:
+                self.write('Автопоиск первого паспорта: '+str(exc)+
+                           ' Шаблоны других объектов не подставляются.')
             if self.new.get():self.numbers['values']=[p.next_number];self.number.set(p.next_number)
             self.write(f'{name}: первый {p.first_number}; последний {p.last_number}; следующий {p.next_number}')
             aliases=model.approved_legacy_aliases(name,entries)
@@ -136,30 +163,58 @@ class App:
         d=tk.Toplevel(self.root);d.title('Собственные источники: '+name);self.fit(d,1070,720);d.transient(self.root)
         d.grab_set();d.bind('<Escape>',lambda e:d.destroy())
         root=tk.StringVar(value=old.get('root',''));fields={}
-        ttk.Label(d,text='Папка только выбранного объекта').grid(row=0,column=0,padx=8,pady=8)
+        ttk.Label(d,text='Папка подготовленных форм объекта').grid(row=0,column=0,padx=8,pady=8)
         ttk.Entry(d,textvariable=root,width=85).grid(row=0,column=1);ttk.Button(d,text='Выбрать',command=lambda:self.choose(root,True)).grid(row=0,column=2)
         roles=['appendix','vik','uzk','quality']+[r+str(n) for n in range(4) for r in ('akz','akz_appendix')]
         for row,role in enumerate(roles,1):
-            var=tk.StringVar(value=old.get('templates',{}).get(role,{}).get('path',''));fields[role]=var
-            label={'appendix':'Приложение №1','vik':'ВИК','uzk':'УЗК','quality':'Документ о качестве'}.get(role,('Приложение АКЗ №' if role.startswith('akz_appendix') else 'Акт АКЗ №')+role[-1])
-            ttk.Label(d,text=label).grid(row=row,column=0,padx=8,pady=5,sticky='w');ttk.Entry(d,textvariable=var,width=85).grid(row=row,column=1)
-            ttk.Button(d,text='Файл…',command=lambda v=var:self.choose(v,False)).grid(row=row,column=2)
+            original=(self.first_reference or {}).get('sources',{}).get(role)
+            first_appendix=bool(role=='appendix' and original)
+            # First Appendix is dynamically sourced from issued passport;
+            # the other original acts are strictly read-only references.
+            display=(original['path'] if first_appendix else
+                     old.get('templates',{}).get(role,{}).get('path',''))
+            var=tk.StringVar(value=display);fields[role]=var
+            label={'appendix':('Приложение №1 (из первого паспорта)'
+                              if first_appendix else 'Приложение №1'),
+                   'vik':'ВИК','uzk':'УЗК','quality':'Документ о качестве'}.get(
+                   role,('Приложение АКЗ №' if role.startswith('akz_appendix')
+                         else 'Акт АКЗ №')+role[-1])
+            ttk.Label(d,text=label).grid(row=row,column=0,padx=8,pady=5,sticky='w')
+            ttk.Entry(d,textvariable=var,width=85,
+                      state='readonly' if first_appendix else 'normal').grid(
+                      row=row,column=1)
+            ttk.Button(d,text='Авто' if first_appendix else 'Файл…',
+                       state='disabled' if first_appendix else 'normal',
+                       command=lambda v=var:self.choose(v,False)).grid(row=row,column=2)
         catalog=tk.StringVar(value=old.get('catalog',''))
         ttk.Label(d,text='Справочник марок (если есть)').grid(row=13,column=0,padx=8,sticky='w');ttk.Entry(d,textvariable=catalog,width=85).grid(row=13,column=1);ttk.Button(d,text='Файл…',command=lambda:self.choose(catalog,False)).grid(row=13,column=2)
-        ttk.Label(d,text='appendix — первое приложение объекта. Word: утверждённые поля {{NUMBER}}, {{OBJECT}} и др.; УЗК: {{UZK_TABLE}}.\nСтарые акты с готовыми результатами не превращаются в новые подтверждённые результаты автоматически.',wraplength=990).grid(row=14,column=0,columnspan=3,pady=8)
+        ttk.Label(d,text=('Первый паспорт найден автоматически: '+
+            str((self.first_reference or {}).get('passport_root','не найден'))+
+            '. Первое Приложение №1 читается оттуда напрямую. Остальные поля — очищенные рабочие формы, созданные по образцам; старые результаты, измерения и подписи не копируются.'),wraplength=990).grid(row=14,column=0,columnspan=3,pady=8)
         def save_profile():
             try:
                 p={'root':str(model.contained(root.get(),self.cfg['documents'])),'templates':{}}
                 for role,var in fields.items():
+                    if role=='appendix' and (self.first_reference or {}).get('sources',{}).get('appendix'):
+                        # This visible path is deliberately outside the local
+                        # CLEAN-form directory. Preserve any old cached
+                        # record (for manual compatibility); the effective
+                        # production source is auto-selected and SHA-pinned
+                        # in model.profile, never stored as a guessed file.
+                        previous=old.get('templates',{}).get('appendix')
+                        if previous:p['templates']['appendix']=previous
+                        continue
                     if var.get():
-                        f=model.contained(var.get(),p['root']);p['templates'][role]={'path':str(f),'sha256':sha(f)}
+                        f=model.contained(var.get(),p['root'])
+                        p['templates'][role]={'path':str(f),'sha256':sha(f)}
                 if catalog.get():p['catalog']=str(model.contained(catalog.get(),p['root']));p['catalog_sha256']=sha(p['catalog'])
                 cfg=self.cfg|{'profiles':self.cfg.get('profiles',{})|{name:p}}
-                model.profile(cfg,name)
+                effective=model.profile(cfg,name)
                 from .templates import validate
                 project=model.select(model.read_registry(cfg['registry']),name)
-                variants=sorted({int(role[-1]) for role in p['templates'] if role.startswith('akz')})
-                validate(p,project,variants,cfg.get('training',False))
+                variants=sorted({int(role[-1]) for role in effective['templates']
+                                 if role.startswith('akz')})
+                validate(effective,project,variants,cfg.get('training',False))
                 self.cfg=cfg;save(local_root()/'settings.json',cfg);self.facts={};self.invalidate();d.destroy()
             except Exception as exc:self.error(exc)
         def forms():
