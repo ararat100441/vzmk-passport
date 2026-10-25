@@ -38,7 +38,7 @@ class App:
         tools=ttk.Frame(root,padding=(14,0));tools.pack(fill='x')
         # The first issued passport supplies the visual reference. The clean
         # approved forms remain an internal software asset, not a daily dialog.
-        for text,command in [('Фактические результаты',self.fact_dialog),('Черновик справочника',self.catalog),('Открыть подготовленные документы',self.open_documents),('Восстановление',self.recovery)]:
+        for text,command in [('Фактические результаты',self.fact_dialog),('Открыть документы',self.open_documents)]:
             ttk.Button(tools,text=text,command=command).pack(side='left',padx=(0,6),pady=5)
         steps=ttk.Frame(root,padding=14);steps.pack(fill='x')
         # A single user action; native Office/registry safety stages remain.
@@ -95,7 +95,7 @@ class App:
         shown=visible_settings(self.cfg)
         dialog=tk.Toplevel(self.root)
         dialog.title('Рабочие пути — три источника')
-        self.fit(dialog,1060,330)
+        self.fit(dialog,1060,380)
         dialog.transient(self.root)
         dialog.grab_set()
         selected={key:tk.StringVar(value=value)
@@ -155,6 +155,12 @@ class App:
         ttk.Button(dialog,text='Создать учебную копию',
                    command=lambda:store(True)).grid(
                    row=4,column=1,sticky='e',pady=12)
+        def open_recovery():
+            dialog.destroy()
+            self.recovery()
+        ttk.Button(dialog,text='Восстановление после сбоя',
+                   command=open_recovery).grid(
+                   row=5,column=1,sticky='w',pady=6)
 
     def refresh(self):
         if self.active:return
