@@ -14,6 +14,7 @@ class App:
         try:self.cfg=read(local_root()/'settings.json') if (local_root()/'settings.json').exists() else {'profiles':{}}
         except Exception as exc:self.cfg={'profiles':{}};config_error=str(exc)
         self.plan=None;self.facts={};self.active=None;self.result_path=None;self.buttons=[]
+        self.preview_pdf=None
         self.first_reference=None  # read-only first issued passport, never copied as facts
         self.project=tk.StringVar();self.number=tk.StringVar();self.vom=tk.StringVar();self.new=tk.BooleanVar(value=False)
         self.project.trace_add('write',lambda *_:self.inputs_changed())
@@ -37,8 +38,10 @@ class App:
         tools=ttk.Frame(root,padding=(14,0));tools.pack(fill='x')
         for text,command in [('Шаблоны объекта',self.profile),('Фактические результаты',self.fact_dialog),('Черновик справочника',self.catalog),('Открыть подготовленные документы',self.open_documents),('Восстановление',self.recovery)]:ttk.Button(tools,text=text,command=command).pack(side='left',padx=(0,6),pady=5)
         steps=ttk.Frame(root,padding=14);steps.pack(fill='x')
-        for label,command in [('1. Проверить данные',self.check),('2. Подготовить документы',self.prepare),('3. Проверить комплект',self.verify),('4. Подтвердить выпуск и запись',self.issue)]:
-            b=ttk.Button(steps,text=label,command=command);b.pack(side='left',expand=True,fill='x',padx=3);self.buttons.append(b)
+        # A single user action; native Office/registry safety stages remain.
+        button=ttk.Button(steps,text='Сформировать пакет',command=self.check)
+        button.pack(fill='x',expand=True)
+        self.buttons.append(button)
         self.progress=ttk.Label(root,text='Выберите рабочие пути. Реестр пока не изменяется.');self.progress.pack(fill='x',padx=15)
         ttk.Label(root,text='TEST/SAMPLE_ONLY не являются результатами контроля. Выпуск требует протоколов, проверки Office и отдельного подтверждения.',wraplength=940).pack(side='bottom',padx=14,pady=(0,12))
         self.log=tk.Text(root,wrap='word',font=('Segoe UI',10),state='disabled',height=10);self.log.pack(fill='both',expand=True,padx=14,pady=12)
@@ -69,8 +72,9 @@ class App:
         self.log.configure(state='normal');self.log.insert('end',str(text)+'\n');self.log.see('end');self.log.configure(state='disabled')
 
     def invalidate(self):
-        self.plan=None
-        for n,b in enumerate(self.buttons):b.configure(state='normal' if n==0 and not self.active else 'disabled')
+        self.plan=None;self.preview_pdf=None
+        for b in self.buttons:
+            b.configure(state='normal' if not self.active else 'disabled',text='Сформировать пакет')
 
     def inputs_changed(self):
         self.facts={};self.invalidate()
@@ -463,25 +467,75 @@ class App:
         if target:self.run('catalog',{'vom':self.vom.get(),'target':target},lambda r:self.write('Черновик: '+r['path']+'; профиль/краска/АКЗ пустые.'))
 
     def check(self):
-        if not all(self.cfg.get(k) for k in ('registry','documents','output')):self.error('Сначала выберите рабочие пути в «Настройки путей».');return
-        if not self.project.get() or not self.number.get() or not self.vom.get():self.error('Выберите объект, паспорт и отгрузочную ВОМ.');return
-        if not self.facts:self.error('Введите и подтвердите фактические результаты контроля. TEST-данные для рабочего выпуска запрещены.');return
-        self.run('check',{'cfg':self.cfg,'project':self.project.get(),'number':self.number.get(),'vom':self.vom.get(),'facts':self.facts,'new':self.new.get()},self.checked)
+        if self.active:return
+        if self.plan and self.preview_pdf:
+            self.review_preview()
+            return
+        if not all(self.cfg.get(k) for k in ('registry','documents','output')):
+            self.error('Сначала выберите рабочие пути в «Настройки путей».');return
+        if not self.project.get() or not self.number.get() or not self.vom.get():
+            self.error('Выберите объект, паспорт и отгрузочную ВОМ.');return
+        if not self.facts:
+            self.error('Откройте «Фактические результаты» и проверьте сведения '
+                       'текущей отгрузки. Старые протоколы не подставляются.')
+            return
+        self.run('check',{'cfg':self.cfg,'project':self.project.get(),
+                          'number':self.number.get(),'vom':self.vom.get(),
+                          'facts':self.facts,'new':self.new.get()},self.checked)
+
     def checked(self,result):
-        self.plan=result['plan'];self.buttons[1].configure(state='normal');d=result['data']
-        self.write(f"PASS. {d['project']} | {d['number']} | {d['marks']} марок / {d['quantity']} изделий / {d['mass_kg']} кг\nРеестр: {d['registry']}\nНовая папка: {d['target']}\nАКЗ: {d['variants']}. Источники закреплены SHA-256.")
-    def prepare(self):self.run('prepare',{'path':self.plan},lambda r:(self.write('Подготовлено файлов: '+str(r['files'])+'; '+r['folder']),self.buttons[1].configure(state='disabled'),self.buttons[2].configure(state='normal')))
-    def verify(self):self.run('verify',{'path':self.plan},lambda r:(self.write('Комплект PASS. Просмотрите каждый файл перед подтверждением.\n'+str(r['documents'])),self.buttons[3].configure(state='normal')))
+        self.plan=result['plan']
+        self.facts=result['data']['facts']
+        d=result['data']
+        self.write(f"Данные проверены: {d['project']} | {d['number']} | "
+                   f"{d['marks']} марок / {d['quantity']} изделий / "
+                   f"{d['mass_kg']} кг. Дата паспорта: {d['date']}.")
+        self.run('prepare',{'path':self.plan},self.prepared)
+
+    def prepared(self,result):
+        self.write('Word и Excel подготовлены: '+str(result['files'])+' файлов.')
+        self.run('verify',{'path':self.plan,'preview':True},self.verified)
+
+    def verified(self,result):
+        self.preview_pdf=result.get('preview_pdf')
+        if not self.preview_pdf or not Path(self.preview_pdf).is_file():
+            self.error('Не создан черновой PDF: выпуск запрещён.')
+            return
+        self.buttons[0].configure(text='Просмотреть и подтвердить')
+        self.review_preview()
+
+    def review_preview(self):
+        if not self.preview_pdf:return
+        try:
+            os.startfile(self.preview_pdf)
+        except Exception as exc:
+            self.error('Не удалось открыть черновой PDF: '+str(exc))
+            return
+        if not messagebox.askyesno(
+            'Просмотр комплекта перед выпуском',
+            'Открылся ЧЕРНОВОЙ PDF (не официальный выпуск).\n'
+            'Проверьте страницы, номера, марки, даты, результаты '
+            'контроля и АКЗ.\n\n'
+            'После подтверждения программа снова проверит файлы, '
+            'сохранит выпуск и обновит реестр с резервной копией.\n'
+            'Подтверждаете выпуск?',
+        ):
+            self.write('Документы подготовлены, но выпуск не подтверждён. '
+                       'Реестр не изменён. Для продолжения нажмите '
+                       '«Просмотреть и подтвердить».')
+            return
+        self.issue()
+
     def open_documents(self):
         if self.plan:
             folder=Path(self.plan).parent/'documents'
             if folder.is_dir():os.startfile(folder)
     def issue(self):
-        if not self.plan:return
+        if not self.plan or not self.preview_pdf:return
         d=read(self.plan)
         message=f"{'УЧЕБНАЯ КОПИЯ' if self.cfg.get('training') else 'РАБОЧИЙ ВЫПУСК'}\nОбъект: {d['project']}\nПаспорт: {d['number']}\nРеестр: {d['registry']}\nРезервная копия: {Path(d['registry']).parent/'.vzmk-operations'/d['id']/'backup.xlsx'}\nРезультат: {d['target']}\n"+('Будет добавлена ОДНА новая строка.' if d['new'] else 'Существующий паспорт: строки реестра не добавляются.')+'\n\nПодтверждаете, что просмотрели ВСЕ документы, фактические результаты и полномочия ответственного?'
         if not messagebox.askyesno('Отдельное подтверждение выпуска',message):return
-        self.run('confirm',{'path':self.plan,'responsible':self.facts['responsible'],'reviewed':True},lambda r:self.run('release',{'path':self.plan},self.released))
+        self.run('confirm',{'path':self.plan,'responsible':self.facts.get('responsible',''),'reviewed':True},lambda r:self.run('release',{'path':self.plan},self.released))
     def released(self,r):self.run('commit',{'path':self.plan,'release_result':self.result_path},self.committed)
     def committed(self,r):self.run('readback',{'journal':r['journal']},lambda v:self.run('complete',{'journal':r['journal'],'readback_result':self.result_path},self.completed))
     def completed(self,r):
