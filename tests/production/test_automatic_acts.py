@@ -15,6 +15,10 @@ from production_app.automatic_acts import (
     joint_text,ordered_vik_names,
 )
 from production_app.storage import Stop,sha
+from production_app.word_controls import inspect_word_fields,BINDABLE_FIELDS
+from production_app import office
+from zipfile import ZipFile
+import inspect
 
 
 HEADER=[
@@ -135,6 +139,29 @@ class AutomaticActs(unittest.TestCase):
         make_book(self.book,modified=True)
         with self.assertRaisesRegex(Stop,'структура'):
             calculate_design_characteristics(self.vom,self.facts,self.book)
+
+    def test_word_sources_accept_optional_dynamic_mark_and_design_tokens(self):
+        with TemporaryDirectory() as tmp:
+            file=Path(tmp)/'BlankWord.docx'
+            xml=(
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+                'wordprocessingml/2006/main"><w:body>'
+                '<w:p><w:r><w:t>{{VIK_MARKS}}</w:t></w:r></w:p>'
+                '<w:p><w:r><w:t>{{UZK_DESIGN}}</w:t></w:r></w:p>'
+                '</w:body></w:document>'
+            )
+            with ZipFile(file,'w') as z:
+                z.writestr('word/document.xml',xml)
+            tokens,controls=inspect_word_fields(file)
+            self.assertEqual(tokens,{'VIK_MARKS','UZK_DESIGN'})
+            self.assertFalse(controls)
+            self.assertTrue(tokens.issubset(BINDABLE_FIELDS))
+        code=inspect.getsource(office.render)
+        self.assertIn("values['VIK_MARKS']",code)
+        self.assertIn("values['UZK_DESIGN']",code)
+        self.assertIn('ordered_vik_names(vom)',code)
+        self.assertIn("facts.get('uzk_design',[])",code)
 
     def test_mismatched_vom_marks_refused(self):
         self.facts['marks'].append({
