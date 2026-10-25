@@ -67,8 +67,15 @@ def plan(cfg,project,number,vom,facts,new):
     profile_geometry_source=None
     from .word_controls import inspect_word_fields
     tokens,controls=inspect_word_fields(profile['templates']['uzk']['path'])
+    first_uzk=(profile.get('first_passport_sources',{})
+               .get('sources',{}).get('uzk'))
+    historical_uzk=False
+    if first_uzk:
+        from .highlighted_reference import supports_uzk_first
+        historical_uzk=supports_uzk_first(first_uzk['path'])
     wants_design=('UZK_DESIGN' in (tokens|controls) or
-                  cfg.get('auto_uzk_characteristics') is True)
+                  cfg.get('auto_uzk_characteristics') is True or
+                  historical_uzk)
     if wants_design:
         from .automatic_acts import (
             find_approved_geometry,calculate_design_characteristics,
