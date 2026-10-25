@@ -14,6 +14,7 @@ class App:
         try:self.cfg=read(local_root()/'settings.json') if (local_root()/'settings.json').exists() else {'profiles':{}}
         except Exception as exc:self.cfg={'profiles':{}};config_error=str(exc)
         self.plan=None;self.facts={};self.active=None;self.result_path=None;self.buttons=[]
+        self.first_reference=None  # read-only first issued passport, never copied as facts
         self.project=tk.StringVar();self.number=tk.StringVar();self.vom=tk.StringVar();self.new=tk.BooleanVar(value=False)
         self.project.trace_add('write',lambda *_:self.inputs_changed())
         self.number.trace_add('write',lambda *_:self.inputs_changed())
@@ -114,12 +115,38 @@ class App:
 
     def select_project(self):
         if self.active:return
-        self.invalidate();self.facts={}
+        self.invalidate();self.facts={};self.first_reference=None
         try:
             r=model.read_registry(self.cfg['registry']);name=self.project.get();entries=r.projects[name]
             self.numbers['values']=[str(e['number']) for e in entries]
             self.number.set(str(entries[0]['number']))
             p=model.select(r,name)
+            # The FIRST ISSUED passport is the automatic reference for THIS
+            # project only. Existing approved empty forms remain separate:
+            # never inject historical findings or signatures as new facts.
+            from .first_passport import discover_first_passport
+            self.cfg['auto_first_passport']=True
+            try:
+                self.first_reference=discover_first_passport(
+                    self.cfg['documents'],p)
+                refs=self.first_reference['sources']
+                self.write('Автоматически найден первый паспорт: '+
+                           p.first_number+' / '+
+                           self.first_reference['passport_root'])
+                for role in ('appendix','vik','uzk','quality','akz0','akz_appendix0'):
+                    if role in refs:
+                        self.write('Источник '+role+': '+refs[role]['path'])
+                if self.first_reference['missing']:
+                    self.write('Не найдены источники первого паспорта: '+
+                               ', '.join(self.first_reference['missing'])+
+                               '. Другие проекты не подставляются.')
+                else:
+                    self.write('Источники первого паспорта найдены. Первое '
+                               'Приложение №1 будет использовано напрямую; '
+                               'старые акты контроля остаются только образцами.')
+            except Stop as exc:
+                self.write('Автопоиск первого паспорта: '+str(exc)+
+                           ' Шаблоны других объектов не подставляются.')
             if self.new.get():self.numbers['values']=[p.next_number];self.number.set(p.next_number)
             self.write(f'{name}: первый {p.first_number}; последний {p.last_number}; следующий {p.next_number}')
             aliases=model.approved_legacy_aliases(name,entries)
@@ -146,7 +173,7 @@ class App:
             ttk.Button(d,text='Файл…',command=lambda v=var:self.choose(v,False)).grid(row=row,column=2)
         catalog=tk.StringVar(value=old.get('catalog',''))
         ttk.Label(d,text='Справочник марок (если есть)').grid(row=13,column=0,padx=8,sticky='w');ttk.Entry(d,textvariable=catalog,width=85).grid(row=13,column=1);ttk.Button(d,text='Файл…',command=lambda:self.choose(catalog,False)).grid(row=13,column=2)
-        ttk.Label(d,text='appendix — первое приложение объекта. Word: утверждённые поля {{NUMBER}}, {{OBJECT}} и др.; УЗК: {{UZK_TABLE}}.\nСтарые акты с готовыми результатами не превращаются в новые подтверждённые результаты автоматически.',wraplength=990).grid(row=14,column=0,columnspan=3,pady=8)
+        ttk.Label(d,text='Источники первого паспорта находятся АВТОМАТИЧЕСКИ в рабочих документах объекта. Первое Приложение №1 используется напрямую; перечисленные здесь Word/АКЗ — отдельные очищенные копии для генератора. Старые результаты контроля, даты и подписи не переносятся в новый паспорт.',wraplength=990).grid(row=14,column=0,columnspan=3,pady=8)
         def save_profile():
             try:
                 p={'root':str(model.contained(root.get(),self.cfg['documents'])),'templates':{}}
