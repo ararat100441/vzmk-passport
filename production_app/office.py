@@ -11,6 +11,7 @@ from .model import filename,columns
 from .word_controls import fill_word_controls
 from .facts import validate_layer_ranges,validate_dry_averages,validate_layer_details
 from .real_forms import values_for_documents,validate_uzk_details,UZK_HEADERS,uzk_details_to_table
+from .automatic_acts import ordered_vik_names,joint_text
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
@@ -411,6 +412,11 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
         if values[k.upper()]!=actual:raise Stop('Фактическая дата '+k+' ('+actual+') не совпадает с формулой/данными реестра ('+values[k.upper()]+'). Ничего не подставлено автоматически.')
     values['MASS']=str(vom.mass);values['CONNECTIONS']=vom.connections
     values['NUMBER']=facts['number']
+    values['VIK_MARKS']='; '.join(ordered_vik_names(vom))
+    values['UZK_DESIGN']='; '.join(
+        row['mark']+': '+joint_text(row)
+        for row in facts.get('uzk_design',[])
+    )
     values.update(values_for_documents(facts,{c['variant'] for c in facts['climates']}))
     prefix='УЧЕБНЫЙ КОМПЛЕКТ — НЕ ДЛЯ ВЫПУСКА' if training else 'ЧЕРНОВИК — НЕ ДЛЯ ВЫПУСКА'
     by_mark={str(m['mark']):m for m in facts['marks']}
