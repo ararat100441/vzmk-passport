@@ -65,24 +65,22 @@ def plan(cfg,project,number,vom,facts,new):
     # Stage4 profile geometry when its approved workbook is available.
     # Calculated S/L/frequency/angle NEVER imply inspection GОДЕН.
     profile_geometry_source=None
-    if any(int(str(item.get('uzk_quantity') or '0'))>0
-           for item in facts.get('marks',[])
-           if str(item.get('uzk_quantity') or '0').isdigit()):
+    from .word_controls import inspect_word_fields
+    tokens,controls=inspect_word_fields(profile['templates']['uzk']['path'])
+    wants_design=('UZK_DESIGN' in (tokens|controls) or
+                  cfg.get('auto_uzk_characteristics') is True)
+    if wants_design:
         from .automatic_acts import (
             find_approved_geometry,calculate_design_characteristics,
         )
-        from .word_controls import inspect_word_fields
-        tokens,_=inspect_word_fields(profile['templates']['uzk']['path'])
-        requested='UZK_DESIGN' in tokens
-        profile_geometry_source=find_approved_geometry(cfg,require=requested)
-        if profile_geometry_source is not None:
-            computed=calculate_design_characteristics(
-                v,facts,profile_geometry_source,
-                expected_sha=cfg.get('profiles_workbook_sha256'))
-            facts={**facts,'uzk_design':computed}
-        elif requested:
-            raise Stop('УЗК: форма требует характеристики, но источник '
-                       'утверждённой геометрии не найден.')
+        # Only explicitly adapted/approved Word forms opt in to this newer
+        # source. Do not change the behavior of existing 383-pass Windows
+        # E2E that uses historical five/eight-column forms without the marker.
+        profile_geometry_source=find_approved_geometry(cfg,require=True)
+        computed=calculate_design_characteristics(
+            v,facts,profile_geometry_source,
+            expected_sha=cfg.get('profiles_workbook_sha256'))
+        facts={**facts,'uzk_design':computed}
     if facts.get('auto_registry_dates'):
         from .registry_dates import resolve_registry_dates
         # For a new row, today's ending date is a PROPOSAL.
