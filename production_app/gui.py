@@ -190,8 +190,19 @@ class App:
             ttk.Button(d,text='Авто' if first_appendix else 'Файл…',
                        state='disabled' if first_appendix else 'normal',
                        command=lambda v=var:self.choose(v,False)).grid(row=row,column=2)
-        catalog=tk.StringVar(value=old.get('catalog',''))
-        ttk.Label(d,text='Справочник марок (если есть)').grid(row=13,column=0,padx=8,sticky='w');ttk.Entry(d,textvariable=catalog,width=85).grid(row=13,column=1);ttk.Button(d,text='Файл…',command=lambda:self.choose(catalog,False)).grid(row=13,column=2)
+        auto_catalog=(self.first_reference or {}).get('catalog')
+        catalog=tk.StringVar(value=auto_catalog['path'] if auto_catalog
+                             else old.get('catalog',''))
+        ttk.Label(d,text='Справочник профилей / АКЗ (авто)' if auto_catalog
+                  else 'Справочник марок (если есть)').grid(
+                  row=13,column=0,padx=8,sticky='w')
+        ttk.Entry(d,textvariable=catalog,width=85,
+                  state='readonly' if auto_catalog else 'normal').grid(
+                  row=13,column=1)
+        ttk.Button(d,text='Авто' if auto_catalog else 'Файл…',
+                   state='disabled' if auto_catalog else 'normal',
+                   command=lambda:self.choose(catalog,False)).grid(
+                   row=13,column=2)
         ttk.Label(d,text=('Первый паспорт найден автоматически: '+
             str((self.first_reference or {}).get('passport_root','не найден'))+
             '. Первое Приложение №1 читается оттуда напрямую. Остальные поля — очищенные рабочие формы, созданные по образцам; старые результаты, измерения и подписи не копируются.'),wraplength=990).grid(row=14,column=0,columnspan=3,pady=8)
@@ -211,7 +222,16 @@ class App:
                     if var.get():
                         f=model.contained(var.get(),p['root'])
                         p['templates'][role]={'path':str(f),'sha256':sha(f)}
-                if catalog.get():p['catalog']=str(model.contained(catalog.get(),p['root']));p['catalog_sha256']=sha(p['catalog'])
+                if auto_catalog:
+                    # Model.profile reads the pinned REAL project catalogue,
+                    # which is outside the clean Templates folder.
+                    previous=old.get('catalog')
+                    if previous:
+                        p['catalog']=previous
+                        p['catalog_sha256']=old['catalog_sha256']
+                elif catalog.get():
+                    p['catalog']=str(model.contained(catalog.get(),p['root']))
+                    p['catalog_sha256']=sha(p['catalog'])
                 cfg=self.cfg|{'profiles':self.cfg.get('profiles',{})|{name:p}}
                 effective=model.profile(cfg,name)
                 from .templates import validate
