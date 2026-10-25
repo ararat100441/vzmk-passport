@@ -97,7 +97,8 @@ def plan(cfg,project,number,vom,facts,new):
     if catalog and Path(catalog).is_file():inputs.append(catalog)
     if shared_uzk is not None:inputs.append(shared_uzk)
     # Frozen human entries supply explicitly confirmed assignments when no catalog exists.
-    target=output/project/'Паспорт'/(model.filename(number)+' от '+date.fromisoformat(facts['date']).strftime('%d.%m.%Y'))
+    passport_folder=model.output_passport_directory(cfg,project,profile)
+    target=passport_folder/(model.filename(number)+' от '+date.fromisoformat(facts['date']).strftime('%d.%m.%Y'))
     safe(target)
     if target.exists():raise Stop('Папка готового комплекта уже существует: '+str(target))
     hashes=pins(inputs)
