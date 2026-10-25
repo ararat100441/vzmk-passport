@@ -26,7 +26,12 @@ def training_copy(cfg,parent):
     with locked_file(source) as payload:target.write_bytes(payload)
     mark={'schema':'VZMK_TRAINING_COPY_1','registry':str(target),'source':str(source),'original_sha256':sha(source),'id':root.name}
     save(root/'TRAINING_COPY.json',mark)
-    return cfg|{'registry':str(target),'output':str(root),'training':True}
+    # Preserve the separately selected historical source root READ ONLY.
+    # Before training, `output` is a user-selected folder containing the
+    # original passports; after creating the sandbox, output points to TEMP.
+    archive=cfg.get('first_passport_documents') or cfg['output']
+    return cfg|{'registry':str(target),'output':str(root),
+                'first_passport_documents':str(archive),'training':True}
 
 def training_guard(cfg):
     if not cfg.get('training'):return
