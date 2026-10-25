@@ -105,11 +105,20 @@ def profile(cfg,name):
     root=contained(p['root'],cfg['documents'])
     if not root.is_dir():raise Stop('Папка объекта отсутствует.')
     templates=p.get('templates',{})
-    required={'appendix','vik','uzk','quality'}
-    if not required.issubset(templates):raise Stop('Не привязаны шаблоны Приложение №1, ВИК, УЗК, качество.')
+    required={'vik','uzk','quality'} if cfg.get('auto_first_passport',False) else {'appendix','vik','uzk','quality'}
+    if not required.issubset(templates):
+        raise Stop('Не хватает подготовленных безопасных Word-форм: '+
+                   ', '.join(sorted(required-set(templates)))+
+                   '. Заполненные акты первого паспорта нельзя выпускать '
+                   'повторно без очистки старых результатов.')
     for role,ref in templates.items():
+        # The actual first Appendix will be validated/read separately below.
+        # An old manually cached appendix must NOT become a prerequisite.
+        if role=='appendix' and cfg.get('auto_first_passport',False):
+            continue
         path=contained(ref['path'],root)
-        if not path.is_file() or sha(path)!=ref['sha256']:raise Stop('Шаблон изменён/отсутствует: '+str(path))
+        if not path.is_file() or sha(path)!=ref['sha256']:
+            raise Stop('Шаблон изменён/отсутствует: '+str(path))
     if p.get('catalog'):
         catalog=contained(p['catalog'],root)
         if not catalog.is_file() or sha(catalog)!=p.get('catalog_sha256'):raise Stop('Изменён/отсутствует справочник марок объекта.')
