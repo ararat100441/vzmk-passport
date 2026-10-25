@@ -15,6 +15,7 @@ class App:
         except Exception as exc:self.cfg={'profiles':{}};config_error=str(exc)
         self.plan=None;self.facts={};self.active=None;self.result_path=None;self.buttons=[]
         self.last_output_folder=None
+        self.last_output_project=None
         self.preview_pdf=None
         self.first_reference=None  # read-only first issued passport, never copied as facts
         self.project=tk.StringVar();self.number=tk.StringVar();self.vom=tk.StringVar();self.new=tk.BooleanVar(value=False)
@@ -918,7 +919,7 @@ class App:
     def open_documents(self):
         """Open the latest completed passport or the current prepared drafts."""
         candidates=[]
-        if self.last_output_folder:
+        if self.last_output_folder and self.last_output_project==self.project.get():
             candidates.append(Path(self.last_output_folder))
         if self.plan:
             candidates.append(Path(self.plan).parent/'documents')
@@ -946,6 +947,7 @@ class App:
     def completed(self,r):
         if r.get('folder'):
             self.last_output_folder=str(r['folder'])
+            self.last_output_project=self.project.get()
         self.write('ГОТОВО. '+str(r))
         # Store preferences only for an actually completed production issue.
         # Old protocols, measurement thicknesses, dates and approvals never
