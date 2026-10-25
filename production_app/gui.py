@@ -333,6 +333,10 @@ class App:
         if not variants and (self.first_reference or {}).get('sources',{}).get('akz0'):
             variants=[0]  # reference for display only, not confirmed assignment
         variant_forms={}
+        # Proofs for АКЗ must be explicitly associated with that variant;
+        # a generic VIK/UZK proof cannot be silently called АКЗ evidence.
+        akz_proofs={n:list(self.facts.get('akz_proofs',{}).get(str(n),[]))
+                    for n in range(4)}
         prev={int(entry['variant']):entry
               for entry in self.facts.get('climates',[])}
         akz_notice=ttk.Label(d,wraplength=1080,justify='left')
@@ -414,6 +418,30 @@ class App:
                     record=previous.get(layer,{})
                     details.insert('','end',values=(layer,)+tuple(
                         record.get(k,'') for k in detailkeys[1:]))
+            attachments=ttk.Frame(group)
+            attachments.grid(row=len(measurements)+5,column=0,
+                             columnspan=3,sticky='w',pady=5)
+            count_label=ttk.Label(
+                attachments,text='Протоколов АКЗ №'+str(n)+': '+
+                                 str(len(akz_proofs[n])))
+            count_label.pack(side='left',padx=5)
+            def pick_akz_proof(variant=n,display=count_label):
+                try:
+                    for raw in filedialog.askopenfilenames(
+                            title='Первичный протокол АКЗ №'+str(variant)):
+                        path=str(Path(raw).resolve())
+                        proof={'path':path,'sha256':sha(path),
+                               'role':'AKZ','variant':variant}
+                        if not any(x.get('path')==path
+                                   for x in akz_proofs[variant]):
+                            akz_proofs[variant].append(proof)
+                        if not any(x.get('path')==path for x in proofs):
+                            proofs.append(proof)
+                    display.configure(text='Протоколов АКЗ №'+str(variant)+
+                                      ': '+str(len(akz_proofs[variant])))
+                except Exception as exc:self.error(exc)
+            ttk.Button(attachments,text='Приложить протокол АКЗ…',
+                       command=pick_akz_proof).pack(side='left',padx=5)
             variant_forms[n]={'frame':group,'fields':fields,
                               'coats':coats,'details':details}
 
@@ -561,8 +589,10 @@ class App:
                     climate['material']=', '.join(colors)
                     # A protocol reference is never generated from a filename
                     # unless the operator actually attached that real file.
+                    # Only proof files explicitly selected for this АКЗ
+                    # variant can supply the coating's protocol reference.
                     climate['basis']='; '.join(
-                        Path(proof['path']).name for proof in proofs)
+                        Path(proof['path']).name for proof in akz_proofs[variant])
                     details=info['details']
                     if details is not None:
                         detailkeys=('layer','material','paint_batch','hardener_batch',
@@ -576,6 +606,8 @@ class App:
                                 rows.append(vals)
                         if rows:climate['layer_details']=rows
                     data['climates'].append(climate)
+                data['akz_proofs']={str(n):list(akz_proofs[n])
+                                    for n in used if akz_proofs[n]}
                 data['uzk_details']=list(imported_uzk)
                 data['doc_fields']={}
                 for item in extra.get_children():
