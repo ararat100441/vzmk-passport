@@ -4,15 +4,16 @@ All registries here are synthetic and only temp copies are written.
 H353 reproduces the approved Garage Kazakhstan first passport layout.
 """
 import unittest
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from openpyxl import Workbook
+from openpyxl import Workbook,load_workbook
 
-from production_app.registry_dates import first_passport_start
+from production_app.registry_dates import first_passport_start,resolve_registry_dates
 from production_app.storage import Stop, sha
 
 
@@ -72,6 +73,72 @@ class FirstStartDate(unittest.TestCase):
                        return_value={'START_DATE':8}):
                 with self.assertRaisesRegex(Stop,'начала изготовления'):
                     first_passport_start(registry,project)
+
+
+    def test_new_passport_refuses_mismatched_start_on_disposable_copy(self):
+        with TemporaryDirectory() as td:
+            path=Path(td)/'COPY_ВЗМК.xlsx'
+            book=Workbook()
+            sheet=book.active
+            sheet.title='Паспорт качества'
+            sheet['H353']=date(2026,5,14)
+            sheet['I353']=date(2026,6,1)
+            for key in ('J','K','L'):
+                sheet[key+'353']='=I353'  # true current-date formulas
+            book.save(path);book.close()
+            original=sha(path)
+            fields={
+                'START_DATE':8,'END_DATE':9,'VIK_DATE':10,
+                'UZK_DATE':11,'AKZ_DATE':12
+            }
+            project=SimpleNamespace(first_row=353,next_number='11/2026')
+
+            def fake_registry(file):
+                w=load_workbook(file,data_only=False)
+                try:
+                    present=w['Паспорт качества']['I354'].value is not None
+                finally:w.close()
+                entries=[{'row':353,'number':'1/2026'}]
+                if present:entries.append({'row':354,'number':'11/2026'})
+                return SimpleNamespace(path=Path(file),
+                    sheet='Паспорт качества',digest=sha(file),
+                    projects={'Гараж Казахстан':entries})
+
+            @contextmanager
+            def no_native_excel():
+                yield object()
+
+            def bad_copy(excel,copy,registry,selected,vom,day):
+                w=load_workbook(copy)
+                try:
+                    s=w['Паспорт качества']
+                    s['H354']=date(2026,10,1)  # invalid new manufacturing start
+                    for key in ('I','J','K','L'):
+                        s[key+'354']=day
+                    w.save(copy)
+                finally:w.close()
+                return 354,{}
+            with patch('production_app.registry_dates.read_registry',
+                       side_effect=fake_registry),\
+                 patch('production_app.registry_dates.model.select',
+                       return_value=project),\
+                 patch('production_app.registry_dates.model.columns',
+                       return_value=fields),\
+                 patch('production_app.registry_dates.excel_session',
+                       side_effect=no_native_excel),\
+                 patch('production_app.registry_dates.append_row',
+                       side_effect=bad_copy):
+                with self.assertRaisesRegex(
+                        Stop,'не совпала.*первого паспорта'):
+                    resolve_registry_dates(
+                        {'registry':str(path)},'Гараж Казахстан',
+                        '11/2026',None,True,day=date(2026,10,25))
+            self.assertEqual(sha(path),original)
+            w=load_workbook(path)
+            try:
+                self.assertIsNone(w['Паспорт качества']['I354'].value)
+            finally:w.close()
+
 
 
 if __name__=='__main__':
