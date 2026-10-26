@@ -133,7 +133,7 @@ class FirstAKZContract(unittest.TestCase):
         s=Sheet()
         s.data['E4']='1/2026 от '
         for pos,formula in AKZ_FORMULAS.items():s.Range(pos).Formula=formula
-        with self.assertRaisesRegex(Stop,'измеренного значения'):
+        with self.assertRaisesRegex(Stop,'нечисловое поле'):
             fill_first_akz(
                 s,number='11/2026',akz_date='2026-10-22',
                 climate={'variant':0,'thickness':'','air':'22',
