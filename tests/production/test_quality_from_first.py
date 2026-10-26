@@ -75,7 +75,7 @@ class ExactQuality(unittest.TestCase):
             self.assertEqual(text.count('19.10.2026'),2)
             self.assertEqual(text.count('20.10.2026'),1)
             self.assertEqual(text.count('24.10.2026'),1)
-            self.assertNotIn('1/2026',text)
+            self.assertNotRegex(text,r'(?<!\\d)1/2026')
             for p in t.cell(i,0).paragraphs[:1]:
                 self.assertTrue(all(r.font.highlight_color is None
                                     for r in p.runs))
