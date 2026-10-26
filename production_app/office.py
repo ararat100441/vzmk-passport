@@ -190,7 +190,7 @@ def verify_appendix_print_layout(sheet,expected=None):
     actual=str(sheet.PageSetup.PrintTitleRows or '').replace('$','')
     # Excel may prepend the sheet name to the A1-style range.
     actual=actual.rsplit('!',1)[-1].strip().upper()
-    if actual not in ('3:3','3:4'):
+    if actual not in ('2:3','3:3','3:4'):
         raise Stop('Excel повторяет длинные строки названия/объекта или не '
                    'сохранил компактную шапку таблицы: '+actual)
     if expected is not None and actual!=expected:
@@ -423,13 +423,67 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
     totals={}
     for r in vom.rows:totals[str(r[0])]=totals.get(str(r[0]),0)+r[2]
     outputs=[]
+    first_sources=profile.get('first_passport_sources',{}).get('sources',{})
     with excel_session() as app:
         for role,ref in profile['templates'].items():
             if role in ('vik','uzk','quality'):continue
             if role.startswith('akz'):
                 variant=int(role[-1]);climate=next((c for c in facts['climates'] if c['variant']==variant),None)
                 if climate is None:continue
-            target=folder/(filename(facts['number'])+' - '+role+'.xlsx');shutil.copyfile(ref['path'],target)
+            target=folder/(filename(facts['number'])+' - '+role+'.xlsx')
+            # The user provided exact YELLOW-MARKED first AKZ #0 forms.
+            # Reuse their layout; only current registry/date/climate/VOM
+            # fields change. This is NOT a control-result approval.
+            historical=first_sources.get(role) if role in (
+                'akz0','akz_appendix0') else None
+            if historical:
+                from .akz_from_first import (
+                    is_first_akz,is_first_akz_appendix,
+                    fill_first_akz,fill_first_akz_appendix,
+                )
+                source=historical['path']
+                if sha(source)!=historical['sha256']:
+                    raise Stop('Изменён исходный первый АКЗ: '+source)
+                supported=(is_first_akz(source) if role=='akz0'
+                           else is_first_akz_appendix(source))
+                if supported:
+                    shutil.copyfile(source,target)
+                    b=open_excel(app,target)
+                    try:
+                        s=b.Worksheets(1)
+                        if role=='akz0':
+                            fill_first_akz(
+                                s,number=facts['number'],
+                                akz_date=facts['akz_date'],
+                                climate=climate,
+                            )
+                        else:
+                            selected=[entry for entry in vom.rows
+                                      if by_mark[str(entry[0])]['akz']==variant]
+                            fill_first_akz_appendix(
+                                s,number=facts['number'],
+                                akz_date=facts['akz_date'],
+                                rows=selected,
+                            )
+                            fit_appendix_body(s,4,3+len(selected))
+                        app.CalculateFullRebuild()
+                        b.Save()
+                    finally:b.Close(SaveChanges=False)
+                    # The original user sheet still goes through exactly
+                    # the same draft print and placeholder safeguards.
+                    b=open_excel(app,target)
+                    try:
+                        for s in b.Worksheets:
+                            s.PageSetup.CenterHeader=prefix
+                            for line in s.UsedRange.Value2:
+                                if any(isinstance(v,str) and TOKEN.search(v)
+                                       for v in line):
+                                    raise Stop('Незаполненное поле '+role)
+                        b.Save()
+                    finally:b.Close(SaveChanges=False)
+                    outputs.append({'role':role,'path':str(target)})
+                    continue
+            shutil.copyfile(ref['path'],target)
             if role=='appendix':
                 # The first-passport template is valid BEFORE number/date change.
                 # A second inspect_template AFTER generation would reject the
@@ -502,6 +556,29 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                         source,target,number=facts['number'],
                         uzk_date=facts['uzk_date'],
                         design_rows=facts['uzk_design'],
+                    )
+                    doc=open_word(app,target,readonly=False)
+                    try:
+                        doc.Range(0,0).InsertBefore(prefix+'\r')
+                        doc.Repaginate();doc.Save()
+                    finally:doc.Close(SaveChanges=False)
+                    outputs.append({'role':role,'path':str(target)})
+                    continue
+            if original and role=='quality':
+                from .quality_from_first import (
+                    is_exact_first_quality,create_quality_copy,
+                )
+                source=original['path']
+                if sha(source)!=original['sha256']:
+                    raise Stop('Изменён первый документ о качестве.')
+                if is_exact_first_quality(source):
+                    create_quality_copy(
+                        source,target,number=facts['number'],
+                        end_date=facts['date'],
+                        vik_date=facts['vik_date'],
+                        uzk_date=facts['uzk_date'],
+                        akz_date=facts['akz_date'],
+                        mass_kg=vom.mass,
                     )
                     doc=open_word(app,target,readonly=False)
                     try:
