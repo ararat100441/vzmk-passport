@@ -84,7 +84,10 @@ def _numeric(x,label):
     try:v=Decimal(str(x))
     except Exception as exc:
         raise Stop('АКЗ: нечисловое поле '+label) from exc
-    if not v.is_finite() or v<=0:
+    # Air/surface/dew may legitimately be below 0 C.
+    # Humidity and physical coating thickness must remain positive.
+    if (not v.is_finite() or
+            label in ('thickness','humidity') and v<=0):
         raise Stop('АКЗ: нет измеренного значения '+label)
     return float(v)
 
