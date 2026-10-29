@@ -1,0 +1,173 @@
+{
+  "status": "PASS",
+  "tests": 542,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "details": {
+    "failures": [],
+    "errors": []
+  },
+  "modules": [
+    {
+      "path": "tests\\production\\test_akz_from_first.py",
+      "tests": 6
+    },
+    {
+      "path": "tests\\production\\test_akz_presets.py",
+      "tests": 17
+    },
+    {
+      "path": "tests\\production\\test_automatic_acts.py",
+      "tests": 13
+    },
+    {
+      "path": "tests\\production\\test_catalog_climate_restore.py",
+      "tests": 11
+    },
+    {
+      "path": "tests\\production\\test_codex30.py",
+      "tests": 47
+    },
+    {
+      "path": "tests\\production\\test_codex31.py",
+      "tests": 24
+    },
+    {
+      "path": "tests\\production\\test_daily_gui.py",
+      "tests": 14
+    },
+    {
+      "path": "tests\\production\\test_daily_input.py",
+      "tests": 16
+    },
+    {
+      "path": "tests\\production\\test_daily_preview.py",
+      "tests": 3
+    },
+    {
+      "path": "tests\\production\\test_document_values.py",
+      "tests": 3
+    },
+    {
+      "path": "tests\\production\\test_draft_package.py",
+      "tests": 19
+    },
+    {
+      "path": "tests\\production\\test_external_open.py",
+      "tests": 3
+    },
+    {
+      "path": "tests\\production\\test_first_passport_sources.py",
+      "tests": 20
+    },
+    {
+      "path": "tests\\production\\test_first_passport_start_date.py",
+      "tests": 5
+    },
+    {
+      "path": "tests\\production\\test_flat_shipping_vom.py",
+      "tests": 10
+    },
+    {
+      "path": "tests\\production\\test_highlighted_reference.py",
+      "tests": 18
+    },
+    {
+      "path": "tests\\production\\test_historical_akz.py",
+      "tests": 14
+    },
+    {
+      "path": "tests\\production\\test_native_acts.py",
+      "tests": 13
+    },
+    {
+      "path": "tests\\production\\test_pr12_word_print.py",
+      "tests": 18
+    },
+    {
+      "path": "tests\\production\\test_pr13_print_pdf_audit.py",
+      "tests": 8
+    },
+    {
+      "path": "tests\\production\\test_pr8_adapter_contract.py",
+      "tests": 8
+    },
+    {
+      "path": "tests\\production\\test_print_pdf.py",
+      "tests": 14
+    },
+    {
+      "path": "tests\\production\\test_print_release.py",
+      "tests": 2
+    },
+    {
+      "path": "tests\\production\\test_quality_from_first.py",
+      "tests": 5
+    },
+    {
+      "path": "tests\\production\\test_rc3_agreed_ux.py",
+      "tests": 15
+    },
+    {
+      "path": "tests\\production\\test_rc3_interface.py",
+      "tests": 7
+    },
+    {
+      "path": "tests\\production\\test_rc3_screen_cleanup.py",
+      "tests": 16
+    },
+    {
+      "path": "tests\\production\\test_real_forms.py",
+      "tests": 11
+    },
+    {
+      "path": "tests\\production\\test_registry_preservation.py",
+      "tests": 6
+    },
+    {
+      "path": "tests\\production\\test_safety.py",
+      "tests": 28
+    },
+    {
+      "path": "tests\\production\\test_shared_uzk_settings.py",
+      "tests": 17
+    },
+    {
+      "path": "tests\\production\\test_simple_facts_back.py",
+      "tests": 19
+    },
+    {
+      "path": "tests\\production\\test_word_controls.py",
+      "tests": 8
+    },
+    {
+      "path": "tests\\production\\test_worker_error_context.py",
+      "tests": 1
+    },
+    {
+      "path": "tests\\test_stage6.py",
+      "tests": 16
+    },
+    {
+      "path": "tests\\test_stage6_part2.py",
+      "tests": 17
+    },
+    {
+      "path": "tests\\stage9_akz_auto\\test_auto.py",
+      "tests": 32
+    },
+    {
+      "path": "tests\\stage9_akz_auto\\test_persistence.py",
+      "tests": 12
+    },
+    {
+      "path": "tests\\stage9_098\\test_cleanup.py",
+      "tests": 17
+    },
+    {
+      "path": "tests\\office_unbound\\test_verdict.py",
+      "tests": 9
+    }
+  ]
+}
