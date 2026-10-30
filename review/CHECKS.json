@@ -1,0 +1,37 @@
+{
+  "delivery_status": "BLOCKED",
+  "regression": {
+    "tests": 587,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "new_targeted_tests": 20
+  },
+  "frozen_exe_native_office_cases": 3,
+  "ordinary_frozen_gui_synthetic_cycle": "PASS: 8 stages, three DEV files, backups/readback/COMPLETE",
+  "ordinary_gui_120_marks": "PASS: Ctrl+C/Ctrl+V, 104 initially share one profile, additional profiles, empty area, automatic standards",
+  "ordinary_gui_recovery": "PASS: three original SHA restored",
+  "duplicate_frozen_commit": "PASS: rejected, all files unchanged",
+  "pdf_visual_review": {
+    "final_native_cases": [
+      8,
+      8,
+      10
+    ],
+    "ordinary_gui_preview": 8,
+    "method": "All pages rasterized and visually inspected; source fidelity checked separately"
+  },
+  "protected_files_sha_unchanged": 7400,
+  "build_inputs": 113,
+  "identical_published_build_inputs": 109,
+  "redacted_published_build_inputs": 4,
+  "real_gui_current_uzk_plan": 4,
+  "real_issue": "NOT PERFORMED",
+  "blockers": [
+    "Current real shipment fails stock availability; no production stock altered",
+    "Historic false Hardlink trigger and origin of invalid climate value cannot be proven from old logs",
+    "Historic Word startup modal text/cause not logged; /a/native binding tested but exact original modal not reproduced",
+    "System Font Capture dialog 0xc06d007e observed during GUI session; cause unresolved",
+    "Historical date-bound acceptance scripts not rerun as current regression; private binary fixtures excluded from publication"
+  ]
+}
