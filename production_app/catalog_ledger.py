@@ -148,6 +148,7 @@ def update_balance(sheet,row,count,complete):
 
 
 def validate_stock(path,project,number,quantities,registered=None):
+    source=Path(path);before=sha(source)
     b=load_workbook(path,data_only=False)
     try:
         data=metadata(b);s=b.worksheets[0]
@@ -157,10 +158,8 @@ def validate_stock(path,project,number,quantities,registered=None):
             expected={str(e['number']):(e['date'].date() if isinstance(e['date'],datetime) else e['date']).isoformat() for e in registered}
             actual={h['number']:h['date'] for h in data['history']}
             if actual!=expected:raise Stop('История справочника не соответствует номерам и датам реестра. Обновите подтверждённую историю.')
-        for historical in data['history']:
-            if historical.get('complete') and historical.get('source'):
-                path=Path(historical['source'])
-                if not path.is_file() or sha(path)!=historical.get('sha256'):raise Stop('Изменён исторический источник паспорта '+historical['number'])
+        from .history_binding import reconcile_history
+        reconcile_history(data,registered)
         incomplete=[h['number'] for h in data['history'] if not h['complete']]
         if incomplete:raise Stop('Остаток не подтверждён: отсутствует история паспортов '+', '.join(incomplete))
         rows={}
@@ -170,22 +169,34 @@ def validate_stock(path,project,number,quantities,registered=None):
             mark=str(raw).strip()
             if mark in rows:raise Stop('Дублирующаяся марка в справочнике '+mark)
             rows[mark]=no
-        for mark,requested in quantities.items():
-            if mark not in rows:raise Stop('В справочнике отсутствует марка '+mark)
-            no=rows[mark];total=quantity(s.cell(no,2).value,'Марка '+mark+': общее проектное количество',True);shipped=0
+        if s.max_column!=5+len(data['history']):raise Stop('В справочнике есть неучтённые столбцы отгрузок.')
+        for col,h in enumerate(data['history'],6):
+            if s.cell(1,col).value!='Паспорт '+h['number']+' от '+date.fromisoformat(h['date']).strftime('%d.%m.%Y'):raise Stop('Изменён заголовок истории '+h['number'])
+        available={}
+        for mark,no in rows.items():
+            shipped=0
             for col,h in enumerate(data['history'],6):
-                if s.cell(1,col).value!='Паспорт '+h['number']+' от '+date.fromisoformat(h['date']).strftime('%d.%m.%Y'):raise Stop('Изменён заголовок истории '+h['number'])
                 value=quantity(s.cell(no,col).value,'История '+mark,True)
                 if value!=h['quantities'].get(mark,0):raise Stop('Количество истории '+h['number']+' / '+mark+' не совпало с подтверждённым приложением.')
                 shipped+=value
-            available=total-shipped
-            if requested>available:raise Stop(f'Марка {mark}: доступный остаток {available}, запрошено {requested}.')
+            # B is the current editable project quantity. _VZMK_SOURCE is
+            # retained only for technical assignments, never a frozen total.
+            raw=s.cell(no,2).value
+            if raw is None and mark not in quantities:continue
+            total=quantity(raw,'Марка '+mark+': общее проектное количество',True)
+            if total<shipped:raise Stop(f'Марка {mark}: отрицательный остаток {total-shipped}; проектное количество {total}, уже отгружено {shipped}.')
+            available[mark]=total-shipped
+        for mark,requested in quantities.items():
+            if mark not in rows:raise Stop('В справочнике отсутствует марка '+mark)
+            requested=quantity(requested,'Заявка '+mark,True)
+            if requested>available[mark]:raise Stop(f'Марка {mark}: доступный остаток {available[mark]}, запрошено {requested}.')
+        if sha(source)!=before:raise Stop('Справочник изменился во время проверки остатков.')
         return data
     finally:b.close()
 
 
 def shipment_candidate(source,target,project,number,day,quantities,registered=None):
-    data=validate_stock(source,project,number,quantities,registered);before=sha(source)
+    before=sha(source);data=validate_stock(source,project,number,quantities,registered)
     if Path(target).exists():raise Stop('Кандидат справочника уже существует.')
     b=load_workbook(source)
     try:
@@ -199,7 +210,8 @@ def shipment_candidate(source,target,project,number,day,quantities,registered=No
         write_metadata(b[META],data);s.auto_filter.ref=s.dimensions;b.save(target)
     finally:b.close()
     if sha(source)!=before or read_assignments(source)!=read_assignments(target):raise Stop('Изменились назначения при подготовке отгрузки.')
-    return {'number':number,'column':col,'sha256':sha(target)}
+    return {'number':number,'column':col,'sha256':sha(target),
+            'history_binding_updates':[{'number':h['number'],**u} for h in data['history'] for u in h.get('binding_updates',[])]}
 
 
 def refresh_history(source,target,project,history):

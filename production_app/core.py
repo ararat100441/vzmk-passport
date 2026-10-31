@@ -174,6 +174,9 @@ def plan(cfg,project,number,vom,facts,new):
     safe(target)
     if target.exists():raise Stop('Папка готового комплекта уже существует: '+str(target))
     hashes=pins(inputs)
+    if accounting:
+        for path,expected in accounting.get('history_fingerprints',{}).items():
+            if hashes.get(path)!=expected:raise Stop('Историческое приложение изменилось после проверки: '+path)
     if profile_geometry_source is not None and hashes[str(profile_geometry_source)]!=profile_geometry_sha:
         raise Stop('Справочник геометрии изменился после расчёта УЗК. Повторите проверку.')
     if shared_uzk is not None and hashes[str(shared_uzk)]!=shared_uzk_sha:
