@@ -110,6 +110,10 @@ def generate_appendix(excel, path, project, vom, requisites, *, undated_draft=Fa
             col = layout.columns[field]
             letter = get_column_letter(col)
             sheet.Cells(total, col).Formula = f'=SUM({letter}{layout.start}:{letter}{total - 1})'
+        # Display precision only, on this generated copy. Keep the SUM formula
+        # and every input value at their original calculation precision.
+        sheet.Cells(total, layout.columns['area_total']).NumberFormatLocal = (
+            '0' + str(excel.DecimalSeparator) + '000')
         sheet.Range(sheet.Cells(total, mincol), sheet.Cells(total, maxcol)).Font.Bold = True
         current = str(sheet.Range(header).Value2)
         day = requisites['date']

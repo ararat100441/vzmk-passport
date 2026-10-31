@@ -9,6 +9,7 @@ Any conversion/validation failure prevents the release from being accepted.
 """
 import os
 import re
+import shutil
 import tempfile
 from io import BytesIO
 from pathlib import Path
@@ -18,7 +19,7 @@ from pypdf import PdfReader, PdfWriter
 from passport_app.excel import excel_session
 from passport_app.vik import word_session, open_word
 from .storage import Stop, pins, verify_pins, sha
-from .office import PREVIEW_MARK
+from .office import PREVIEW_MARK, word_preview_mark
 
 BASE_ROLES = ('quality', 'appendix', 'vik', 'uzk')
 ROLE_EXTENSIONS = {
@@ -68,22 +69,24 @@ def _export_word(items):
         return
     with word_session() as word:
         for item in items:
-            doc = open_word(word, item['source'], readonly=True)
-            try:
+            with tempfile.TemporaryDirectory(prefix='.word-print-', dir=item['pdf'].parent) as tmp:
+                source = item['source']
                 if item.get('preview'):
-                    # Only the in-memory read-only export is unmarked. Never
-                    # save/reformat Word sources to place a PDF watermark.
-                    first=doc.Paragraphs(1).Range
-                    if first.Text.rstrip('\r')!=PREVIEW_MARK:
-                        raise Stop('Изменена маркировка предварительного просмотра Word.')
-                    first.Delete()
-                if item['role']=='uzk':_fit_uzk_executor(doc)
-                doc.ExportAsFixedFormat(
-                    OutputFileName=str(item['pdf']), ExportFormat=17,
-                    OpenAfterExport=False, OptimizeFor=0,
-                )
-            finally:
-                doc.Close(SaveChanges=False)
+                    # Use the SAME XML-only paragraph removal as release_copies.
+                    # Word Range.Delete can retain paragraph spacing and move
+                    # the first table. Only this private export copy is changed.
+                    source = Path(tmp) / source.name
+                    shutil.copyfile(item['source'], source)
+                    word_preview_mark(source, remove=True)
+                doc = open_word(word, source, readonly=True)
+                try:
+                    if item['role']=='uzk':_fit_uzk_executor(doc)
+                    doc.ExportAsFixedFormat(
+                        OutputFileName=str(item['pdf']), ExportFormat=17,
+                        OpenAfterExport=False, OptimizeFor=0,
+                    )
+                finally:
+                    doc.Close(SaveChanges=False)
 
 
 def _fit_uzk_executor(doc):
@@ -234,7 +237,9 @@ def _preview_overlay(page):
     stream=BytesIO();c=canvas.Canvas(stream,pagesize=(width,height))
     size=min(9,(width-24)/pdfmetrics.stringWidth(PREVIEW_MARK,name,1))
     c.setFont(name,size);c.setFillColorRGB(.65,0,0)
-    c.drawCentredString(width/2,height-16,PREVIEW_MARK)
+    # The unshifted historical continuation starts about 15 pt from the top.
+    # Keep the label above that text rather than occupying its first line.
+    c.drawCentredString(width/2,height-8,PREVIEW_MARK)
     c.save();stream.seek(0)
     overlay=PdfReader(stream).pages[0]
     overlay.add_transformation((1,0,0,1,float(box.left),float(box.bottom)))

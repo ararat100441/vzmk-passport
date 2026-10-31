@@ -1,8 +1,8 @@
 {
-  "version": "1.0.0 r9 / CODEX36",
-  "binary_sha256": "436e2a589b84e7bcc7d41bb21a4f1fd3a80732844755c8de8d9b7df545711b85",
+  "version": "1.0.0 r10 / CODEX37",
+  "binary_sha256": "18f8b5be62a42d6e0b16d697f9404d9e924f68bee0ee6f0b49181ba7a8f5904e",
   "build_inputs": 113,
-  "source_files": 342,
+  "source_files": 343,
   "redacted_files": [
     {
       "file": "akz_stage6/part2.py",
@@ -162,8 +162,8 @@
       "redactions": []
     },
     "passport_app/appendix.py": {
-      "local_sha256": "69be487901aabd0b84cef41b4510a792ef4b4bba18803725f3e81ed1289830df",
-      "published_sha256": "69be487901aabd0b84cef41b4510a792ef4b4bba18803725f3e81ed1289830df",
+      "local_sha256": "aee60ba73ada49d67fe5925eddef760e21350c2521dbc894435ae3c14d58e47c",
+      "published_sha256": "aee60ba73ada49d67fe5925eddef760e21350c2521dbc894435ae3c14d58e47c",
       "redactions": []
     },
     "passport_app/catalog.py": {
@@ -382,8 +382,8 @@
       "redactions": []
     },
     "production_app/print_pdf.py": {
-      "local_sha256": "d3fa50a271d96de5a28e6b9e9c66dc7fe31cb0197e7f261d85dc90919ecaef87",
-      "published_sha256": "d3fa50a271d96de5a28e6b9e9c66dc7fe31cb0197e7f261d85dc90919ecaef87",
+      "local_sha256": "2ce288ace9f151500bfe3b2c841d882359b81f01b707084cd3157a3cabc6d797",
+      "published_sha256": "2ce288ace9f151500bfe3b2c841d882359b81f01b707084cd3157a3cabc6d797",
       "redactions": []
     },
     "production_app/project_catalog.py": {
@@ -1840,8 +1840,14 @@
       "local_sha256": "4200a18da3085fff938ba83364db44828113cce83572edef693b2f53cfeb370a",
       "published_sha256": "4200a18da3085fff938ba83364db44828113cce83572edef693b2f53cfeb370a",
       "redactions": []
+    },
+    "tests/production/test_codex37.py": {
+      "local_sha256": "21c7c78b742e0913709a17be9dedf70e6876b39b298e56f6dc870007b4030afb",
+      "published_sha256": "21c7c78b742e0913709a17be9dedf70e6876b39b298e56f6dc870007b4030afb",
+      "redactions": []
     }
   },
   "historical_git_ancestry_included": false,
-  "warning": "Explicit privacy redactions may differ from original EXE inputs. Inspect every local/published hash and the build-input flag. No binary documents or personal configuration are included."
+  "warning": "Explicit privacy redactions may differ from original EXE inputs. Inspect every local/published hash and the build-input flag. No binary documents or personal configuration are included.",
+  "parent_public_snapshot": "ff63c588d99554a46513de546bb8faffb9fe4216"
 }

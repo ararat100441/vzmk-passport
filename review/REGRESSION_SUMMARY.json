@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "tests": 611,
+  "tests": 618,
   "failures": 0,
   "errors": 0,
   "skipped": 0,
@@ -43,6 +43,10 @@
     },
     {
       "path": "tests\\production\\test_codex36.py",
+      "tests": 7
+    },
+    {
+      "path": "tests\\production\\test_codex37.py",
       "tests": 7
     },
     {
