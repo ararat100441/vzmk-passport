@@ -69,7 +69,7 @@ def create_forms(folder):
         for role,title,body in (
             ('vik','Акты визуального и измерительного контроля','ВИК: {{VIK_DATE}}\nСоединения: {{CONNECTIONS}}\n{{VIK_TABLE}}\nПервичные протоколы: {{EVIDENCE}}'),
             ('uzk','Заключение ультразвукового контроля','УЗК: {{UZK_DATE}}\n{{UZK_TABLE}}\nПротоколы: {{EVIDENCE}}'),
-            ('quality','Документ о качестве','Масса: {{MASS}} кг\nСталь: {{STEEL}}\nКМ: {{KM}}\nКМД: {{KMD_COMPANY}}\nПриложение №1; акты ВИК, УЗК и АКЗ по комплекту.\n{{EVIDENCE}}')):
+            ('quality','Документ о качестве','Масса: {{MASS}} кг\nСталь: {{STEEL}}\nКМ: {{KM}}\nКМД: {{KMD_COMPANY}}\nПриложение №1; {{ACCEPTANCE_ACTS}}\n{{EVIDENCE}}')):
             doc=word.Documents.Add()
             try:
                 doc.Content.Text=title+' № {{NUMBER}} от {{END_DATE}}\rДоговор: {{CONTRACT}}\rЗаказчик: {{CUSTOMER}}\rОбъект: {{OBJECT}}\rШифр: {{CIPHER}}\r'+body.replace('\n','\r')+'\rОтветственное лицо: {{RESPONSIBLE}}\rПодпись: __________________\r'
@@ -476,12 +476,14 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
     totals={}
     for r in vom.rows:totals[str(r[0])]=totals.get(str(r[0]),0)+r[2]
     outputs=[]
+    uzk_required=not facts.get('marks') or any(r.get('uzk_quantity') not in (0,'0') for r in facts['marks'])
     first_sources=profile.get('first_passport_sources',{}).get('sources',{})
     from .model import reference_project
     sample=reference_project(project,profile)
     if profile.get('first_passport_sources') is not None:
         from .working_facts import selected_form
         for role in ['appendix','vik','uzk','quality',*[r+str(c['variant']) for c in facts['climates'] for r in ('akz','akz_appendix')]]:
+            if role=='uzk' and not uzk_required:continue
             selected_form(profile,role)
     from .akz_from_first import act_number
     with excel_session() as app:
@@ -583,6 +585,7 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
         first_sources=(profile.get('first_passport_sources',{})
                        .get('sources',{}))
         for role in ('vik','uzk','quality'):
+            if role=='uzk' and not uzk_required:continue
             ref=profile['templates'][role];target=folder/(filename(facts['number'])+' - '+role+'.docx')
             original=first_sources.get(role)
             if original and role in ('vik','uzk'):
@@ -632,6 +635,7 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                         akz_date=facts['akz_date'],
                         mass_kg=vom.mass,start_date=facts.get('start_date'),
                         variants=sorted({c['variant'] for c in facts['climates']}),
+                        uzk_required=uzk_required,
                     )
                     word_preview_mark(target)
                     outputs.append({'role':role,'path':str(target)})
@@ -664,6 +668,8 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                     word_table(doc,'{{VIK_TABLE}}',('Марка','ВОМ, шт','Результат ВИК','Первичный протокол'),rows)
                 replace_word(doc,values)
                 if TOKEN.search(doc.Content.Text):raise Stop('Незаполненные поля Word: '+role)
+                if role=='quality' and not uzk_required and re.search(r'УЗК|ультразвук',doc.Content.Text,re.I):
+                    raise Stop('Документ о качестве содержит неизменяемое утверждение об УЗК при нулевом плане. Нужны корректные переменные ссылки актов.')
                 doc.Repaginate();doc.Save()
             finally:doc.Close(SaveChanges=False)
             word_preview_mark(target)

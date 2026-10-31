@@ -194,6 +194,12 @@ def decrement_candidate(source,target,project,quantities):
         row=rec['rows'][0];left=rec['remaining']-count
         if left:updates[row]=left
         else:deletions.append(row)
+    if not updates and not deletions:
+        # A zero plan changes neither quantities nor any opaque XLSM part.
+        import shutil
+        shutil.copyfile(source,target)
+        if sha(source)!=original or sha(target)!=original:raise Stop('УЗК изменился при копировании нулевого плана.')
+        return {'sha256':original,'deleted_rows':[],'updated_rows':{},'sheet_xml':None,'changed_parts':[]}
     X='{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
     R='{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
     with ZipFile(source) as z:

@@ -1,8 +1,8 @@
 {
-  "version": "1.0.0 r11 / CODEX38",
-  "binary_sha256": "70c208150a0b694b9b0667c8751797000b3ee0d868ab648e5de0814918298122",
-  "build_inputs": 113,
-  "source_files": 346,
+  "version": "1.0.0 r12 / CODEX39",
+  "binary_sha256": "a0be9d210b87650ffd1b5014a4910e9b151231565da0f9802435b969bf314cf9",
+  "build_inputs": 114,
+  "source_files": 348,
   "redacted_files": [
     {
       "file": "akz_stage6/part2.py",
@@ -302,8 +302,8 @@
       "redactions": []
     },
     "production_app/core.py": {
-      "local_sha256": "befd3096a8eb9c5aedc65ada1ba3dde193abec2d4408adc44d60f4a461095a2b",
-      "published_sha256": "befd3096a8eb9c5aedc65ada1ba3dde193abec2d4408adc44d60f4a461095a2b",
+      "local_sha256": "b9c09ce3e309131be9deb342c050882e42981c79061199b208f7fef597b1d190",
+      "published_sha256": "b9c09ce3e309131be9deb342c050882e42981c79061199b208f7fef597b1d190",
       "redactions": []
     },
     "production_app/daily_gui.py": {
@@ -362,8 +362,8 @@
       "redactions": []
     },
     "production_app/office.py": {
-      "local_sha256": "52c2b9a74983c411e27d8817fcdca74ccea6ea952f966f5145fac88f37eae692",
-      "published_sha256": "52c2b9a74983c411e27d8817fcdca74ccea6ea952f966f5145fac88f37eae692",
+      "local_sha256": "97a3f176e6a479a464a21b761135b89601cfebd82febc8175aa73de0d61fdd8a",
+      "published_sha256": "97a3f176e6a479a464a21b761135b89601cfebd82febc8175aa73de0d61fdd8a",
       "redactions": []
     },
     "production_app/owner_control.py": {
@@ -382,8 +382,8 @@
       "redactions": []
     },
     "production_app/print_pdf.py": {
-      "local_sha256": "2ce288ace9f151500bfe3b2c841d882359b81f01b707084cd3157a3cabc6d797",
-      "published_sha256": "2ce288ace9f151500bfe3b2c841d882359b81f01b707084cd3157a3cabc6d797",
+      "local_sha256": "404ad7407156d50bd1041b578eeebafcda938d3697eab7bcd1c1bc1e5a1921bb",
+      "published_sha256": "404ad7407156d50bd1041b578eeebafcda938d3697eab7bcd1c1bc1e5a1921bb",
       "redactions": []
     },
     "production_app/project_catalog.py": {
@@ -392,13 +392,13 @@
       "redactions": []
     },
     "production_app/quality_from_first.py": {
-      "local_sha256": "9993b33c86242b4b9ee7a4135ec5654b7ec437b7482fcc02f6d0fc08354d72e1",
-      "published_sha256": "9993b33c86242b4b9ee7a4135ec5654b7ec437b7482fcc02f6d0fc08354d72e1",
+      "local_sha256": "88041146e204b148ec8563c31fde4b79df69c17586c3cd52e1d8d9044b1a55c6",
+      "published_sha256": "88041146e204b148ec8563c31fde4b79df69c17586c3cd52e1d8d9044b1a55c6",
       "redactions": []
     },
     "production_app/real_forms.py": {
-      "local_sha256": "3c1b57e0aae8c9023ef974a898e81865137d260a8d0f4259b07c25c2183e18eb",
-      "published_sha256": "3c1b57e0aae8c9023ef974a898e81865137d260a8d0f4259b07c25c2183e18eb",
+      "local_sha256": "e033cfd4e99531d0c7114567a35dfd53e125ba18be1e7407dde6b542af37fb68",
+      "published_sha256": "e033cfd4e99531d0c7114567a35dfd53e125ba18be1e7407dde6b542af37fb68",
       "redactions": []
     },
     "production_app/registry_dates.py": {
@@ -407,8 +407,8 @@
       "redactions": []
     },
     "production_app/shared_uzk.py": {
-      "local_sha256": "8d36b3627f9fc4db054b89bd3864ab83563691a8e56cbc2fa2ab2df9fc8149da",
-      "published_sha256": "8d36b3627f9fc4db054b89bd3864ab83563691a8e56cbc2fa2ab2df9fc8149da",
+      "local_sha256": "f0a55f8526b72707ee5680afb57d808eae6942bc6c8147d7a988dea5b3f84043",
+      "published_sha256": "f0a55f8526b72707ee5680afb57d808eae6942bc6c8147d7a988dea5b3f84043",
       "redactions": []
     },
     "production_app/shipment_dialog.py": {
@@ -1072,8 +1072,8 @@
       ]
     },
     "tests/production/test_rc3_agreed_ux.py": {
-      "local_sha256": "8eaa35949f9f981a576e579cb54eadc066da6b3f75b14410569ccb3fda90d327",
-      "published_sha256": "8eaa35949f9f981a576e579cb54eadc066da6b3f75b14410569ccb3fda90d327",
+      "local_sha256": "4c461b31638e772918b4ba42bdfd2971f9e1a114aaee7bc14df30a1ddc0d72a8",
+      "published_sha256": "4c461b31638e772918b4ba42bdfd2971f9e1a114aaee7bc14df30a1ddc0d72a8",
       "redactions": []
     },
     "tests/production/test_rc3_interface.py": {
@@ -1860,9 +1860,19 @@
       "local_sha256": "0abcdec493e8357e198658d2276cbcfea9b43b50ee4e4cfbb6a18a624c0dc67f",
       "published_sha256": "0abcdec493e8357e198658d2276cbcfea9b43b50ee4e4cfbb6a18a624c0dc67f",
       "redactions": []
+    },
+    "tests/production/test_codex39.py": {
+      "local_sha256": "42bb65876498c735748231a176e1f9a9a2167a522ea920df7daa0206bfda3982",
+      "published_sha256": "42bb65876498c735748231a176e1f9a9a2167a522ea920df7daa0206bfda3982",
+      "redactions": []
+    },
+    "docs/CODEX39_REVIEW.md": {
+      "local_sha256": "de76da71aa10041381231b6bb9c50a4b755c2ed605bf7ef3b14599fcb074d02c",
+      "published_sha256": "de76da71aa10041381231b6bb9c50a4b755c2ed605bf7ef3b14599fcb074d02c",
+      "redactions": []
     }
   },
   "historical_git_ancestry_included": false,
   "warning": "Explicit privacy redactions may differ from original EXE inputs. Inspect every local/published hash and the build-input flag. No binary documents or personal configuration are included.",
-  "parent_public_snapshot": "f38b51f542117927cf6a4139e9195c2382c20170"
+  "parent_public_snapshot": "e00e40aad873980c4803069955f9c19be77d1d44"
 }

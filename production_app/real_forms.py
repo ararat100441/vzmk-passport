@@ -176,6 +176,7 @@ def require_form_inputs(profile, facts):
     provided = normalize_doc_fields(facts.get('doc_fields'))
     from .working_facts import selected_form
     for role in ('vik','uzk','quality'):
+        if role=='uzk' and facts.get('marks') and all(r.get('uzk_quantity') in (0,'0') for r in facts['marks']):continue
         ref=selected_form(profile,role)
         # Only the recognized exact copier supplies these fixed contents;
         # the clean technical form is still independently validated/pinned.
@@ -269,8 +270,9 @@ def acceptance_acts(facts, variants):
     names = [
         f'Акт ВИК № {number} от {vik} г.',
         f'Акт ВИК № {number}-1 от {vik} г.',
-        f'Акт УЗК № {number} от {uzk} г.',
     ]
+    if not facts.get('marks') or any(r.get('uzk_quantity') not in (0,'0') for r in facts['marks']):
+        names.append(f'Акт УЗК № {number} от {uzk} г.')
     for variant in sorted(set(variants)):
         if variant not in range(4):
             raise Stop('Неверный вариант АКЗ для документа о качестве.')

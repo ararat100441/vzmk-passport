@@ -85,6 +85,7 @@ def plan(cfg,project,number,vom,facts,new):
     # Derive UZK DESIGN characteristics from current marks and the accepted
     # Stage4 profile geometry when its approved workbook is available.
     # Calculated S/L/frequency/angle NEVER imply inspection GОДЕН.
+    uzk_required=not facts.get('marks') or any(row.get('uzk_quantity') not in (0,'0') for row in facts['marks'])
     profile_geometry_source=None;profile_geometry_sha=None
     from .word_controls import inspect_word_fields
     from .working_facts import selected_form
@@ -99,7 +100,7 @@ def plan(cfg,project,number,vom,facts,new):
     wants_design=('UZK_DESIGN' in (tokens|controls) or
                   cfg.get('auto_uzk_characteristics') is True or
                   historical_uzk)
-    if wants_design:
+    if wants_design and uzk_required:
         from .automatic_acts import (
             find_approved_geometry,calculate_design_characteristics,
         )
@@ -145,8 +146,8 @@ def plan(cfg,project,number,vom,facts,new):
     from .working_facts import selected_form
     effective_uzk=selected_form(profile,'uzk')
     uzk_tokens=set() if effective_uzk.get('exact_reference') else inspect_word_fields(effective_uzk['path'])[0]
-    validate_uzk_details(facts,v,required=bool({'UZK_DETAILS_TABLE','UZK_NATIVE_ROW'} & uzk_tokens))
-    if 'UZK_NATIVE_ROW' in uzk_tokens:
+    validate_uzk_details(facts,v,required=uzk_required and bool({'UZK_DETAILS_TABLE','UZK_NATIVE_ROW'} & uzk_tokens))
+    if uzk_required and 'UZK_NATIVE_ROW' in uzk_tokens:
         from .native_acts import native_rows
         native_rows(facts)
     from .real_forms import require_form_inputs
@@ -188,7 +189,7 @@ def plan(cfg,project,number,vom,facts,new):
     data={'schema':'VZMK_PRODUCTION_PLAN_1','id':uuid4().hex,'cfg':cfg,'project':project,'number':number,
           'new':bool(new),'facts':facts,'vom':str(v.path),'fingerprints':hashes,'target':str(target),
           'marks':len(v.rows),'quantity':str(v.quantity),'mass_kg':str(v.mass),'area_m2':str(v.area),
-          'variants':variants,'registry':str(registry),'date':facts['date'],'accounting':accounting}
+          'variants':variants,'registry':str(registry),'date':facts['date'],'accounting':accounting,'uzk_required':uzk_required}
     run=local_root()/'jobs'/data['id'];run.mkdir(parents=True,exist_ok=False)
     data['run']=str(run);data['seal']=digest(data)
     save(run/'plan.json',data)
@@ -316,7 +317,7 @@ def verify(path,preview=False):
             shutil.copyfile(source,target)
             copied.append({'role':item['role'],'path':str(target)})
         # PDF marking is applied after pagination, on every preview page.
-        printout=create_print_pdf(copied,draft,Path(d['target']).name,preview=True)
+        printout=create_print_pdf(copied,draft,Path(d['target']).name,preview=True,uzk_required=d.get('uzk_required',True))
         preview_path=printout['output']['path']
         hashes.update(pins([preview_path]))
     save(run/'verified.json',{
@@ -338,7 +339,7 @@ def preview(path):
         target=folder/Path(item['path']).name;shutil.copyfile(item['path'],target)
         if sha(target)!=verified['fingerprints'][item['path']]:raise Stop('Изменилась копия для просмотра.')
         copies.append(item|{'path':str(target)})
-    result=create_print_pdf(copies,folder,Path(d['target']).name,preview=True)
+    result=create_print_pdf(copies,folder,Path(d['target']).name,preview=True,uzk_required=d.get('uzk_required',True))
     data={'plan_seal':d['seal'],'verified_sha256':sha(run/'verified.json'),
           'pdf':result['output']['path'],'sha256':result['output']['sha256'] if 'sha256' in result['output'] else sha(result['output']['path']),
           'pages':result['manifest']['pages']}
@@ -420,12 +421,12 @@ def release(path):
     # Only the FINAL, unwatermarked release copies enter the printable PDF.
     # A failed native Office export stops before any registry modification.
     from .print_pdf import create_print_pdf, verify_package_print
-    printed=create_print_pdf(files,output,Path(d['target']).name)
+    printed=create_print_pdf(files,output,Path(d['target']).name,uzk_required=d.get('uzk_required',True))
     files.append(printed['output'])
     result={'plan_seal':d['seal'],'outputs':files,
             'fingerprints':pins([o['path'] for o in files]),
             'print_pdf':printed['manifest']}
-    verify_package_print(result,Path(d['target']).name)
+    verify_package_print(result,Path(d['target']).name,uzk_required=d.get('uzk_required',True))
     save(run/'release.json',result)
     return {'status':'PASS','plan':str(path),'task':'release',
             'print_pdf':printed['manifest']['filename'],
@@ -439,7 +440,7 @@ def commit(path,release_result):
     if released['plan_seal']!=d['seal']:raise Stop('Другой выпуск.')
     verify_pins(released['fingerprints'])
     from .print_pdf import verify_package_print
-    verify_package_print(released,target.name)
+    verify_package_print(released,target.name,uzk_required=d.get('uzk_required',True))
     if confirmation['plan_seal']!=d['seal'] or confirmation['verified_sha256']!=sha(run/'verified.json') or not confirmation['reviewed']:raise Stop('Нет действительного подтверждения выпуска.')
     verify_pins(verified['fingerprints']);v=model.visible_vom(d['vom'])
     approved_facts=d['facts']|{'documents_reviewed':True}
@@ -528,7 +529,7 @@ def readback(journal):
         finally:b.Close(SaveChanges=False)
     released=read(Path(s['plan']).parent/'release.json')
     from .print_pdf import verify_package_print,verify_print_pdf
-    print_manifest=verify_package_print(released,target.name)
+    print_manifest=verify_package_print(released,target.name,uzk_required=d.get('uzk_required',True))
     name=print_manifest['filename']
     if name not in s['output_hashes'] or s['output_hashes'][name]!=print_manifest['sha256']:
         raise Stop('Сводный PDF не совпадает с манифестом выпуска.')

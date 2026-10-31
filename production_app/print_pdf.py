@@ -29,7 +29,7 @@ ROLE_EXTENSIONS = {
 AKZ_ROLE = re.compile(r'akz(?:_appendix)?[0-3]\Z')
 
 
-def ordered_sources(outputs, *, partial_draft=False):
+def ordered_sources(outputs, *, partial_draft=False, uzk_required=True):
     """Return complete ordered components; refuse duplicates and orphaned AKZ."""
     if not isinstance(outputs, list):
         raise Stop('Неверный состав документов для общего PDF.')
@@ -48,7 +48,9 @@ def ordered_sources(outputs, *, partial_draft=False):
             raise Stop('Нет готового ' + expected + ' для роли ' + role + ': ' + str(path))
         roles[role] = path
 
-    missing = [role for role in BASE_ROLES if role not in roles]
+    if not uzk_required and 'uzk' in roles:
+        raise Stop('При нулевом плане УЗК акт УЗК не входит в комплект PDF.')
+    missing = [role for role in BASE_ROLES if role not in roles and (role!='uzk' or uzk_required)]
     if missing and not partial_draft:
         raise Stop('В комплекте PDF отсутствуют обязательные документы: ' + ', '.join(missing))
     ordered = [dict(role=role, path=roles[role]) for role in BASE_ROLES if role in roles]
@@ -180,7 +182,7 @@ def verify_print_pdf(path, *, expected_pages=None):
 
 
 
-def verify_package_print(released, package_folder_name):
+def verify_package_print(released, package_folder_name, *, uzk_required=True):
     """Validate the print manifest, order, pages and hash before registry commit."""
     if not isinstance(released, dict):
         raise Stop('Отсутствует проверенный манифест выпускных документов.')
@@ -190,7 +192,7 @@ def verify_package_print(released, package_folder_name):
     pdf_items = [item for item in outputs if item.get('role') == 'print_pdf']
     if len(pdf_items) != 1:
         raise Stop('В выпуске должен быть ровно один сводный PDF.')
-    ordered = ordered_sources([item for item in outputs if item.get('role') != 'print_pdf'])
+    ordered = ordered_sources([item for item in outputs if item.get('role') != 'print_pdf'],uzk_required=uzk_required)
     path = Path(pdf_items[0]['path'])
     manifest = released.get('print_pdf')
     name = package_folder_name + '.pdf'
@@ -248,7 +250,7 @@ def _preview_overlay(page):
     page.merge_page(overlay)
 
 
-def create_print_pdf(outputs, release_folder, package_folder_name, *, partial_draft=False, preview=False):
+def create_print_pdf(outputs, release_folder, package_folder_name, *, partial_draft=False, preview=False, uzk_required=True):
     """Return PDF output record + section manifest; no other files published.
 
     release_folder is a private, newly created directory. package_folder_name
@@ -260,7 +262,7 @@ def create_print_pdf(outputs, release_folder, package_folder_name, *, partial_dr
             package_folder_name in ('', '.', '..') or
             any(char in package_folder_name for char in '<>:"/\\|?*')):
         raise Stop('Небезопасное имя папки/место сборки сводного PDF.')
-    ordered = ordered_sources(outputs, partial_draft=partial_draft)
+    ordered = ordered_sources(outputs, partial_draft=partial_draft, uzk_required=uzk_required)
     if any(item['path'].parent.resolve() != release_folder.resolve()
            for item in ordered):
         raise Stop('Общий PDF разрешено создавать только из выпускных копий в одной папке.')

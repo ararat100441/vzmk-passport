@@ -101,7 +101,7 @@ def _fill_highlighted(run,value):
     run.font.highlight_color=None
 
 
-def _appendix_acts(paragraph,original_number,number,vik,uzk,akz,*,variants=None):
+def _appendix_acts(paragraph,original_number,number,vik,uzk,akz,*,variants=None,uzk_required=True):
     runs=[r for r in paragraph.runs
           if r.font.highlight_color==WD_COLOR_INDEX.YELLOW]
     if not runs:runs=list(paragraph.runs)
@@ -135,6 +135,18 @@ def _appendix_acts(paragraph,original_number,number,vik,uzk,akz,*,variants=None)
     # The entire original act reference line was marked, not only numbers.
     # Clear editing highlights in NEW COPY while retaining fonts/spacing.
     for run in runs:run.font.highlight_color=None
+    if not uzk_required:
+        # Remove only the current UZK reference, across its original runs.
+        # Retain the VIK/AKZ text, fonts, paragraph and table geometry.
+        pattern=r'Акт УЗК № '+re.escape(number)+r' от '+re.escape(uzk)+r' г\., '
+        matches=list(re.finditer(pattern,paragraph.text))
+        if len(matches)!=1:raise Stop('Документ о качестве: неоднозначная ссылка УЗК для исключения.')
+        start,end=matches[0].span();offset=0
+        for run in paragraph.runs:
+            text=run.text
+            low=max(0,start-offset);high=min(len(text),end-offset)
+            if low<high:run.text=text[:low]+text[high:]
+            offset+=len(text)
 
 
 def _manufacturing_start(table,value):
@@ -152,7 +164,7 @@ def _manufacturing_start(table,value):
 
 
 def create_quality_copy(source,target,*,number,end_date,vik_date,
-                        uzk_date,akz_date,mass_kg,start_date=None,variants=None):
+                        uzk_date,akz_date,mass_kg,start_date=None,variants=None,uzk_required=True):
     source=Path(source).resolve(strict=True)
     target=Path(target).resolve(strict=False)
     if (source.suffix.lower()!='.docx' or target.suffix.lower()!='.docx'
@@ -191,7 +203,7 @@ def create_quality_copy(source,target,*,number,end_date,vik_date,
         _appendix_acts(t.rows[row].cells[0].paragraphs[0],
                        source_number,number,
                        result_dates['ВИК'],result_dates['УЗК'],
-                       result_dates['АКЗ'],variants=variants)
+                       result_dates['АКЗ'],variants=variants,uzk_required=uzk_required)
     _manufacturing_start(t,start_date)
     _fill_highlighted(
         _one_highlighted_cell(doc.tables[1],4,0,

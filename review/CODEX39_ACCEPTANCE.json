@@ -1,0 +1,21 @@
+{
+  "real_acceptance": "STOP_CATALOG_B",
+  "real_pdf": null,
+  "real_dev_complete": false,
+  "official_issue": false,
+  "production_ready": false,
+  "catalog": {
+    "checked": 195,
+    "invalid": 84,
+    "below_shipped": 44,
+    "fractional": 48,
+    "overlap": 8,
+    "current_marks_invalid": 0
+  },
+  "regressions": 647,
+  "new_targeted_tests": 10,
+  "protected_files": 24106,
+  "protected_changed": 0,
+  "protected_missing": 0,
+  "synthetic_tests_do_not_prove_real_acceptance": true
+}

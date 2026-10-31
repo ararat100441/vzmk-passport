@@ -222,8 +222,9 @@ class AgreedUX(unittest.TestCase):
             }
             save(folder/'prepared.json',prepared)
 
-            def fake_pdf(sources,dest,name,*,preview=False):
+            def fake_pdf(sources,dest,name,*,preview=False,uzk_required=True):
                 self.assertTrue(preview)
+                self.assertTrue(uzk_required)
                 preview=dest/(name+'.pdf')
                 preview.write_bytes(b'%PDF-1.4\\nSYNTHETIC TEST ONLY')
                 return {'output':{'role':'print_pdf','path':str(preview)},
