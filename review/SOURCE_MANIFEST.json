@@ -1,8 +1,8 @@
 {
-  "version": "1.0.0 r12 / CODEX39",
-  "binary_sha256": "a0be9d210b87650ffd1b5014a4910e9b151231565da0f9802435b969bf314cf9",
+  "version": "1.0.0 r13 / CODEX40",
+  "binary_sha256": "cd6813c728a74d017d7973b4ca0d0051b87cd48e02eb17433f8caf8d403dcc07",
   "build_inputs": 114,
-  "source_files": 348,
+  "source_files": 350,
   "redacted_files": [
     {
       "file": "akz_stage6/part2.py",
@@ -287,8 +287,8 @@
       "redactions": []
     },
     "production_app/catalog_ledger.py": {
-      "local_sha256": "885a8b8379e0a1f58985191e778fa857e243ea991ecf95c5c8c7f516a07798fe",
-      "published_sha256": "885a8b8379e0a1f58985191e778fa857e243ea991ecf95c5c8c7f516a07798fe",
+      "local_sha256": "78695250a6a78295a6d54a6b645bd9d8a8851173b5a3a1b085a30f1bed1c388c",
+      "published_sha256": "78695250a6a78295a6d54a6b645bd9d8a8851173b5a3a1b085a30f1bed1c388c",
       "redactions": []
     },
     "production_app/control_book.py": {
@@ -297,8 +297,8 @@
       "redactions": []
     },
     "production_app/coordinated.py": {
-      "local_sha256": "90a8d0a8b9294bc6bdc0d1f600d93aab6445629d0d1e39c8fd4f57541496552f",
-      "published_sha256": "90a8d0a8b9294bc6bdc0d1f600d93aab6445629d0d1e39c8fd4f57541496552f",
+      "local_sha256": "f993a79289422cc94fa035aa49b3d86b46866d4c6bd64efc97ee2394833894a1",
+      "published_sha256": "f993a79289422cc94fa035aa49b3d86b46866d4c6bd64efc97ee2394833894a1",
       "redactions": []
     },
     "production_app/core.py": {
@@ -337,8 +337,8 @@
       "redactions": []
     },
     "production_app/gui.py": {
-      "local_sha256": "08cc8acfc751b5892f4d8212b67fe82d052a4c18dca5dc8642584ac3ca30ad00",
-      "published_sha256": "08cc8acfc751b5892f4d8212b67fe82d052a4c18dca5dc8642584ac3ca30ad00",
+      "local_sha256": "b022ca8df379d170e4c470fdcd911a1ee44e175bcdae201466b508ff300cbfd8",
+      "published_sha256": "b022ca8df379d170e4c470fdcd911a1ee44e175bcdae201466b508ff300cbfd8",
       "redactions": []
     },
     "production_app/highlighted_reference.py": {
@@ -1852,8 +1852,8 @@
       "redactions": []
     },
     "tests/production/test_codex38.py": {
-      "local_sha256": "449b2312a9c7f0c903ef9ab2bc491ba21e180e909debfd82798180416226b0f7",
-      "published_sha256": "449b2312a9c7f0c903ef9ab2bc491ba21e180e909debfd82798180416226b0f7",
+      "local_sha256": "f0ee8bc078a71dd434632bfd74695ffad11e95a63d666923ec6c49ecc865f000",
+      "published_sha256": "f0ee8bc078a71dd434632bfd74695ffad11e95a63d666923ec6c49ecc865f000",
       "redactions": []
     },
     "docs/CODEX38_REVIEW.md": {
@@ -1870,9 +1870,19 @@
       "local_sha256": "de76da71aa10041381231b6bb9c50a4b755c2ed605bf7ef3b14599fcb074d02c",
       "published_sha256": "de76da71aa10041381231b6bb9c50a4b755c2ed605bf7ef3b14599fcb074d02c",
       "redactions": []
+    },
+    "tests/production/test_codex40.py": {
+      "local_sha256": "99176ca42142b1b7b9bb0251b41e6a522e5e89af0554fd8280b06329db22449d",
+      "published_sha256": "99176ca42142b1b7b9bb0251b41e6a522e5e89af0554fd8280b06329db22449d",
+      "redactions": []
+    },
+    "docs/CODEX40_REVIEW.md": {
+      "local_sha256": "50977117f63451c934c2b8c5dcc8591ed431512b5a3c1aab679c2c978542b38c",
+      "published_sha256": "50977117f63451c934c2b8c5dcc8591ed431512b5a3c1aab679c2c978542b38c",
+      "redactions": []
     }
   },
   "historical_git_ancestry_included": false,
   "warning": "Explicit privacy redactions may differ from original EXE inputs. Inspect every local/published hash and the build-input flag. No binary documents or personal configuration are included.",
-  "parent_public_snapshot": "e00e40aad873980c4803069955f9c19be77d1d44"
+  "parent_public_snapshot": "1bc03df2970a1421ef9c41313e864551e5ee7927"
 }

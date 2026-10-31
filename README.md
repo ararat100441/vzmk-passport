@@ -1,11 +1,11 @@
-# ВЗМК Паспортизация r12 / CODEX39
+# ВЗМК Паспортизация r13 / CODEX40
 
-Review-ветка codex/review-production-r12-codex39. База — r11 e00e40aad873980c4803069955f9c19be77d1d44. При УЗК = 0 отсутствуют акт УЗК и ссылки на него, обязательные ВИК и АКЗ сохраняются. Списание нулевого плана не меняет УЗК.xlsm. При УЗК > 0 действует прежний путь.
+Review-ветка codex/review-production-r13-codex40. База — r12 1bc03df2970a1421ef9c41313e864551e5ee7927. B и остаток блокируют выпуск для всех марок текущей ВОМ. Ошибки B других марок дают предупреждение. История F+ всех марок проверяется строго. Прежние B/F+ не исправляются; отрицательные остатки не превращаются в ноль.
 
-Реальная заявка заблокирована некорректными B. Проверенного PDF реальной отгрузки и успешного полного DEV-цикла нет. PRODUCTION READY не присвоен.
+Конкретная реальная ВОМ прошла полный frozen DEV-цикл до COMPLETE на точных копиях данных при УЗК=0. Recovery проверен на диагностических копиях фактической транзакции. Официального выпуска не было. Общий PRODUCTION READY не присвоен.
 
-Изменение и границы доказательств: docs/CODEX39_REVIEW.md. Результаты: review/CODEX39_ACCEPTANCE.json и review/REGRESSION_SUMMARY.json. Контроль входов: review/BUILD_INPUTS_R12.json и review/SOURCE_MANIFEST.json.
+Подробности и границы доказательств: docs/CODEX40_REVIEW.md. Результаты: review/CODEX40_ACCEPTANCE.json и review/REGRESSION_SUMMARY.json. Входы сборки: review/BUILD_INPUTS_R13.json. Различия обезличенного снимка и приватной сборки: review/SOURCE_MANIFEST.json.
 
-Запуск: production.py. Сборка: python -B tests/production/build.py --name reviewr12. Windows, Python 3.12, Microsoft Word/Excel; requirements.txt, requirements_stage5.txt, PyInstaller, pywin32, pypdf и ReportLab 4.x. Новые адресные тесты: python -B -m unittest discover -s tests/production -p test_codex39.py -v.
+Запуск production.py. Сборка: python -B tests/production/build.py --name reviewr13. Windows, Python 3.12, Microsoft Word/Excel; requirements.txt, requirements_stage5.txt, PyInstaller, pywin32, pypdf, ReportLab 4.x. Адресные тесты: python -B -m unittest discover -s tests/production -p test_codex40.py -v.
 
-Сохранено прежнее обезличивание четырёх исторических runtime-модулей. Их различия от локальных входов EXE указаны в манифесте. Все шесть изменённых runtime-модулей совпадают полностью. Реальные документы и частные настройки не публикуются. Main и r11 не изменяются, merge не выполняется.
+Реальные документы, EXE и частные настройки остаются локально. Main и r12 не меняются. Сохраняется обезличивание четырёх исторических runtime-модулей; полная воспроизводимость EXE только из публичного снимка не заявляется.

@@ -135,9 +135,21 @@ def create_migrated(source,target,project,history):
             'missing_history':[h['number'] for h in history if not h['complete']]}
 
 
-def update_balance(sheet,row,count,complete):
+def update_balance(sheet,row,count,complete,*,strict=True):
     # A blank total/history is explicitly not a confirmed stock.
     if not complete:sheet.cell(row,5).value=None;return
+    if not strict:
+        # History is mandatory even when this mark is outside the shipment.
+        for c in range(6,6+count):quantity(sheet.cell(row,c).value,'История '+str(sheet.cell(row,1).value),True)
+        raw=sheet.cell(row,2).value
+        try:
+            value=Decimal(str(raw))
+            numeric=not isinstance(raw,bool) and value.is_finite()
+        except Exception:numeric=False
+        if not numeric:
+            sheet.cell(row,5,'НЕИЗВЕСТНО: проверьте B');return
+        sheet.cell(row,5,'=B'+str(row)+('-SUM(F'+str(row)+':'+get_column_letter(5+count)+str(row)+')' if count else ''))
+        return
     if sheet.cell(row,2).value is None:
         expression='B'+str(row)+('-SUM(F'+str(row)+':'+get_column_letter(5+count)+str(row)+')' if count else '')
         sheet.cell(row,5,'=IF(ISNUMBER(B'+str(row)+'),'+expression+',"")');return
@@ -172,7 +184,7 @@ def validate_stock(path,project,number,quantities,registered=None):
         if s.max_column!=5+len(data['history']):raise Stop('В справочнике есть неучтённые столбцы отгрузок.')
         for col,h in enumerate(data['history'],6):
             if s.cell(1,col).value!='Паспорт '+h['number']+' от '+date.fromisoformat(h['date']).strftime('%d.%m.%Y'):raise Stop('Изменён заголовок истории '+h['number'])
-        available={}
+        available={};warnings=[]
         for mark,no in rows.items():
             shipped=0
             for col,h in enumerate(data['history'],6):
@@ -182,16 +194,20 @@ def validate_stock(path,project,number,quantities,registered=None):
             # B is the current editable project quantity. _VZMK_SOURCE is
             # retained only for technical assignments, never a frozen total.
             raw=s.cell(no,2).value
-            if raw is None and mark not in quantities:continue
-            total=quantity(raw,'Марка '+mark+': общее проектное количество',True)
-            if total<shipped:raise Stop(f'Марка {mark}: отрицательный остаток {total-shipped}; проектное количество {total}, уже отгружено {shipped}.')
+            try:
+                total=quantity(raw,'Марка '+mark+': общее проектное количество',True)
+                if total<shipped:raise Stop(f'Марка {mark}: отрицательный остаток {total-shipped}; проектное количество {total}, уже отгружено {shipped}.')
+            except Stop as exc:
+                if mark in quantities:raise
+                warnings.append({'mark':mark,'row':no,'total':raw,'shipped':shipped,'reason':str(exc)})
+                continue
             available[mark]=total-shipped
         for mark,requested in quantities.items():
             if mark not in rows:raise Stop('В справочнике отсутствует марка '+mark)
             requested=quantity(requested,'Заявка '+mark,True)
             if requested>available[mark]:raise Stop(f'Марка {mark}: доступный остаток {available[mark]}, запрошено {requested}.')
         if sha(source)!=before:raise Stop('Справочник изменился во время проверки остатков.')
-        return data
+        return {**data,'stock_warnings':warnings}
     finally:b.close()
 
 
@@ -205,12 +221,14 @@ def shipment_candidate(source,target,project,number,day,quantities,registered=No
         s.cell(1,col,'Паспорт '+number+' от '+date.fromisoformat(day).strftime('%d.%m.%Y'))
         for no in range(2,s.max_row+1):
             mark=str(s.cell(no,1).value or '').strip()
-            if mark:s.cell(no,col,quantities.get(mark,0));update_balance(s,no,len(data['history'])+1,True)
+            if mark:s.cell(no,col,quantities.get(mark,0));update_balance(s,no,len(data['history'])+1,True,strict=mark in quantities)
+        warnings=data.pop('stock_warnings',[])
         data['history'].append({'number':number,'date':day,'complete':True,'quantities':quantities,'origin':'CONFIRMED_CURRENT_ISSUE'})
         write_metadata(b[META],data);s.auto_filter.ref=s.dimensions;b.save(target)
     finally:b.close()
     if sha(source)!=before or read_assignments(source)!=read_assignments(target):raise Stop('Изменились назначения при подготовке отгрузки.')
     return {'number':number,'column':col,'sha256':sha(target),
+            'stock_warnings':warnings,
             'history_binding_updates':[{'number':h['number'],**u} for h in data['history'] for u in h.get('binding_updates',[])]}
 
 

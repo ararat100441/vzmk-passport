@@ -39,6 +39,7 @@ def accounting_plan(cfg,project,number,vom,facts,profile,registry_entries):
     for mark,count in controls.items():
         if count and len(index[(_key(project),_key(mark))]['rows'])!=1:raise Stop('Общий УЗК: дубли строк марки '+mark+'; запись запрещена.')
     return {'catalog':str(paths[0]),'uzk':str(paths[1]),'quantities':quantities,'controls':controls,'history_sources':[h['source'] for h in history['history'] if h.get('source')],
+            'stock_warnings':history.get('stock_warnings',[]),
             'history_fingerprints':{h['source']:h['sha256'] for h in history['history'] if h.get('source')},
             'history_binding_updates':[{'number':h['number'],**u} for h in history['history'] for u in h.get('binding_updates',[])]}
 
@@ -69,7 +70,7 @@ def prepare_candidates(d):
                             if not isinstance(value,(float,int)) or value<0:raise Stop('Excel: не подтверждён остаток справочника.')
             finally:b.Close(SaveChanges=False)
     return [{'role':role,'path':a[role],'candidate':str(candidate),'original_sha256':d['fingerprints'][a[role]],'candidate_sha256':sha(candidate),
-             **({'history_binding_updates':ledger_result['history_binding_updates']} if role=='catalog' else {})} for role,candidate in [('catalog',ledger),('uzk',uzk)]]
+             **({'history_binding_updates':ledger_result['history_binding_updates'],'stock_warnings':ledger_result.get('stock_warnings',[])} if role=='catalog' else {})} for role,candidate in [('catalog',ledger),('uzk',uzk)]]
 
 
 def _lock_all(stack,participants,writable):

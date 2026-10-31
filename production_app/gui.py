@@ -1056,6 +1056,8 @@ class App:
         self.plan=result['plan']
         self.facts=result['data']['facts']
         d=result['data']
+        warnings=(d.get('accounting') or {}).get('stock_warnings',[])
+        if warnings:self.write('Предупреждение: некорректное B у '+str(len(warnings))+' марок вне текущей ВОМ. Их количества не исправлены. История F+ всех марок проверена.')
         self.write(f"Данные проверены: {d['project']} | {d['number']} | "
                    f"{d['marks']} марок / {d['quantity']} изделий / "
                    f"{d['mass_kg']} кг. Дата паспорта: {d['date']}.")
@@ -1173,6 +1175,7 @@ class App:
                  str(d['marks'])+' марок / '+str(d['quantity'])+' изделий / '+str(d['mass_kg'])+' кг / '+str(d['area_m2'])+' м²\n'+
                  'Реестр: '+str(d['registry'])+'\n'
                  'Папка результата: '+str(d['target'])+'\n'+
+                 ('Предупреждение: '+str(len(d['accounting'].get('stock_warnings',[])))+' проблемных строк B вне текущей ВОМ. Их данные не исправляются.\n' if (d.get('accounting') or {}).get('stock_warnings') else '')+
                  (('Справочник отгрузок: '+d['accounting']['catalog']+'\nОбщий УЗК: '+d['accounting']['uzk']+
                    '\nСписание УЗК: '+str(sum(d['accounting']['controls'].values()))+' шт. Три файла — с резервными копиями.\n') if d.get('accounting') else '')+
                  ('Будет добавлена одна строка в реестр.\n' if d['new']

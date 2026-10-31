@@ -51,9 +51,11 @@ class EditableLedger(unittest.TestCase):
     def test_negative_remaining_reports_total_and_shipped(self):
         self.totals(2)
         with self.assertRaisesRegex(Stop,'проектное количество 2, уже отгружено 3'):self.check()
-    def test_negative_unrequested_mark_also_stops(self):
+    def test_negative_unrequested_mark_warns_without_blocking_current_vom(self):
         self.totals(8,0)
-        with self.assertRaisesRegex(Stop,'Марка N: отрицательный'):self.check()
+        warnings=self.check()['stock_warnings']
+        self.assertEqual(len(warnings),1);self.assertEqual(warnings[0]['mark'],'N')
+        self.assertIn('отрицательный',warnings[0]['reason'])
     def test_stale_E_does_not_authorize_shipment(self):
         self.totals(3);self.edit(self.catalog,{'E2':999})
         with self.assertRaisesRegex(Stop,'остаток 0'):self.check()

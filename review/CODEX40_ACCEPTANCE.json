@@ -1,0 +1,22 @@
+{
+  "status": "PASS_REAL_INPUTS_DEV_ONLY",
+  "real_dev_phase": "COMPLETE",
+  "warning_count": 84,
+  "current_balances": [
+    0,
+    3,
+    3
+  ],
+  "all_B_preserved": true,
+  "old_Fplus_preserved": true,
+  "uzk_sha_unchanged": true,
+  "pdf_pages": 7,
+  "pdf_body_geometry_and_pixels_equal": true,
+  "recovery": "PASS_DIAGNOSTIC_TRANSACTION_COPIES",
+  "actual_process_crash_test": false,
+  "regressions": 653,
+  "new_targeted_tests": 6,
+  "official_issue": false,
+  "production_ready": false,
+  "external_adobe_font_capture_issue": "PERSISTS_PDF_QA_VIA_POPPLER"
+}
