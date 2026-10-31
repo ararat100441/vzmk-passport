@@ -1,0 +1,17 @@
+{
+  "status": "PASS_BOUNDED",
+  "gui_stages": 8,
+  "frozen_many_stages": 8,
+  "gui_pages_before": 9,
+  "gui_pages_after": 8,
+  "uzk_pages_before": 2,
+  "uzk_pages_after": 1,
+  "preview_pages_marked": 8,
+  "final_pages_marked": 0,
+  "protected_files_unchanged": 9825,
+  "vik_final_docx_parts_identical": true,
+  "vik_final_pdf_pixels_identical": true,
+  "native_40_rows_7_pages_executor_with_last_mark": true,
+  "real_issue": false,
+  "production_ready": false
+}
