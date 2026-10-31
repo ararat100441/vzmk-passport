@@ -1,0 +1,74 @@
+{
+  "status": "READY_FOR_INDEPENDENT_REVIEW",
+  "production_ready": false,
+  "edge": "NOT TESTED — owner check only; no browser-control workaround",
+  "local_regression": {
+    "tests": 604,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "new_tests": 17,
+    "source_changed_after_pass": false
+  },
+  "published_snapshot_targeted_tests": {
+    "tests": 17,
+    "result": "PASS",
+    "scope": "Only synthetic fixtures, no private binary assets"
+  },
+  "graphics": {
+    "real_docx_forms_without_graphics": 6,
+    "controlled_graphics_cases_blocked": 30,
+    "automatic_image_classification": "UNRELIABLE; protective block retained",
+    "images_automatically_deleted": false
+  },
+  "geometry": {
+    "approved_current_rows": 975,
+    "current_duplicate_groups": 0,
+    "conflicting_duplicates": "REJECTED_WITH_ROW_NUMBERS",
+    "identical_duplicates": "FIRST_PHYSICAL_ROW",
+    "automatic_and_shared_gost_and_individual_exception": "PRESERVED"
+  },
+  "native_frozen_cases": 3,
+  "native_tasks_per_case": 8,
+  "native_pdf_pages": [
+    9,
+    9,
+    11
+  ],
+  "ordinary_gui": {
+    "completed_stages": 8,
+    "coordinated_dev_files": 3,
+    "planned_uzk": 4,
+    "cancel": "PASS",
+    "readback": "PASS",
+    "recovery": "PASS",
+    "final_pdf_pages": 9,
+    "final_pdf_rasters_identical_to_inspected_native": 9,
+    "external_font_dialog": "REPRODUCED; NOT RESOLVED"
+  },
+  "recovery": {
+    "after_each_of_three_replacements": "PASS",
+    "second_recovery_noop": "PASS",
+    "external_change": "EXPECTED_STOP_WITHOUT_OVERWRITE",
+    "duplicate_commit": "EXPECTED_STOP_WITHOUT_CHANGES"
+  },
+  "owned_office_remaining": 0,
+  "protected_sha_unchanged": 8602,
+  "build_inputs": 113,
+  "published_build_inputs_identical": 109,
+  "published_build_inputs_redacted": [
+    "stage9_app/akz_auto.py",
+    "akz_stage6/part2.py",
+    "stage7_quality/native.py",
+    "stage7_quality/word.py"
+  ],
+  "real_issue": "NOT PERFORMED",
+  "remaining_limits": [
+    "Real shipment has a correct stock block; production totals/history unchanged",
+    "Font Capture reproduced in Adobe/Windows without VZMK; exact faulting child process and DLL not established",
+    "Edge PDF viewing NOT TESTED by owner instruction after Computer Use safety stop",
+    "UZK executor block moves to a second landscape page for the four-control-row fixture; owner layout acceptance remains",
+    "Real current control and approval of production forms are outside synthetic DEV evidence",
+    "Private source-form fixtures are excluded; the public snapshot cannot reproduce all native checks or the exact EXE without private original literals/assets"
+  ]
+}
