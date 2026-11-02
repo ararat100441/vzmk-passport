@@ -1,0 +1,56 @@
+{
+  "status": "PASS_COMPENSATION_AND_FROZEN_GUI_DEV",
+  "base_commit": "74c691ae26480741b0701b194cba1c98613076a7",
+  "release": "r14-final / CODEX49",
+  "binary_sha256": "1ff6a959bebbf4fc977f82150365c27d78a2c675fe2e83c24b26af7b58208084",
+  "targeted_tests": 66,
+  "new_compensation_tests": 17,
+  "candidate_static_checks": 33,
+  "candidate_native_checks": 17,
+  "restoration": "PASS_COMPENSATED",
+  "current_user_row_and_formulas_preserved": true,
+  "current_uzk_deletions_EF_VBA_preserved": true,
+  "catalog_balances": [
+    9,
+    9,
+    9
+  ],
+  "uzk_balances": [
+    1,
+    2,
+    0
+  ],
+  "frozen_GUI_DEV": "COMPLETE",
+  "GUI_steps": [
+    "check",
+    "prepare",
+    "verify",
+    "confirm",
+    "release",
+    "commit",
+    "readback",
+    "complete"
+  ],
+  "scenario": {
+    "pieces": 3,
+    "mass_kg": "641.95",
+    "area_m2": "20.684",
+    "planned_UZK": 0
+  },
+  "pdf_pages": 7,
+  "no_UZK_act_for_zero": true,
+  "native_readback": "PASS",
+  "duplicate_passport": "STOP_NO_WRITES",
+  "real_hardlink_before_write": "STOP_TARGETED_WINDOWS_TESTS",
+  "candidate_SHA_mismatch_after_write": "STOP_TARGETED_TESTS",
+  "repeated_postwrite_checks": "PASS_TARGETED_TESTS_AND_R14_BASE_NATIVE_EVIDENCE",
+  "preview_final_glyph_positions_and_body_pixels_equal": true,
+  "templates_and_GUI_unchanged": true,
+  "official_issue": false,
+  "control_results": "SYNTHETIC_DEV_ONLY; actual site results not confirmed",
+  "historical_transient_hardlink_root_cause": "UNKNOWN; no new claim",
+  "source_matches_binary_inputs": 103,
+  "inherited_line_endings_only": 8,
+  "inherited_redacted_runtime_files": 4,
+  "full_public_only_binary_reproducibility_claimed": false
+}

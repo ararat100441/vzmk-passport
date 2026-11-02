@@ -25,6 +25,9 @@ def task(name,request):
     if name=='readback':return core.readback(**request)
     if name=='complete':return core.complete(**request)
     if name=='recover':return core.recover(**request)
+    if name=='compensate':
+        from production_app.compensation import apply
+        return apply(**request)
     raise RuntimeError('Неизвестная операция: '+name)
 
 def main():

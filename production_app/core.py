@@ -16,6 +16,9 @@ def journal_write(path,state):save(path,state|{'seal':digest(state)})
 def journal_read(path):
     d=read(path);seal=d.pop('seal',None)
     if digest(d)!=seal:raise Stop('Журнал повреждён, автоматическая запись/восстановление запрещены: '+str(path))
+    if d.get('phase')=='COMPENSATED':
+        from .compensation import validate_closed
+        validate_closed(path,d)
     return d
 
 def training_copy(cfg,parent):
@@ -55,7 +58,7 @@ def training_guard(cfg):
 
 def pending(registry):
     root=safe(registry).parent/'.vzmk-operations'
-    return [p for p in root.glob('*/journal.json') if journal_read(p).get('phase') not in ('COMPLETE','ROLLED_BACK','ABORTED')]
+    return [p for p in root.glob('*/journal.json') if journal_read(p).get('phase') not in ('COMPLETE','ROLLED_BACK','ABORTED','COMPENSATED')]
 
 def plan(cfg,project,number,vom,facts,new):
     registry,documents,output=model.validate_paths(cfg);training_guard(cfg)
@@ -618,6 +621,10 @@ def complete(journal,readback_result):
 def recover(journal):
     journal=safe(journal);s=journal_read(journal);registry=safe(s['registry'])
     if journal.parent.parent!=registry.parent/'.vzmk-operations' or journal.parent.name!=s['id']:raise Stop('Журнал вне папки операций выбранного реестра.')
+    if s['phase']=='COMPENSATED':return {'status':'PASS','phase':'COMPENSATED'}
+    if s['phase']=='COMPENSATING':
+        from .compensation import recover_interrupted
+        return recover_interrupted(journal)
     if s.get('participants'):
         from .coordinated import recover as recover_accounting
         return recover_accounting(journal,s)
