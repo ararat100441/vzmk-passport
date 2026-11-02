@@ -8,7 +8,7 @@ from copy import copy
 from passport_app.registry import read_registry,append_row
 from passport_app.excel import excel_session,open_excel,locked_file,atomic_replace,load_book
 from . import model,facts as factual,office
-from .storage import Stop,safe,contained,sha,digest,save,read,local_root,pins,verify_pins,mutex
+from .storage import Stop,safe,contained,sha,digest,save,read,local_root,pins,verify_pins,mutex,post_commit_path
 from stage8_closure.storage import frozen
 
 def journal_write(path,state):save(path,state|{'seal':digest(state)})
@@ -511,15 +511,71 @@ def commit(path,release_result):
             journal_write(journal,state)
             raise Stop('Выпуск не завершён. Используйте восстановление: '+str(journal)+'; '+str(exc)) from exc
 
-def readback(journal):
-    s=journal_read(journal);d=read(s['plan']);registry=safe(s['registry']);target=safe(s['target'])
+def post_commit_context(journal):
+    """Bind the after-write exception to this sealed, confirmed transaction.
+
+    load_plan intentionally cannot be used here: its source pins describe
+    the originals, which the confirmed commit has already replaced.
+    """
+    journal=safe(journal);s=journal_read(journal)
     if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза проверки.')
+    plan=safe(s['plan']);d=read(plan);seal=d.get('seal')
+    if d.get('schema')!='VZMK_PRODUCTION_PLAN_1' or digest({k:v for k,v in d.items() if k!='seal'})!=seal:
+        raise Stop('План повреждён.')
+    if (s['id']!=d['id'] or plan!=local_root()/'jobs'/d['id']/'plan.json'
+            or str(plan.parent)!=d['run'] or s['registry']!=d['registry']
+            or s['registry']!=d['cfg']['registry'] or s['target']!=d['target']):
+        raise Stop('Пути транзакции не совпадают с защищённым планом.')
+    registry=Path(s['registry'])
+    if not registry.is_absolute() or journal!=registry.parent/'.vzmk-operations'/s['id']/'journal.json':
+        raise Stop('Журнал вне папки операций выбранного реестра.')
+    prepared=read(plan.parent/'prepared.json');verified=read(plan.parent/'verified.json')
+    confirmation=read(plan.parent/'confirmation.json');released=read(plan.parent/'release.json')
+    if (any(v.get('plan_seal')!=seal for v in (prepared,verified,confirmation,released))
+            or confirmation.get('verified_sha256')!=sha(plan.parent/'verified.json')
+            or confirmation.get('reviewed') is not True
+            or d['facts'].get('simple_ui') and confirmation.get('approved') is not True):
+        raise Stop('Нет действительного подтверждения транзакции.')
+    if s.get('participants'):
+        expected={'registry':d['registry'],'catalog':d['accounting']['catalog'],'uzk':d['accounting']['uzk']}
+        items=s['participants']
+        if (len(items)!=3 or {i['role'] for i in items}!=set(expected)
+                or len({i['path'] for i in items})!=3):raise Stop('Повреждены участники транзакции.')
+        candidates={i['role']:i for i in prepared['accounting']}
+        candidates['registry']={'path':d['registry'],'candidate':prepared['registry'],
+            'original_sha256':d['fingerprints'][d['registry']], 'candidate_sha256':prepared['snapshot_sha256']}
+        for item in items:
+            bound=candidates[item['role']];p=Path(item['path'])
+            if (item['path']!=expected[item['role']] or not p.is_absolute()
+                    or item['backup']!=str(journal.parent/('backup-'+item['role']+p.suffix))
+                    or any(item[k]!=bound[k] for k in ('path','candidate','original_sha256','candidate_sha256'))
+                    or item['original_sha256']!=d['fingerprints'][item['path']]):
+                raise Stop('Участник не совпадает с защищённым планом.')
+        reg=next(i for i in items if i['role']=='registry')
+        if s.get('candidate_sha256')!=reg['candidate_sha256'] or s.get('new') is not True:
+            raise Stop('Кандидат реестра не совпадает с журналом.')
+    elif s.get('candidate_sha256',s['original_sha256'])!=(prepared['snapshot_sha256'] if s['new'] else d['fingerprints'][d['registry']]):
+        raise Stop('Кандидат реестра не совпадает с планом.')
+    # Only participant files use the exception. Journal, plan, documents and
+    # backups retain strict safety, including hardlink checks.
+    registry=post_commit_path(registry);target=safe(s['target'])
+    if str(registry)!=s['registry']:raise Stop('Неточный путь участника транзакции.')
+    for item in s.get('participants',[]):
+        if str(post_commit_path(item['path']))!=item['path']:raise Stop('Неточный путь участника транзакции.')
+        if sha(safe(item['backup']))!=item['original_sha256']:raise Stop('Резервная копия повреждена '+item['role'])
+    if any(Path(name).name!=name for name in s['output_hashes']):raise Stop('Неверный путь документа.')
+    if sha(safe(target/'ISSUE.json'))!=s.get('issue_sha256'):raise Stop('Изменены сведения о выпуске.')
+    return s,d,registry,target
+
+
+def readback(journal):
+    s,d,registry,target=post_commit_context(journal)
     if s.get('participants'):
         from .coordinated import verify_current,native_readback
         verify_current(s);native_readback(s)
     if sha(registry)!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после записи.')
     for name,h in s['output_hashes'].items():
-        if sha(target/name)!=h:raise Stop('Изменён документ: '+name)
+        if sha(safe(target/name))!=h:raise Stop('Изменён документ: '+name)
     with excel_session() as app:
         b=app.Workbooks.Open(str(registry),UpdateLinks=0,ReadOnly=True,AddToMru=False)
         try:
@@ -541,13 +597,13 @@ def readback(journal):
             'print_pdf_pages':print_manifest['pages']}
 
 def complete(journal,readback_result):
-    journal=safe(journal);s=journal_read(journal);registry=safe(s['registry'])
+    journal=safe(journal);s,d,registry,target=post_commit_context(journal)
     supervisor_proof(readback_result,'readback',s['plan'])
     if s.get('participants'):
         if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза завершения.')
         from .coordinated import complete as complete_accounting
         return complete_accounting(journal,s)
-    with mutex(registry),locked_file(registry) as current:
+    with mutex(registry,post_commit=True),locked_file(registry) as current:
         if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза завершения.')
         if hashlib.sha256(current).hexdigest()!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после проверки.')
         for name,h in s['output_hashes'].items():

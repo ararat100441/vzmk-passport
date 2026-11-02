@@ -1,0 +1,41 @@
+{
+  "status": "PASS_BOUNDED_DEV_ACCEPTANCE",
+  "regression_tests": 668,
+  "new_targeted_tests": 15,
+  "skipped": 0,
+  "frozen_gui": "COMPLETE",
+  "native_source_cycle": "COMPLETE",
+  "native_frozen_cycle": "COMPLETE",
+  "genuine_hardlink_before_write_each_participant": "STOP",
+  "repeated_readback_genuine_links_2_after_commit": "PASS",
+  "wrong_candidate_sha": "STOP_BEFORE_EXCEL",
+  "duplicate_commit_single_name": "STOP_SOURCE_SHA",
+  "three_real_workbook_copies": true,
+  "all_B_and_previous_Fplus_preserved": true,
+  "catalog_balances": [
+    8,
+    8,
+    8
+  ],
+  "uzk_before": [
+    1,
+    2,
+    0
+  ],
+  "uzk_after": [
+    0,
+    1,
+    0
+  ],
+  "uzk_vba_unchanged": true,
+  "pdf_pages": 8,
+  "pdf_positioned_glyphs_and_body_pixels_equal": true,
+  "templates_identical_r13": true,
+  "protected_files_unchanged": 1268,
+  "user_confirmed_external_workbook_saves": 2,
+  "dispatch_requests_scoped_to_test_copies": 39,
+  "active_working_journal_unchanged": true,
+  "official_issue": false,
+  "production_ready": false,
+  "exe_sha256": "5e1e2bd6e545b724048b8dcc23093c4a0da2e42bd470c972a94f8321c0205d9d"
+}

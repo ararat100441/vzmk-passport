@@ -1,6 +1,6 @@
 {
   "status": "PASS",
-  "tests": 653,
+  "tests": 668,
   "failures": 0,
   "errors": 0,
   "skipped": 0,
@@ -60,6 +60,10 @@
     {
       "path": "tests\\production\\test_codex40.py",
       "tests": 6
+    },
+    {
+      "path": "tests\\production\\test_codex46.py",
+      "tests": 15
     },
     {
       "path": "tests\\production\\test_daily_gui.py",

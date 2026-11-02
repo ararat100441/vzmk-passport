@@ -43,7 +43,7 @@ def windows_file_identity(path):
         raise Stop('Не удалось проверить идентичность файла Windows: '+str(path)+
                    '. Закройте редактирование файла и повторите. '+str(exc)) from exc
 
-def safe(path):
+def _safe_path(path,*,check_hardlinks):
     path=Path(path).absolute()
     for p in (path,*path.parents):
         try:metadata=p.lstat()
@@ -56,9 +56,25 @@ def safe(path):
             if identity['attributes']&0x400:raise Stop('Ссылка/reparse недопустима: '+str(path))
             links=identity['links']
         else:links=path.stat().st_nlink
-        if links>1:raise Stop('Hardlink недопустим: '+str(path))
-        if links!=1:raise Stop('Не удалось подтвердить единственное имя файла: '+str(path))
+        if check_hardlinks:
+            if links>1:raise Stop('Hardlink недопустим: '+str(path))
+            if links!=1:raise Stop('Не удалось подтвердить единственное имя файла: '+str(path))
     return path.resolve()
+
+
+def safe(path):
+    """Strict pre-write/default safety, including the native hardlink count."""
+    return _safe_path(path,check_hardlinks=True)
+
+
+def post_commit_path(path):
+    """No-follow path check for journal-bound participants after replacement.
+
+    Callers must first validate the sealed transaction and exact participant
+    paths, then require candidate SHA. Never use for planning/writing/recovery.
+    Reparse checks and native metadata-query failures still stop the operation.
+    """
+    return _safe_path(path,check_hardlinks=False)
 
 def contained(path,root):
     path,root=safe(path),safe(root)
@@ -66,9 +82,10 @@ def contained(path,root):
     return path
 
 @contextlib.contextmanager
-def mutex(registry):
+def mutex(registry,*,post_commit=False):
     import win32event,win32api,winerror
-    name='Local\\VZMKPassport_'+hashlib.sha256(str(safe(registry)).casefold().encode()).hexdigest()
+    checked=post_commit_path(registry) if post_commit else safe(registry)
+    name='Local\\VZMKPassport_'+hashlib.sha256(str(checked).casefold().encode()).hexdigest()
     h=win32event.CreateMutex(None,False,name)
     acquired=win32event.WaitForSingleObject(h,0) in (0,128)
     try:

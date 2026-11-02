@@ -15,7 +15,7 @@ Contract from the approved Stage 5 project:
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from openpyxl import load_workbook
-from .storage import Stop, sha, safe
+from .storage import Stop, sha, safe, post_commit_path
 
 
 HEADERS=('Заказ','Марка элемента','Кол-во (шт)')
@@ -66,9 +66,9 @@ def find_shared_uzk(cfg,*,require=True):
     return candidate
 
 
-def read_shared_uzk(path,*,project=None,marks=None):
+def read_shared_uzk(path,*,project=None,marks=None,post_commit=False):
     """Read only values; reject formula quantities, duplicate contradictory rows."""
-    path=safe(path)
+    path=post_commit_path(path) if post_commit else safe(path)
     before=sha(path)
     book=load_workbook(path,read_only=True,data_only=False,keep_links=False)
     rows={}

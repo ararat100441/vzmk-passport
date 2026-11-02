@@ -9,7 +9,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from uuid import uuid4
 import hashlib,os,shutil
-from .storage import Stop,safe,sha,save,read,verify_pins,mutex
+from .storage import Stop,safe,sha,save,read,verify_pins,mutex,post_commit_path
 from passport_app.excel import locked_file,atomic_replace
 from stage8_closure.storage import frozen
 
@@ -73,10 +73,10 @@ def prepare_candidates(d):
              **({'history_binding_updates':ledger_result['history_binding_updates'],'stock_warnings':ledger_result.get('stock_warnings',[])} if role=='catalog' else {})} for role,candidate in [('catalog',ledger),('uzk',uzk)]]
 
 
-def _lock_all(stack,participants,writable):
+def _lock_all(stack,participants,writable,*,post_commit=False):
     payloads={}
     for item in sorted(participants,key=lambda x:x['path'].casefold()):
-        stack.enter_context(mutex(item['path']))
+        stack.enter_context(mutex(item['path'],post_commit=post_commit))
         payloads[item['path']]=stack.enter_context(locked_file(item['path'],writable=writable))
     return payloads
 
@@ -145,7 +145,7 @@ def commit(d,prepared,released,confirmation,approved_facts):
 
 def verify_current(state):
     for item in state['participants']:
-        if sha(item['path'])!=item['candidate_sha256']:raise Stop('После записи изменён файл '+item['path'])
+        if sha(post_commit_path(item['path']))!=item['candidate_sha256']:raise Stop('После записи изменён файл '+item['path'])
     return True
 
 
@@ -180,7 +180,7 @@ def native_readback(state):
         try:
             if not native.ReadOnly:raise Stop('Readback: общий УЗК открыт не только для чтения.')
             before=read_shared_uzk(uzk['backup'],project=data['project'],marks=a['controls'])
-            after=read_shared_uzk(uzk['path'],project=data['project'],marks=a['controls'])
+            after=read_shared_uzk(uzk['path'],project=data['project'],marks=a['controls'],post_commit=True)
             for mark,consumed in a['controls'].items():
                 if not consumed:continue
                 key=(_key(data['project']),_key(mark));remaining=before[key]['remaining']-consumed
@@ -193,7 +193,7 @@ def native_readback(state):
 def complete(journal,state):
     from .core import journal_write
     with ExitStack() as stack:
-        payloads=_lock_all(stack,state['participants'],False)
+        payloads=_lock_all(stack,state['participants'],False,post_commit=True)
         for item in state['participants']:
             if hashlib.sha256(payloads[item['path']]).hexdigest()!=item['candidate_sha256']:raise Stop('После readback изменён '+item['path'])
         target=Path(state['target'])

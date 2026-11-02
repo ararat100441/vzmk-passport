@@ -1,11 +1,9 @@
-# ВЗМК Паспортизация r13 / CODEX40
+# ВЗМК Паспортизация r14 / CODEX46
 
-Review-ветка codex/review-production-r13-codex40. База — r12 1bc03df2970a1421ef9c41313e864551e5ee7927. B и остаток блокируют выпуск для всех марок текущей ВОМ. Ошибки B других марок дают предупреждение. История F+ всех марок проверяется строго. Прежние B/F+ не исправляются; отрицательные остатки не превращаются в ноль.
+Readback и COMPLETE проверяют уже записанных участников по защищённому журналу и candidate SHA без повторного отказа по числу hardlink. Строгая защита до записи, reparse, SHA, резервные копии, блокировки и проверки истории сохранены.
 
-Конкретная реальная ВОМ прошла полный frozen DEV-цикл до COMPLETE на точных копиях данных при УЗК=0. Recovery проверен на диагностических копиях фактической транзакции. Официального выпуска не было. Общий PRODUCTION READY не присвоен.
+668 регрессий PASS. Собранный EXE прошёл полный frozen GUI DEV-цикл до COMPLETE на копиях трёх реальных Excel и отдельный native цикл с links=2 после записи и STOP при неверном SHA. Рабочая незавершённая операция не изменялась. r13 и формы сохранены.
 
-Подробности и границы доказательств: docs/CODEX40_REVIEW.md. Результаты: review/CODEX40_ACCEPTANCE.json и review/REGRESSION_SUMMARY.json. Входы сборки: review/BUILD_INPUTS_R13.json. Различия обезличенного снимка и приватной сборки: review/SOURCE_MANIFEST.json.
+Подробности и границы: docs/CODEX46_REVIEW.md. Входы сборки: review/BUILD_INPUTS_R14.json. Результат: review/CODEX46_ACCEPTANCE.json. Сохранено прежнее обезличивание исторических модулей; полная побайтовая воспроизводимость EXE только из этой ветки не заявляется.
 
-Запуск production.py. Сборка: python -B tests/production/build.py --name reviewr13. Windows, Python 3.12, Microsoft Word/Excel; requirements.txt, requirements_stage5.txt, PyInstaller, pywin32, pypdf, ReportLab 4.x. Адресные тесты: python -B -m unittest discover -s tests/production -p test_codex40.py -v.
-
-Реальные документы, EXE и частные настройки остаются локально. Main и r12 не меняются. Сохраняется обезличивание четырёх исторических runtime-модулей; полная воспроизводимость EXE только из публичного снимка не заявляется.
+База r13: 8757adc194166f325d692be31dc0133cc19bff01. Review-ветка codex/review-production-r14-codex46. Main и r13 не меняются. Реальные документы, EXE и личные настройки не публикуются.
