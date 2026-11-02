@@ -148,7 +148,7 @@
     },
     "docs/production_user_guide.txt": {
       "local_sha256": "038eeaa43916177c78c298a67c7aadc4339162277c9eec4b9c28e5c4827519b3",
-      "published_sha256": "038eeaa43916177c78c298a67c7aadc4339162277c9eec4b9c28e5c4827519b3",
+      "published_sha256": "46b03b707596d03430f6c5088c50cbb23679fbed2b3dcf2e73d1ae0687056b69",
       "redactions": []
     },
     "main.py": {
@@ -163,7 +163,7 @@
     },
     "passport_app/appendix.py": {
       "local_sha256": "aee60ba73ada49d67fe5925eddef760e21350c2521dbc894435ae3c14d58e47c",
-      "published_sha256": "aee60ba73ada49d67fe5925eddef760e21350c2521dbc894435ae3c14d58e47c",
+      "published_sha256": "5c8247b3bb47df0ddbcc7ec675f0994ffb34fa367e9cf5b2762cc0800b773f07",
       "redactions": []
     },
     "passport_app/catalog.py": {
@@ -288,7 +288,7 @@
     },
     "production_app/catalog_ledger.py": {
       "local_sha256": "78695250a6a78295a6d54a6b645bd9d8a8851173b5a3a1b085a30f1bed1c388c",
-      "published_sha256": "78695250a6a78295a6d54a6b645bd9d8a8851173b5a3a1b085a30f1bed1c388c",
+      "published_sha256": "2733a536a346f885dd23c2973e40d6bdf2032ca67d380c84d7e51125851463f0",
       "redactions": []
     },
     "production_app/control_book.py": {
@@ -338,7 +338,7 @@
     },
     "production_app/gui.py": {
       "local_sha256": "b022ca8df379d170e4c470fdcd911a1ee44e175bcdae201466b508ff300cbfd8",
-      "published_sha256": "b022ca8df379d170e4c470fdcd911a1ee44e175bcdae201466b508ff300cbfd8",
+      "published_sha256": "af8b3fbb0e21c7a88d635c2d7c558e13ca73965fe8fa0c6add94cb2e2a88ff92",
       "redactions": []
     },
     "production_app/highlighted_reference.py": {
@@ -363,7 +363,7 @@
     },
     "production_app/office.py": {
       "local_sha256": "97a3f176e6a479a464a21b761135b89601cfebd82febc8175aa73de0d61fdd8a",
-      "published_sha256": "97a3f176e6a479a464a21b761135b89601cfebd82febc8175aa73de0d61fdd8a",
+      "published_sha256": "ed34352141a12319d6b2a8adaad06e71b3b377162762e98b77e8853fcdfc3431",
       "redactions": []
     },
     "production_app/owner_control.py": {
@@ -383,7 +383,7 @@
     },
     "production_app/print_pdf.py": {
       "local_sha256": "404ad7407156d50bd1041b578eeebafcda938d3697eab7bcd1c1bc1e5a1921bb",
-      "published_sha256": "404ad7407156d50bd1041b578eeebafcda938d3697eab7bcd1c1bc1e5a1921bb",
+      "published_sha256": "ec04be3190a8dfec319d92979df6d146bbc1da9a5b2e677cb8b730d9a78ffbc8",
       "redactions": []
     },
     "production_app/project_catalog.py": {
@@ -393,12 +393,12 @@
     },
     "production_app/quality_from_first.py": {
       "local_sha256": "88041146e204b148ec8563c31fde4b79df69c17586c3cd52e1d8d9044b1a55c6",
-      "published_sha256": "88041146e204b148ec8563c31fde4b79df69c17586c3cd52e1d8d9044b1a55c6",
+      "published_sha256": "31bbbe975dee0f0fd67752ba76c32c96a5b6b3b1c28a0fe9e46498c7a59adb78",
       "redactions": []
     },
     "production_app/real_forms.py": {
       "local_sha256": "e033cfd4e99531d0c7114567a35dfd53e125ba18be1e7407dde6b542af37fb68",
-      "published_sha256": "e033cfd4e99531d0c7114567a35dfd53e125ba18be1e7407dde6b542af37fb68",
+      "published_sha256": "86c3ed3462c1b916884d1112cdbd07a521e50317da1f787efcff29ef959dce1b",
       "redactions": []
     },
     "production_app/registry_dates.py": {
@@ -1073,7 +1073,7 @@
     },
     "tests/production/test_rc3_agreed_ux.py": {
       "local_sha256": "4c461b31638e772918b4ba42bdfd2971f9e1a114aaee7bc14df30a1ddc0d72a8",
-      "published_sha256": "4c461b31638e772918b4ba42bdfd2971f9e1a114aaee7bc14df30a1ddc0d72a8",
+      "published_sha256": "a7a6251eeb5c7c91cb1dc0b04640a30dc264cfdade5d62844245fab81559980e",
       "redactions": []
     },
     "tests/production/test_rc3_interface.py": {
@@ -1868,7 +1868,7 @@
     },
     "docs/CODEX39_REVIEW.md": {
       "local_sha256": "de76da71aa10041381231b6bb9c50a4b755c2ed605bf7ef3b14599fcb074d02c",
-      "published_sha256": "de76da71aa10041381231b6bb9c50a4b755c2ed605bf7ef3b14599fcb074d02c",
+      "published_sha256": "4fbfc5016972fea9096482086eb40871dab56e6bfe1738e6c60ee4ebb5e9e787",
       "redactions": []
     },
     "tests/production/test_codex40.py": {
@@ -1878,7 +1878,7 @@
     },
     "docs/CODEX40_REVIEW.md": {
       "local_sha256": "50977117f63451c934c2b8c5dcc8591ed431512b5a3c1aab679c2c978542b38c",
-      "published_sha256": "50977117f63451c934c2b8c5dcc8591ed431512b5a3c1aab679c2c978542b38c",
+      "published_sha256": "3b4c1392a0a2a740b1b3065232cba920946153def3ed8875ab066e9064a75ba5",
       "redactions": []
     },
     "tests/production/test_codex46.py": {
@@ -1894,5 +1894,128 @@
   },
   "historical_git_ancestry_included": false,
   "warning": "Explicit privacy redactions may differ from original EXE inputs. Inspect every local/published hash and the build-input flag. No binary documents or personal configuration are included.",
-  "parent_public_snapshot": "8757adc194166f325d692be31dc0133cc19bff01"
+  "parent_public_snapshot": "8757adc194166f325d692be31dc0133cc19bff01",
+  "published_build_input_comparison": {
+    "byte_identical": [
+      "production.py",
+      "production_100.spec",
+      "production_app/akz_from_first.py",
+      "production_app/akz_presets.py",
+      "production_app/akz_ui.py",
+      "production_app/automatic_acts.py",
+      "production_app/catalog_assignments.py",
+      "production_app/control_book.py",
+      "production_app/coordinated.py",
+      "production_app/core.py",
+      "production_app/daily_gui.py",
+      "production_app/draft_package.py",
+      "production_app/external_open.py",
+      "production_app/facts.py",
+      "production_app/first_passport.py",
+      "production_app/geometry_selection.py",
+      "production_app/highlighted_reference.py",
+      "production_app/history_binding.py",
+      "production_app/measurement_ranges.py",
+      "production_app/model.py",
+      "production_app/native_acts.py",
+      "production_app/owner_control.py",
+      "production_app/path_config.py",
+      "production_app/prepared_forms.py",
+      "production_app/project_catalog.py",
+      "production_app/registry_dates.py",
+      "production_app/shared_uzk.py",
+      "production_app/shipment_dialog.py",
+      "production_app/shipment_input.py",
+      "production_app/shipment_sync.py",
+      "production_app/simple_facts.py",
+      "production_app/storage.py",
+      "production_app/templates.py",
+      "production_app/word_controls.py",
+      "production_app/working_facts.py",
+      "production_app/__init__.py",
+      "stage9_app/akz_auto_gui.py",
+      "stage9_app/akz_settings.py",
+      "stage9_app/core.py",
+      "stage9_app/diagnostics.py",
+      "stage9_app/gui.py",
+      "stage9_app/office.py",
+      "stage9_app/ownership.py",
+      "stage9_app/supervisor.py",
+      "stage9_app/test_word.py",
+      "stage9_app/validation.py",
+      "stage9_app/workspace.py",
+      "stage9_app/__init__.py",
+      "passport_app/catalog.py",
+      "passport_app/catalog_gui (2).py",
+      "passport_app/catalog_gui.py",
+      "passport_app/catalog_migration (2).py",
+      "passport_app/catalog_migration.py",
+      "passport_app/checks.py",
+      "passport_app/config.py",
+      "passport_app/excel.py",
+      "passport_app/gui.py",
+      "passport_app/registry.py",
+      "passport_app/service.py",
+      "passport_app/tables.py",
+      "passport_app/vik.py",
+      "passport_app/vom (2).py",
+      "passport_app/vom (3).py",
+      "passport_app/vom.py",
+      "passport_app/__init__.py",
+      "profiles_stage4/gui.py",
+      "profiles_stage4/model.py",
+      "profiles_stage4/offline (2).py",
+      "profiles_stage4/offline.py",
+      "profiles_stage4/storage.py",
+      "profiles_stage4/windows_generation.py",
+      "profiles_stage4/__init__.py",
+      "uzk_stage5/core (2).py",
+      "uzk_stage5/core.py",
+      "uzk_stage5/gui (2).py",
+      "uzk_stage5/gui.py",
+      "uzk_stage5/inputs (2).py",
+      "uzk_stage5/inputs.py",
+      "uzk_stage5/result_samples.py",
+      "uzk_stage5/word (2).py",
+      "uzk_stage5/word.py",
+      "uzk_stage5/__init__.py",
+      "akz_stage6/core.py",
+      "akz_stage6/gui (2).py",
+      "akz_stage6/gui.py",
+      "akz_stage6/__init__.py",
+      "stage7_quality/core.py",
+      "stage7_quality/gui.py",
+      "stage7_quality/presentation_revision.py",
+      "stage7_quality/provenance.py",
+      "stage7_quality/sources.py",
+      "stage7_quality/__init__.py",
+      "stage8_closure/core.py",
+      "stage8_closure/fixtures.py",
+      "stage8_closure/gui.py",
+      "stage8_closure/model.py",
+      "stage8_closure/native.py",
+      "stage8_closure/office.py",
+      "stage8_closure/recovery.py",
+      "stage8_closure/shortcopy.py",
+      "stage8_closure/storage.py",
+      "stage8_closure/__init__.py"
+    ],
+    "line_endings_only": [
+      "docs/production_user_guide.txt",
+      "production_app/catalog_ledger.py",
+      "production_app/gui.py",
+      "production_app/office.py",
+      "production_app/print_pdf.py",
+      "production_app/quality_from_first.py",
+      "production_app/real_forms.py",
+      "passport_app/appendix.py"
+    ],
+    "inherited_redactions": [
+      "stage9_app/akz_auto.py",
+      "akz_stage6/part2.py",
+      "stage7_quality/native.py",
+      "stage7_quality/word.py"
+    ]
+  },
+  "publication_note": "Eight inherited r13 build inputs differ only in line endings. Four inherited runtime modules are redacted. The four changed r14 runtime modules are byte-identical to the tested private build inputs."
 }

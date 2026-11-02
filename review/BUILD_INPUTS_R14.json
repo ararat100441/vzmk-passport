@@ -117,5 +117,10 @@
     "stage8_closure/storage.py": "cb9761ff6227d7810ce37982495d5150a7f43b192c7459fb26584fbe672af79b",
     "stage8_closure/__init__.py": "35c66ed92152554d4a329565c231ed26c26d1ce03ba27dce8d71a1c00f1a9828"
   },
-  "note": "Four inherited historical runtime modules remain anonymized; see SOURCE_MANIFEST.json."
+  "note": "Eight inherited r13 build inputs differ only in line endings. Four inherited runtime modules are redacted. The four changed r14 runtime modules are byte-identical to the tested private build inputs.",
+  "published_comparison_counts": {
+    "byte_identical": 102,
+    "line_endings_only": 8,
+    "inherited_redactions": 4
+  }
 }
