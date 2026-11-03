@@ -10,7 +10,6 @@ from pathlib import Path
 from unittest.mock import patch
 import tkinter as tk
 from tkinter import ttk
-from types import SimpleNamespace
 
 from production_app.shipment_dialog import open_shipment
 
