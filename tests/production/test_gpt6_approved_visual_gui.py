@@ -27,7 +27,10 @@ class ApprovedVisualLayout(unittest.TestCase):
                            return_value=Path(self.temp.name))
         self.local.start()
         self.addCleanup(self.local.stop)
-        self.app = gui.App(self.root)
+        # Never display a modal error over a hidden test root: fail promptly.
+        with patch('production_app.gui.messagebox.showerror',
+                   side_effect=AssertionError('Unexpected GUI startup error')):
+            self.app = gui.App(self.root)
         self.root.update_idletasks()
 
     def widgets(self, parent=None):
@@ -35,6 +38,16 @@ class ApprovedVisualLayout(unittest.TestCase):
         for child in parent.winfo_children():
             yield child
             yield from self.widgets(child)
+
+    def test_first_run_without_registry_does_not_select_project_or_show_error(self):
+        # This is the CODEX51 regression: empty ttk.Combobox values can be ''
+        # and Python evaluates '' in '' as True unless the name is checked.
+        self.assertFalse(self.app.cfg.get('registry'))
+        self.assertEqual(self.app.project.get(), '')
+        self.assertFalse(self.app.projects['values'])
+        self.assertIsNone(self.app.plan)
+        self.assertIn('Выберите рабочие пути',
+                      self.app.progress.cget('text'))
 
     def test_existing_commands_and_selection_widgets_are_preserved(self):
         self.assertEqual(len(self.app.buttons), 1)
