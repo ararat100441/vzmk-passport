@@ -1181,7 +1181,7 @@ class App:
         for widget in (self.projects,self.numbers,self.new_widget,self.vom_widget,self.source_numbers,self.shipment_entry):widget.configure(state='disabled')
         states=[b['state'] for b in self.buttons]
         for b in self.buttons:b.configure(state='disabled')
-        labels={'check':'Проверяются исходные данные','prepare':'Формируются Word и Excel','verify':'Проверяется комплект и создаётся PDF','confirm':'Сохраняется ваше подтверждение','release':'Готовятся окончательные документы','commit':'Сохраняется отгрузка с резервными копиями','readback':'Проверяется запись отгрузки','complete':'Завершается сохранение','recover':'Восстанавливается незавершённая операция'}
+        labels={'check':'Проверяются исходные данные','prepare':'Формируются Word и Excel','verify':'Проверяются Word и Excel','confirm':'Сохраняется ваше подтверждение','release':'Готовятся окончательные документы','commit':'Сохраняется отгрузка с резервными копиями','readback':'Проверяется запись отгрузки','complete':'Завершается сохранение','recover':'Восстанавливается незавершённая операция'}
         self.progress.configure(text=labels.get(task,'Выполняется операция')+'. Дождитесь завершения.');self.root.after(500,lambda:self.poll(root,task,callback,states))
     def poll(self,root,task,callback,states):
         if self.active.poll() is None:self.root.after(500,lambda:self.poll(root,task,callback,states));return
