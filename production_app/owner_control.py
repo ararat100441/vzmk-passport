@@ -1,7 +1,8 @@
 """Owner's explicit CURRENT-control declaration, never a simulated protocol.
 
 The pre-release engineering plan contains no positive verdict. Only a single
-explicit PDF approval may create this declaration, sealed to that exact plan.
+explicit approval (with PDF preview or direct no-preview issue) may create
+this declaration, sealed to that exact plan.
 """
 from copy import deepcopy
 from pathlib import Path
@@ -37,8 +38,8 @@ def require_declaration(plan,confirmation):
     owner=confirmation.get('current_control')
     if not isinstance(owner,dict) or owner!=declaration(plan,confirmation.get('verified_sha256')):
         raise Stop('Нет явного заявления владельца о текущем контроле именно этого комплекта.')
-    if not confirmation.get('approved') or not confirmation.get('reviewed'):
-        raise Stop('Не подтверждены просмотр и выпуск.')
+    if not confirmation.get('approved') or not (confirmation.get('reviewed') is True or confirmation.get('direct_issue_confirmed') is True):
+        raise Stop('Не подтверждены проверка данных и выпуск.')
     if confirmation.get('verified_sha256')!=sha(Path(plan['run'])/'verified.json'):
-        raise Stop('Подтверждение относится к другому проверенному PDF.')
+        raise Stop('Подтверждение относится к другому проверенному комплекту.')
     return owner
