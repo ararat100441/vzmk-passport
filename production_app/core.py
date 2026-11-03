@@ -524,7 +524,7 @@ def post_commit_context(journal):
     # exact journal location and confirmed plan below have all been validated.
     journal=post_commit_path(journal);s=journal_read(journal)
     if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза проверки.')
-    plan=safe(s['plan']);d=read(plan);seal=d.get('seal')
+    plan=post_commit_path(s['plan']);d=read(plan);seal=d.get('seal')
     if d.get('schema')!='VZMK_PRODUCTION_PLAN_1' or digest({k:v for k,v in d.items() if k!='seal'})!=seal:
         raise Stop('План повреждён.')
     if (s['id']!=d['id'] or plan!=local_root()/'jobs'/d['id']/'plan.json'
@@ -567,9 +567,9 @@ def post_commit_context(journal):
     if str(registry)!=s['registry']:raise Stop('Неточный путь участника транзакции.')
     for item in s.get('participants',[]):
         if str(post_commit_path(item['path']))!=item['path']:raise Stop('Неточный путь участника транзакции.')
-        if sha(safe(item['backup']))!=item['original_sha256']:raise Stop('Резервная копия повреждена '+item['role'])
+        if sha(post_commit_path(item['backup']))!=item['original_sha256']:raise Stop('Резервная копия повреждена '+item['role'])
     if any(Path(name).name!=name for name in s['output_hashes']):raise Stop('Неверный путь документа.')
-    if sha(safe(target/'ISSUE.json'))!=s.get('issue_sha256'):raise Stop('Изменены сведения о выпуске.')
+    if sha(post_commit_path(target/'ISSUE.json'))!=s.get('issue_sha256'):raise Stop('Изменены сведения о выпуске.')
     return s,d,registry,target
 
 
@@ -580,7 +580,7 @@ def readback(journal):
         verify_current(s);native_readback(s)
     if sha(registry)!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после записи.')
     for name,h in s['output_hashes'].items():
-        if sha(safe(target/name))!=h:raise Stop('Изменён документ: '+name)
+        if sha(post_commit_path(target/name))!=h:raise Stop('Изменён документ: '+name)
     with excel_session() as app:
         b=app.Workbooks.Open(str(registry),UpdateLinks=0,ReadOnly=True,AddToMru=False)
         try:
@@ -612,7 +612,7 @@ def complete(journal,readback_result):
         if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза завершения.')
         if hashlib.sha256(current).hexdigest()!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после проверки.')
         for name,h in s['output_hashes'].items():
-            if sha(safe(s['target'])/name)!=h:raise Stop('Документ изменился после проверки.')
+            if sha(post_commit_path(safe(s['target'])/name))!=h:raise Stop('Документ изменился после проверки.')
         print_name=Path(s['target']).name+'.pdf'
         if print_name not in s['output_hashes']:
             raise Stop('Не найден проверенный сводный PDF. Завершение запрещено.')
