@@ -5,7 +5,6 @@ must still be tested on isolated copies before releasing a new EXE.
 """
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
