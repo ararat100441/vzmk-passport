@@ -30,13 +30,28 @@ def open_shipment(app):
     y=ttk.Scrollbar(frame,orient='vertical',command=grid.yview);y.pack(side='right',fill='y');grid.configure(yscrollcommand=y.set)
     for i,h in enumerate(HEADERS):
         grid.heading(i,text=('1 шт.' if i==5 else 'Всего' if i==6 else h));grid.column(i,width=220 if i==1 else 135,minwidth=75,stretch=True)
-    grid.pack(fill='both',expand=True);app.editable(grid)
+    grid.pack(fill='both',expand=True)
+    def table_rows():
+        return [grid.item(item,'values') for item in grid.get_children()]
+    def update_status():
+        # Never display the totals of an older selection after a row edit.
+        # Invalid/incomplete edits must not be shown as a valid shipment.
+        rows=table_rows()
+        if not rows:
+            status.configure(text='ВОМ пуста — вставьте строки из Excel.')
+            return
+        try:
+            status.configure(text=normalize(rows).summary())
+        except Exception as exc:
+            status.configure(text='ВОМ требует исправления: '+str(exc))
+    app.editable(grid,on_change=update_status)
     rows=getattr(app,'shipment_rows',None)
     if rows is None and app.vom.get():
         from .model import visible_vom
         try:rows=visible_vom(app.vom.get()).rows
         except Exception:rows=[]
     for row in rows or []:grid.insert('','end',values=tuple('' if v is None else str(v) for v in row))
+    update_status()
     def commit_cell():
         pending=getattr(grid,'_pending_editor_commit',None)
         if callable(pending):pending()
@@ -49,15 +64,16 @@ def open_shipment(app):
                 raise Stop('В буфере нет таблицы. Выделите строки ВОМ в Excel, нажмите Ctrl+C и повторите Ctrl+V.')
             shipment=parse_tsv(text)
             replace_rows(grid,shipment.rows)
-            status.configure(text=shipment.summary());grid.focus_set()
+            update_status();grid.focus_set()
         except Exception as exc:app.error(exc)
         return 'break'
     def remove():
         commit_cell()
         for item in grid.selection():grid.delete(item)
+        update_status()
     def accept():
         try:
-            commit_cell();shipment=normalize([grid.item(i,'values') for i in grid.get_children()])
+            commit_cell();shipment=normalize(table_rows())
             target=local_root()/'vom-inputs'/uuid4().hex/'shipment.xlsx';write_internal(shipment,target)
             app.vom.set(str(target));app.shipment_rows=shipment.rows
             app.vom_summary.set(shipment.summary());app.write('Отгрузочная ВОМ: '+shipment.summary());window.destroy()
