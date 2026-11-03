@@ -11,9 +11,90 @@ from .external_open import open_external
 from .owner_control import STATEMENT
 from .real_forms import DOC_FIELD_LABELS, UZK_COLUMNS, UZK_HEADERS
 
+
+# Visual-only palette for the accepted engineering desktop layout.
+# No project, Office, registry, or transaction code is used here.
+GUI_BACKGROUND='#F7F9FC'
+GUI_SURFACE='#FFFFFF'
+GUI_PRIMARY='#183B63'
+GUI_TEXT='#182A3A'
+GUI_MUTED='#64748B'
+GUI_BORDER='#D9E1EA'
+
+
+def apply_visual_theme(root):
+    """Style the existing Tkinter widgets without changing any callbacks."""
+    root.configure(background=GUI_BACKGROUND)
+    style=ttk.Style(root)
+    style.theme_use('clam')
+    style.configure('TFrame',background=GUI_BACKGROUND)
+    style.configure('TLabel',background=GUI_BACKGROUND,foreground=GUI_TEXT,
+                    font=('Segoe UI',10))
+    style.configure('TButton',font=('Segoe UI',10),padding=(12,7),
+                    background=GUI_SURFACE,foreground=GUI_PRIMARY,
+                    borderwidth=1,bordercolor=GUI_BORDER,focuscolor=GUI_PRIMARY)
+    style.map('TButton',
+              background=[('disabled','#EDF1F6'),('pressed','#E0EAF4'),
+                          ('active','#EEF4FA')],
+              foreground=[('disabled','#8795A5')])
+    style.configure('Accent.TButton',font=('Segoe UI Semibold',11),
+                    padding=(14,11),background=GUI_PRIMARY,
+                    foreground=GUI_SURFACE,borderwidth=1,
+                    bordercolor=GUI_PRIMARY,focuscolor=GUI_PRIMARY)
+    style.map('Accent.TButton',
+              background=[('disabled','#9CAEC2'),('pressed','#102C49'),
+                          ('active','#27547F')],
+              foreground=[('disabled','#F7F9FC'),('active',GUI_SURFACE)])
+    style.configure('TEntry',font=('Segoe UI',10),padding=(7,5),
+                    fieldbackground=GUI_SURFACE,foreground=GUI_TEXT,
+                    bordercolor=GUI_BORDER)
+    style.configure('TCombobox',font=('Segoe UI',10),padding=(7,5),
+                    fieldbackground=GUI_SURFACE,background=GUI_SURFACE,
+                    foreground=GUI_TEXT,arrowcolor=GUI_PRIMARY,
+                    bordercolor=GUI_BORDER)
+    style.map('TCombobox',
+              fieldbackground=[('readonly',GUI_SURFACE),
+                               ('disabled','#F0F3F7')],
+              foreground=[('readonly',GUI_TEXT),('disabled',GUI_MUTED)])
+    style.configure('TCheckbutton',font=('Segoe UI',10),
+                    background=GUI_SURFACE,foreground=GUI_TEXT)
+    style.map('TCheckbutton',
+              background=[('active',GUI_SURFACE),('disabled',GUI_SURFACE)],
+              foreground=[('disabled',GUI_MUTED)])
+    style.configure('Header.TFrame',background=GUI_SURFACE)
+    style.configure('HeaderTitle.TLabel',background=GUI_SURFACE,
+                    foreground=GUI_PRIMARY,font=('Segoe UI Semibold',17))
+    style.configure('HeaderSubtitle.TLabel',background=GUI_SURFACE,
+                    foreground=GUI_MUTED,font=('Segoe UI',9))
+    style.configure('Paths.TLabel',background=GUI_BACKGROUND,
+                    foreground=GUI_MUTED,font=('Segoe UI',9))
+    style.configure('Card.TLabelframe',background=GUI_SURFACE,
+                    bordercolor=GUI_BORDER,relief='solid',borderwidth=1)
+    style.configure('Card.TLabelframe.Label',background=GUI_BACKGROUND,
+                    foreground=GUI_PRIMARY,font=('Segoe UI Semibold',11))
+    style.configure('Card.TLabel',background=GUI_SURFACE,
+                    foreground=GUI_TEXT,font=('Segoe UI',10))
+    style.configure('CardNote.TLabel',background=GUI_SURFACE,
+                    foreground=GUI_MUTED,font=('Segoe UI',9))
+    style.configure('Card.TFrame',background=GUI_SURFACE)
+    style.configure('Kpi.TFrame',background='#F1F5FA')
+    style.configure('KpiCaption.TLabel',background='#F1F5FA',
+                    foreground=GUI_MUTED,font=('Segoe UI',9))
+    style.configure('KpiValue.TLabel',background='#F1F5FA',
+                    foreground=GUI_PRIMARY,font=('Segoe UI Semibold',11))
+    style.configure('Status.TLabel',background='#EDF3FA',
+                    foreground=GUI_PRIMARY,font=('Segoe UI',9))
+    style.configure('Footer.TLabel',background=GUI_BACKGROUND,
+                    foreground=GUI_MUTED,font=('Segoe UI',9))
+    style.configure('Treeview',font=('Segoe UI',10),rowheight=26)
+    style.configure('Treeview.Heading',font=('Segoe UI Semibold',10),
+                    background='#E8EFF7',foreground=GUI_PRIMARY)
+    return style
+
 class App:
     def __init__(self,root):
         self.root=root;root.title('ВЗМК — Паспортизация '+VERSION);self.fit(root,1050,760);root.minsize(min(950,root.winfo_screenwidth()-40),min(650,root.winfo_screenheight()-80))
+        apply_visual_theme(root)
         self.config_path=local_root()/'rc3-marked-settings.json'
         initial=Path(sys.executable).parent/'initial_settings.json'
         config_error=None
@@ -30,56 +111,144 @@ class App:
         self.project=tk.StringVar();self.number=tk.StringVar();self.vom=tk.StringVar();self.new=tk.BooleanVar(value=True)
         self.shipment_rows=None;self.preliminary=None
         self.vom_summary=tk.StringVar(value='Строки ВОМ ещё не введены')
+        self.vom_kpis={name:tk.StringVar(value='—') for name in ('marks','pieces','mass','area')}
+        self.vom_summary.trace_add('write',lambda *_:self.update_vom_kpis())
         self.source_number=tk.StringVar()
         self.shipment_date=tk.StringVar(value=date.today().strftime('%d.%m.%Y'))
         self.shipment_date.trace_add('write',lambda *_:self.invalidate())
         self.project.trace_add('write',lambda *_:self.inputs_changed())
         self.number.trace_add('write',lambda *_:self.inputs_changed())
         self.vom.trace_add('write',lambda *_:self.shipment_changed())
-        top=ttk.Frame(root,padding=12);top.pack(fill='x')
-        ttk.Label(top,text='Паспорта металлоконструкций',font=('Segoe UI',17,'bold')).pack(side='left')
-        ttk.Button(top,text='Настройки путей',command=self.settings).pack(side='right')
-        self.paths=ttk.Label(root,wraplength=1050,justify='left');self.paths.pack(fill='x',padx=14)
-        form=ttk.Frame(root,padding=14);form.pack(fill='x');form.columnconfigure(1,weight=1)
-        ttk.Label(form,text='Объект из реестра').grid(row=0,column=0,sticky='w')
-        self.projects=ttk.Combobox(form,textvariable=self.project,state='readonly');self.projects.grid(row=0,column=1,sticky='ew',padx=8,pady=5)
+        # Header and existing settings action.
+        top=ttk.Frame(root,style='Header.TFrame',padding=(16,10))
+        top.pack(fill='x')
+        symbol=tk.Canvas(top,width=40,height=40,bg=GUI_PRIMARY,
+                         highlightthickness=0,borderwidth=0,relief='flat')
+        symbol.pack(side='left',padx=(0,12))
+        symbol.create_line(9,17,20,10,31,17,fill=GUI_SURFACE,width=2)
+        symbol.create_rectangle(11,17,29,32,outline=GUI_SURFACE,width=2)
+        symbol.create_line(17,19,17,32,23,19,23,32,fill=GUI_SURFACE,width=1)
+        identity=ttk.Frame(top,style='Header.TFrame')
+        identity.pack(side='left',fill='x',expand=True)
+        ttk.Label(identity,text='ВЗМК',style='HeaderTitle.TLabel').pack(anchor='w')
+        ttk.Label(identity,text='ПАСПОРТА МЕТАЛЛОКОНСТРУКЦИЙ',
+                  style='HeaderSubtitle.TLabel').pack(anchor='w')
+        ttk.Button(top,text='Настройки путей',
+                   command=self.settings).pack(side='right')
+        ttk.Separator(root,orient='horizontal').pack(fill='x')
+
+        self.paths=ttk.Label(root,style='Paths.TLabel',
+                             wraplength=1010,justify='left')
+        self.paths.pack(fill='x',padx=20,pady=(7,3))
+
+        # Existing selectors; only the visual grouping and spacing changed.
+        form=ttk.LabelFrame(root,text='01   Данные паспорта',
+                            style='Card.TLabelframe',padding=(14,7))
+        form.pack(fill='x',padx=16,pady=(5,5))
+        form.columnconfigure(1,weight=1)
+        ttk.Label(form,text='Объект из реестра',style='Card.TLabel').grid(
+            row=0,column=0,sticky='w',padx=(0,8),pady=3)
+        self.projects=ttk.Combobox(form,textvariable=self.project,state='readonly')
+        self.projects.grid(row=0,column=1,sticky='ew',padx=(0,9),pady=3)
         self.projects.bind('<<ComboboxSelected>>',lambda e:self.select_project())
-        ttk.Button(form,text='Обновить реестр',command=self.refresh).grid(row=0,column=2)
-        ttk.Label(form,text='№ паспорта, исходная серия').grid(row=1,column=0,sticky='w')
-        self.numbers=ttk.Combobox(form,textvariable=self.number,state='readonly');self.numbers.grid(row=1,column=1,sticky='ew',padx=8,pady=5)
-        self.new_widget=ttk.Checkbutton(form,text='Новый паспорт',variable=self.new,command=self.select_project);self.new_widget.grid(row=1,column=2)
-        self.vom_widget=ttk.Label(form,textvariable=self.vom_summary,wraplength=620)
-        self.vom_widget.grid(row=2,column=1,sticky='ew',padx=8,pady=5)
-        ttk.Button(form,text='Отгрузочная ВОМ',command=self.shipment_dialog).grid(row=2,column=0,pady=5,sticky='w')
-        ttk.Label(form,text='Исходный паспорт (образец документов)').grid(row=3,column=0,sticky='w')
+        ttk.Button(form,text='Обновить реестр',command=self.refresh).grid(
+            row=0,column=2,sticky='ew',pady=3)
+        ttk.Label(form,text='№ паспорта, исходная серия',
+                  style='Card.TLabel').grid(row=1,column=0,sticky='w',padx=(0,8),pady=3)
+        self.numbers=ttk.Combobox(form,textvariable=self.number,state='readonly')
+        self.numbers.grid(row=1,column=1,sticky='ew',padx=(0,9),pady=3)
+        self.new_widget=ttk.Checkbutton(form,text='Новый паспорт',
+                                        variable=self.new,command=self.select_project)
+        self.new_widget.grid(row=1,column=2,sticky='w',pady=3)
+        ttk.Label(form,text='Исходный паспорт (образец документов)',
+                  style='Card.TLabel').grid(row=2,column=0,sticky='w',padx=(0,8),pady=3)
         self.source_numbers=ttk.Combobox(form,textvariable=self.source_number,state='readonly')
-        self.source_numbers.grid(row=3,column=1,sticky='ew',padx=8,pady=5)
+        self.source_numbers.grid(row=2,column=1,sticky='ew',padx=(0,9),pady=3)
         self.source_numbers.bind('<<ComboboxSelected>>',lambda e:self.select_source())
-        self.shipment_label=ttk.Label(form,text='Дата окончания / отгрузки')
-        self.shipment_label.grid(row=4,column=0,sticky='w')
-        self.shipment_entry=ttk.Entry(form,textvariable=self.shipment_date,width=20)
-        self.shipment_entry.grid(row=4,column=1,sticky='w',padx=8,pady=5)
-        tools=ttk.Frame(root,padding=(14,0));tools.pack(fill='x')
-        # The first issued passport supplies the visual reference. The clean
-        # approved forms remain an internal software asset, not a daily dialog.
-        for text,command in [('Фактические результаты',self.fact_dialog),('Открыть документы',self.open_documents)]:
-            ttk.Button(tools,text=text,command=command).pack(side='left',padx=(0,6),pady=5)
-        steps=ttk.Frame(root,padding=14);steps.pack(fill='x')
-        # A single user action; native Office/registry safety stages remain.
-        button=ttk.Button(steps,text='Сформировать пакет',command=self.check)
+        self.shipment_label=ttk.Label(form,text='Дата окончания / отгрузки',
+                                       style='Card.TLabel')
+        self.shipment_label.grid(row=3,column=0,sticky='w',padx=(0,8),pady=3)
+        self.shipment_entry=ttk.Entry(form,textvariable=self.shipment_date,width=22)
+        self.shipment_entry.grid(row=3,column=1,sticky='w',padx=(0,9),pady=3)
+
+        # Presentation-only values are taken from the original VOM summary.
+        vom_panel=ttk.LabelFrame(root,text='02   Отгрузочная ведомость',
+                                 style='Card.TLabelframe',padding=(12,7))
+        vom_panel.pack(fill='x',padx=16,pady=(0,5))
+        vom_head=ttk.Frame(vom_panel,style='Card.TFrame')
+        vom_head.pack(fill='x')
+        ttk.Button(vom_head,text='Отгрузочная ВОМ',
+                   command=self.shipment_dialog).pack(side='left',padx=(0,12))
+        self.vom_widget=ttk.Label(vom_head,textvariable=self.vom_summary,
+                                  style='CardNote.TLabel',wraplength=680)
+        self.vom_widget.pack(side='left',fill='x',expand=True)
+        stats=ttk.Frame(vom_panel,style='Card.TFrame')
+        stats.pack(fill='x',pady=(8,0))
+        for name,title in (('marks','Марки'),('pieces','Изделия'),
+                           ('mass','Масса'),('area','Площадь')):
+            tile=ttk.Frame(stats,style='Kpi.TFrame',padding=(12,5))
+            tile.pack(side='left',fill='x',expand=True,padx=(0,7))
+            ttk.Label(tile,text=title,style='KpiCaption.TLabel').pack(anchor='w')
+            ttk.Label(tile,textvariable=self.vom_kpis[name],
+                      style='KpiValue.TLabel').pack(anchor='w')
+
+        tools=ttk.LabelFrame(root,text='03   Документы и контроль',
+                             style='Card.TLabelframe',padding=(12,6))
+        tools.pack(fill='x',padx=16,pady=(0,5))
+        # Existing commands and callbacks are preserved.
+        for text,command in [('Фактические результаты',self.fact_dialog),
+                             ('Открыть документы',self.open_documents)]:
+            ttk.Button(tools,text=text,command=command).pack(
+                side='left',padx=(0,8),pady=2)
+
+        steps=ttk.Frame(root,padding=(16,3,16,3))
+        steps.pack(fill='x')
+        button=ttk.Button(steps,text='Сформировать пакет',
+                          command=self.check,style='Accent.TButton')
         button.pack(fill='x',expand=True)
         self.buttons.append(button)
-        self.progress=ttk.Label(root,text='Выберите рабочие пути. Реестр пока не изменяется.');self.progress.pack(fill='x',padx=15)
-        ttk.Label(root,text='Итоговый PDF создаётся после подтверждения выпуска. Предварительный PDF не открывается.',wraplength=940).pack(side='bottom',padx=14,pady=(0,12))
-        self.log=tk.Text(root,wrap='word',font=('Segoe UI',10),state='disabled',height=10);self.log.pack(fill='both',expand=True,padx=14,pady=12)
+        self.progress=ttk.Label(root,text='Выберите рабочие пути. Реестр пока не изменяется.',
+                                style='Status.TLabel',padding=(10,6))
+        self.progress.pack(fill='x',padx=16,pady=(4,4))
+        ttk.Label(root,text='Итоговый PDF создаётся после подтверждения выпуска. Предварительный PDF не открывается.',
+                  style='Footer.TLabel',wraplength=970).pack(
+                      side='bottom',padx=16,pady=(0,7))
+        log_frame=ttk.LabelFrame(root,text='Журнал операций',
+                                 style='Card.TLabelframe',padding=(8,6))
+        log_frame.pack(fill='both',expand=True,padx=16,pady=(3,8))
+        self.log=tk.Text(log_frame,wrap='word',font=('Segoe UI',10),
+                         state='disabled',height=7,bg=GUI_SURFACE,fg=GUI_TEXT,
+                         selectbackground='#DCE8F5',selectforeground=GUI_TEXT,
+                         relief='flat',borderwidth=0,highlightthickness=0,
+                         padx=6,pady=5)
+        log_scroll=ttk.Scrollbar(log_frame,orient='vertical',command=self.log.yview)
+        self.log.configure(yscrollcommand=log_scroll.set)
+        log_scroll.pack(side='right',fill='y')
+        self.log.pack(side='left',fill='both',expand=True)
+        self.update_vom_kpis()
         root.protocol('WM_DELETE_WINDOW',self.close)
         self.invalidate();self.refresh()
         configured=list(self.cfg.get('profiles',{}));name=self.cfg.get('last_project') or (configured[0] if len(configured)==1 else '')
-        if name in self.projects['values']:self.project.set(name);self.select_project()
+        if name and self.cfg.get('registry') and name in tuple(self.projects['values']):
+            self.project.set(name)
+            self.select_project()
         if not self.cfg.get('registry'):root.after(300,self.settings)
         if config_error:root.after(500,lambda:self.error('Не удалось загрузить настройки. Выберите пути заново. Исходники не изменены. '+config_error))
 
     def fit(self,window,width,height):window.geometry(f'{min(width,window.winfo_screenwidth()-40)}x{min(height,window.winfo_screenheight()-80)}')
+
+    def update_vom_kpis(self):
+        """Reformat existing Shipment.summary() text; never recalculate VOM."""
+        values=('—','—','—','—')
+        parts=self.vom_summary.get().split(' / ')
+        if (len(parts)==5 and 'уникальных марок' in parts[1]
+                and ' изделий' in parts[2] and ' кг' in parts[3]):
+            values=(parts[1].split()[0],parts[2].split()[0],parts[3],
+                    'не указана' if parts[4]=='площадь не указана' else parts[4])
+        for name,value in zip(('marks','pieces','mass','area'),values):
+            self.vom_kpis[name].set(value)
+
+
 
     def scroll_content(self,dialog):
         outer=ttk.Frame(dialog);outer.pack(fill='both',expand=True)
@@ -1238,4 +1407,4 @@ class App:
 
 
 def launch():
-    root=tk.Tk();ttk.Style(root).theme_use('clam');App(root);root.mainloop()
+    root=tk.Tk();App(root);root.mainloop()
