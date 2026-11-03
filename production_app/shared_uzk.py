@@ -13,6 +13,8 @@ Contract from the approved Stage 5 project:
  conflicting duplicate blocks. Selected project's rows only.
 """
 from decimal import Decimal, InvalidOperation
+from collections import Counter
+from bisect import bisect_left
 from pathlib import Path
 from openpyxl import load_workbook
 from .storage import Stop, sha, safe, post_commit_path
@@ -72,6 +74,8 @@ def read_shared_uzk(path,*,project=None,marks=None,post_commit=False):
     before=sha(path)
     book=load_workbook(path,read_only=True,data_only=False,keep_links=False)
     rows={}
+    project_key=_key(project) if project is not None else None
+    selected_marks={_key(mark) for mark in marks} if marks is not None else None
     try:
         if 'УЗК' not in book.sheetnames:
             raise Stop('В общем XLSM отсутствует лист «УЗК».')
@@ -85,10 +89,10 @@ def read_shared_uzk(path,*,project=None,marks=None,post_commit=False):
             sheet.iter_rows(min_row=2,max_col=3,values_only=True),start=2
         ):
             order,mark,qty=values
-            if project is not None:
+            if project_key is not None:
                 if isinstance(order,str) and order.strip() and not order.startswith('='):
-                    if _key(order)!=_key(project):continue
-                elif marks is not None and _key(mark) not in {_key(m) for m in marks}:
+                    if _key(order)!=project_key:continue
+                elif selected_marks is not None and _key(mark) not in selected_marks:
                     continue  # Unassigned rows of other marks remain opaque and untouched.
             if all(x is None or isinstance(x,str) and not x.strip()
                    for x in values):
@@ -155,7 +159,8 @@ def verify_planned_quantities(facts,plan):
     marks=[str(r.get('mark','')) for r in facts.get('marks',[])]
     missing=[m for m in expected if m not in marks]
     extra=list(dict.fromkeys(m for m in marks if m not in expected))
-    duplicates=list(dict.fromkeys(m for m in marks if marks.count(m)>1))
+    frequencies=Counter(marks)
+    duplicates=list(dict.fromkeys(m for m in marks if frequencies[m]>1))
     if missing or extra or duplicates:
         raise Stop('УЗК: состав марок не совпадает с текущей ВОМ; ожидалось '+str(len(expected))+
                    ', найдено '+str(len(marks))+'.\nОтсутствуют: '+(', '.join(missing) or 'нет')+
@@ -164,9 +169,10 @@ def verify_planned_quantities(facts,plan):
         mark=str(row.get('mark',''))
         if mark not in expected:
             raise Stop('УЗК: неизвестная марка текущей ВОМ '+mark)
-        observed=_qty(row.get('uzk_quantity'), 'ВОМ '+mark) if (
-            row.get('uzk_quantity') not in (0,'0')
-        ) else 0
+        raw=row.get('uzk_quantity')
+        if raw is None or isinstance(raw,bool) or isinstance(raw,str) and not raw.strip():
+            raise Stop('УЗК: не заполнено действующее количество для марки '+mark)
+        observed=_qty(raw,'ВОМ '+mark) if raw not in (0,'0') else 0
         if observed!=expected[mark]:
             raise Stop('УЗК: количество по марке '+mark+' должно быть '+
                        str(expected[mark])+' согласно общему реестру. '
@@ -231,7 +237,10 @@ def decrement_candidate(source,target,project,quantities):
                 if 'УЗК' in (defined.text or '').upper():
                     if defined.get('name') not in ('_xlnm._FilterDatabase','_xlnm.Print_Area') or not re.fullmatch(r"(?:'УЗК'|УЗК)![A-Z$0-9:]+",defined.text or ''):
                         raise Stop('УЗК: именованные диапазоны зависят от удаляемых строк; запись остановлена.')
-        def shifted(no):return no-sum(d<no for d in deletions)
+        # Sorting once avoids a full scan of all deleted rows for each cell.
+        removed=sorted(deletions)
+        removed_set=set(deletions)
+        def shifted(no):return no-bisect_left(removed,no)
         for row in list(data):
             no=int(row.get('r'))
             if no in deletions:data.remove(row);continue
@@ -252,9 +261,13 @@ def decrement_candidate(source,target,project,quantities):
                 if not match:raise Stop('УЗК: сложный диапазон строки '+token)
                 low=int(match[3]);high=int(match[6] or low)
                 if low==1 and high==1048576:result.append(token);continue
-                new_low=next((n for n in range(low,high+1) if n not in deletions),None)
-                if new_low is None:continue
-                new_high=next(n for n in range(high,low-1,-1) if n not in deletions)
+                # A sparse set of removed rows must not trigger an O(range)
+                # walk (Excel ranges can span over one million rows).
+                new_low=low
+                while new_low<=high and new_low in removed_set:new_low+=1
+                if new_low>high:continue
+                new_high=high
+                while new_high>=new_low and new_high in removed_set:new_high-=1
                 first=match[1]+match[2]+str(shifted(new_low))
                 last=(match[4] or match[1])+(match[5] or '')+str(shifted(new_high))
                 result.append(first+(':'+last if match[6] else ''))
