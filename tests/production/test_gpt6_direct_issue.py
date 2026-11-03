@@ -158,6 +158,37 @@ class DirectIssueConfirmation(TestCase):
             self.confirm(approved=True, current_control=True, direct_issue=True)
 
 
+class DirectIssueReadbackContract(TestCase):
+    """The sealed post-commit context must recognize explicit no-PDF consent."""
+
+    def setUp(self):
+        import test_codex50 as fixture
+        self.fixture = fixture.JournalAfterWrite(
+            "test_linked_journal_readback_calls_native_verification"
+        )
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.fixture.prepared_readback()
+
+    def set_mode(self, direct, reviewed):
+        folder = self.fixture.run
+        confirmation = read(folder / "confirmation.json")
+        confirmation["reviewed"] = reviewed
+        confirmation["direct_issue_confirmed"] = direct
+        save(folder / "confirmation.json", confirmation)
+        return confirmation
+
+    def test_direct_approval_allows_verified_readback_context(self):
+        self.set_mode(direct=True, reviewed=False)
+        state, _, _, _ = core.post_commit_context(self.fixture.journal)
+        self.assertEqual(state["phase"], "NEEDS_READBACK")
+
+    def test_neither_preview_review_nor_direct_approval_blocks_readback(self):
+        self.set_mode(direct=False, reviewed=False)
+        with self.assertRaisesRegex(Stop, "подтверждения"):
+            core.post_commit_context(self.fixture.journal)
+
+
 if __name__ == "__main__":
     import unittest
     unittest.main()
