@@ -221,9 +221,14 @@ def _prepare(d):
     run=safe(d['run']);outputs=run/'documents'
     outputs.mkdir(exist_ok=False)
     registry=Path(d['registry']);snapshot=run/'registry.xlsx'
-    payload=registry.read_bytes()
-    if hashlib.sha256(payload).hexdigest()!=d['fingerprints'][str(registry)]:raise Stop('SHA реестра изменился.')
-    snapshot.write_bytes(payload)
+    hasher=hashlib.sha256()
+    with registry.open('rb') as source, snapshot.open('xb') as output:
+        for block in iter(lambda:source.read(1024*1024),b''):
+            hasher.update(block)
+            output.write(block)
+    if hasher.hexdigest()!=d['fingerprints'][str(registry)]:
+        snapshot.unlink(missing_ok=True)
+        raise Stop('SHA реестра изменился.')
     v=model.visible_vom(d['vom']);r=read_registry(snapshot);p=model.select(r,d['project'])
     if d['new']:
         with excel_session() as app:

@@ -5,7 +5,9 @@ from uuid import uuid4
 class Stop(RuntimeError): pass
 
 def sha(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    """Hash without materializing the whole workbook/PDF in RAM."""
+    with Path(path).open('rb') as source:
+        return hashlib.file_digest(source, 'sha256').hexdigest()
 
 def digest(data):
     return hashlib.sha256(json.dumps(data,sort_keys=True,ensure_ascii=False,default=str).encode('utf8')).hexdigest()
