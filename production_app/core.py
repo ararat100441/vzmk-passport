@@ -349,10 +349,17 @@ def preview(path):
     save(run/'preview.json',data)
     return {'status':'PASS',**data}
 
-def confirm(path,responsible,reviewed,approved=False,current_control=False):
+def confirm(path,responsible,reviewed,approved=False,current_control=False,direct_issue=False):
     d=load_plan(path);run=Path(d['run']);verified=read(run/'verified.json')
-    if not reviewed or responsible!=d['facts']['responsible']:
-        raise Stop('Подтвердите просмотр всех документов и ответственное лицо.')
+    if responsible!=d['facts']['responsible'] or not (reviewed is True or direct_issue is True):
+        raise Stop('Подтвердите ответственного и разрешение на выпуск.')
+    if direct_issue:
+        if reviewed is True or approved is not True:
+            raise Stop('Прямой выпуск требует отдельного явного согласия без просмотра PDF.')
+        if (run/'preview.json').exists() or verified.get('preview_pdf'):
+            raise Stop('Прямой выпуск запрещён для заявки с предварительным PDF.')
+        if verified.get('plan_seal')!=d['seal'] or not verified.get('documents'):
+            raise Stop('Перед прямым выпуском проверьте подготовленные Word и Excel.')
     if d['facts'].get('simple_ui') and approved is not True:
         raise Stop('Не подтверждены достоверность текущих результатов, '
                    'полномочия и утверждённые формы.')
@@ -361,7 +368,9 @@ def confirm(path,responsible,reviewed,approved=False,current_control=False):
         shown=read(run/'preview.json')
         if shown['plan_seal']!=d['seal'] or shown['verified_sha256']!=sha(run/'verified.json'):raise Stop('Просмотрен другой комплект. Сформируйте PDF снова.')
         verify_pins({shown['pdf']:shown['sha256']})
-    confirmation={'plan_seal':d['seal'],'verified_sha256':sha(run/'verified.json'),'responsible':responsible,'reviewed':True,'approved':approved is True,'created_at':datetime.now(timezone.utc).isoformat()}
+    confirmation={'plan_seal':d['seal'],'verified_sha256':sha(run/'verified.json'),'responsible':responsible,
+                  'reviewed':reviewed is True,'direct_issue_confirmed':direct_issue is True,
+                  'approved':approved is True,'created_at':datetime.now(timezone.utc).isoformat()}
     if d['facts'].get('owner_confirmation_required'):
         if current_control is not True:raise Stop('Явно подтвердите выполненный текущий контроль. Старый образец не является подтверждением.')
         from .owner_control import declaration
@@ -444,9 +453,12 @@ def commit(path,release_result):
     verify_pins(released['fingerprints'])
     from .print_pdf import verify_package_print
     verify_package_print(released,target.name,uzk_required=d.get('uzk_required',True))
-    if confirmation['plan_seal']!=d['seal'] or confirmation['verified_sha256']!=sha(run/'verified.json') or not confirmation['reviewed']:raise Stop('Нет действительного подтверждения выпуска.')
+    if (confirmation['plan_seal']!=d['seal'] or confirmation['verified_sha256']!=sha(run/'verified.json')
+            or not (confirmation.get('reviewed') is True or confirmation.get('direct_issue_confirmed') is True)):
+        raise Stop('Нет действительного подтверждения выпуска.')
     verify_pins(verified['fingerprints']);v=model.visible_vom(d['vom'])
-    approved_facts=d['facts']|{'documents_reviewed':True}
+    approved_facts=d['facts']|{'documents_reviewed':confirmation.get('reviewed') is True,
+                               'direct_issue_confirmed':confirmation.get('direct_issue_confirmed') is True}
     if d['facts'].get('simple_ui'):
         if confirmation.get('approved') is not True:
             raise Stop('Нет итогового подтверждения полномочий и текущих результатов.')
@@ -538,7 +550,8 @@ def post_commit_context(journal):
     confirmation=read(plan.parent/'confirmation.json');released=read(plan.parent/'release.json')
     if (any(v.get('plan_seal')!=seal for v in (prepared,verified,confirmation,released))
             or confirmation.get('verified_sha256')!=sha(plan.parent/'verified.json')
-            or confirmation.get('reviewed') is not True
+            or not (confirmation.get('reviewed') is True or confirmation.get('direct_issue_confirmed') is True)
+            or (confirmation.get('direct_issue_confirmed') is True and confirmation.get('approved') is not True)
             or d['facts'].get('simple_ui') and confirmation.get('approved') is not True):
         raise Stop('Нет действительного подтверждения транзакции.')
     if s.get('participants'):
