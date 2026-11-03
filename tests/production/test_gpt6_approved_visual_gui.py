@@ -49,6 +49,25 @@ class ApprovedVisualLayout(unittest.TestCase):
         self.assertIn('Выберите рабочие пути',
                       self.app.progress.cget('text'))
 
+    def test_configured_project_still_uses_existing_selection_callback(self):
+        # The first-run fix must not suppress selection for a valid profile.
+        from production_app.storage import save
+        folder = Path(self.temp.name)
+        save(folder / 'rc3-marked-settings.json', {
+            'registry': 'CONFIGURED_REGISTRY.xlsx',
+            'profiles': {'TEST': {}},
+            'last_project': 'TEST',
+        })
+        def fake_refresh(app):
+            app.projects['values'] = ('TEST',)
+        with patch.object(gui.App, 'refresh', new=fake_refresh), \
+             patch.object(gui.App, 'select_project', autospec=True) as selected, \
+             patch('production_app.gui.messagebox.showerror',
+                   side_effect=AssertionError('Unexpected configured startup error')):
+            configured = gui.App(self.root)
+        self.assertEqual(configured.project.get(), 'TEST')
+        selected.assert_called_once_with(configured)
+
     def test_existing_commands_and_selection_widgets_are_preserved(self):
         self.assertEqual(len(self.app.buttons), 1)
         self.assertEqual(self.app.buttons[0].cget('text'), 'Сформировать пакет')
