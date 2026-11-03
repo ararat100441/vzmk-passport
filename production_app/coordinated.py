@@ -179,7 +179,8 @@ def native_readback(state):
         native=app.Workbooks.Open(uzk['path'],UpdateLinks=0,ReadOnly=True,AddToMru=False)
         try:
             if not native.ReadOnly:raise Stop('Readback: общий УЗК открыт не только для чтения.')
-            before=read_shared_uzk(uzk['backup'],project=data['project'],marks=a['controls'])
+            # post_commit_context already pins this exact backup by role/path/SHA.
+            before=read_shared_uzk(uzk['backup'],project=data['project'],marks=a['controls'],post_commit=True)
             after=read_shared_uzk(uzk['path'],project=data['project'],marks=a['controls'],post_commit=True)
             for mark,consumed in a['controls'].items():
                 if not consumed:continue
