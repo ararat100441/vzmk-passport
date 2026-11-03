@@ -110,6 +110,13 @@ class ShipmentDialogFooter(unittest.TestCase):
         self.assertIn("2 изделий / 542.92 кг / 16.877 м²", self.status())
         self.assertNotIn("842.92", self.status())
 
+    def test_deleting_every_row_clears_the_summary(self):
+        grid = self.add_three_rows()
+        grid.selection_set(grid.get_children())
+        self.find_controls()["Удалить строку"].invoke()
+        self.assertEqual(grid.get_children(), ())
+        self.assertEqual(self.status(), "ВОМ пуста — вставьте строки из Excel.")
+
     def test_editing_a_cell_invalidates_old_totals(self):
         grid = self.add_three_rows()
         item = grid.get_children()[0]
