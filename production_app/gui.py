@@ -70,7 +70,7 @@ class App:
         button.pack(fill='x',expand=True)
         self.buttons.append(button)
         self.progress=ttk.Label(root,text='Выберите рабочие пути. Реестр пока не изменяется.');self.progress.pack(fill='x',padx=15)
-        ttk.Label(root,text='Запись отгрузки выполняется только после просмотра PDF и вашего подтверждения.',wraplength=940).pack(side='bottom',padx=14,pady=(0,12))
+        ttk.Label(root,text='Итоговый PDF создаётся после подтверждения выпуска. Предварительный PDF не открывается.',wraplength=940).pack(side='bottom',padx=14,pady=(0,12))
         self.log=tk.Text(root,wrap='word',font=('Segoe UI',10),state='disabled',height=10);self.log.pack(fill='both',expand=True,padx=14,pady=12)
         root.protocol('WM_DELETE_WINDOW',self.close)
         self.invalidate();self.refresh()
@@ -948,23 +948,20 @@ class App:
         if target:self.run('catalog',{'vom':self.vom.get(),'target':target},lambda r:self.write('Черновик: '+r['path']+'; профиль/краска/АКЗ пустые.'))
 
     def check(self):
-        """The single working path: validate, preview, one explicit consent."""
+        """Validate current measurements, then issue without a preliminary PDF."""
         if self.active:return
-        if self.plan and self.preview_pdf:return self.review_preview()
-        if self.preliminary and self.preview_pdf:return self.review_preliminary()
+        if self.plan:return self.review_direct()
         try:
-            if not self.project.get() or not self.number.get() or not self.vom.get():raise Stop('Выберите объект, исходный паспорт и введите отгрузочную ВОМ.')
-            current=self.shipment_facts()
-            try:
-                from .owner_control import engineering_facts
-                current=engineering_facts(current,model.profile(self.cfg,self.project.get()))
-            except Stop:
-                pass  # incomplete ranges/assignments may still have a marked preview
-            else:
-                self.run('check',{'cfg':self.cfg,'project':self.project.get(),'number':self.number.get(),'vom':self.vom.get(),'facts':current,'new':self.new.get()},self.checked)
-                return
-            self.run('draft',{'cfg':self.cfg,'project':self.project.get(),'number':self.number.get(),'vom':self.vom.get(),'facts':current,'new':self.new.get()},self.preliminary_ready)
-        except Exception as exc:self.error(exc)
+            if not self.project.get() or not self.number.get() or not self.vom.get():
+                raise Stop('Выберите объект, исходный паспорт и введите отгрузочную ВОМ.')
+            from .owner_control import engineering_facts
+            current=engineering_facts(self.shipment_facts(),model.profile(self.cfg,self.project.get()))
+            self.run('check',{'cfg':self.cfg,'project':self.project.get(),
+                              'number':self.number.get(),'vom':self.vom.get(),
+                              'facts':current,'new':self.new.get()},self.checked)
+        except Exception as exc:
+            self.error('Сначала заполните текущие фактические результаты. '
+                       'Предварительный пакет не создаётся. '+str(exc))
 
     def preliminary_ready(self,result):
         self.preliminary=result;self.preview_pdf=result['preview_pdf']
@@ -1063,14 +1060,55 @@ class App:
                    f"{d['mass_kg']} кг. Дата паспорта: {d['date']}.")
         self.run('prepare',{'path':self.plan},self.prepared)
     def prepare(self):self.run('prepare',{'path':self.plan},self.prepared)
-    def verify(self):self.run('verify',{'path':self.plan,'preview':True},self.verified)
+    def verify(self):self.run('verify',{'path':self.plan,'preview':False},self.verified)
     def verified(self,result):
-        self.preview_pdf=result.get('preview_pdf')
-        if not self.preview_pdf or not Path(self.preview_pdf).is_file():
-            self.error('Не создан предварительный PDF: выпуск запрещён.')
+        if result.get('preview_pdf') or not result.get('ready_to_confirm'):
+            self.error('Неверная проверка итоговых документов: предварительный PDF не требуется.')
             return
-        self.buttons[0].configure(text='Просмотреть и подтвердить')
-        self.review_preview()
+        self.preview_pdf=None
+        self.buttons[0].configure(text='Подтвердить выпуск')
+        self.review_direct()
+
+    def review_direct(self):
+        """One explicit authorization before final PDF and any registry writes."""
+        if not self.plan or self.active or self.preview_pdf:return
+        try:
+            d=read(self.plan)
+            verified=read(Path(self.plan).parent/'verified.json')
+            if (verified.get('plan_seal')!=d['seal']
+                    or verified.get('preview_pdf') is not None
+                    or not verified.get('documents')):
+                raise Stop('Комплект ещё не прошёл проверку Word/Excel.')
+        except Exception as exc:
+            self.error(exc);return
+        accounting=d.get('accounting') or {}
+        message=('Формирование итогового комплекта БЕЗ предварительного PDF.\n'
+                 'Объект: '+str(d['project'])+'\n'
+                 'Паспорт: '+str(d['number'])+'\n'
+                 'Дата: '+str(d['date'])+'\n'
+                 +str(d['marks'])+' марок / '+str(d['quantity'])+' изделий / '
+                 +str(d['mass_kg'])+' кг / '+str(d['area_m2'])+' м²\n'
+                 'Путь к рабочему реестру: '+str(d['registry'])+'\n'
+                 'Папка итогового комплекта: '+str(d['target'])+'\n'
+                 +('Предупреждение: '+str(len(accounting.get('stock_warnings',[])))
+                   +' ошибок B вне ВОМ (данные сохраняются).\n'
+                   if accounting.get('stock_warnings') else '')
+                 +('Справочник: '+str(accounting['catalog'])+'\n'
+                   'Общий УЗК: '+str(accounting['uzk'])+'\n'
+                   'Списание УЗК: '+str(sum(accounting['controls'].values()))+' шт.\n'
+                   if accounting else '')
+                 +'\nПрограмма уже проверила Word и Excel. Предварительный PDF '
+                 'не создаётся и не открывается. После подтверждения программа '
+                 'сформирует ИТОГОВЫЙ PDF, проверит документы и только затем '
+                 'запишет отгрузку в три Excel с резервными копиями.\n\n'
+                 'Вы подтверждаете реальные результаты контроля, правильность '
+                 'ВОМ и право на официальный выпуск БЕЗ предварительного '
+                 'просмотра PDF.\n'+STATEMENT+
+                 '\n\nПодтвердить выпуск?')
+        if not messagebox.askyesno('Подтверждение итогового выпуска',message):
+            self.write('Выпуск отменён до записи. Рабочие Excel не изменены.')
+            return
+        self.issue()
 
     def open_documents(self):
         """Open the latest completed passport or the current prepared drafts."""
@@ -1096,12 +1134,14 @@ class App:
                             'папка паспорта.')
 
     def issue(self):
-        if not self.plan or not self.preview_pdf:return
-        # Only entered from explicit consent in review_preview(), with exact
-        # project/date/registry/output shown. Do not ask a SECOND approval.
+        if not self.plan or self.active:return
+        # The operator explicitly approved either a PDF review or direct issue.
+        # No second confirmation is added.
+        direct_issue=not bool(self.preview_pdf)
         self.run('confirm',{'path':self.plan,
                             'responsible':self.facts.get('responsible',''),
-                            'reviewed':True,
+                            'reviewed':not direct_issue,
+                            'direct_issue':direct_issue,
                             'approved':True,
                             'current_control':True},
                  lambda r:self.run('release',{'path':self.plan},self.released))
@@ -1141,7 +1181,7 @@ class App:
         for widget in (self.projects,self.numbers,self.new_widget,self.vom_widget,self.source_numbers,self.shipment_entry):widget.configure(state='disabled')
         states=[b['state'] for b in self.buttons]
         for b in self.buttons:b.configure(state='disabled')
-        labels={'check':'Проверяются исходные данные','prepare':'Формируются Word и Excel','verify':'Проверяется комплект и создаётся PDF','confirm':'Сохраняется ваше подтверждение','release':'Готовятся окончательные документы','commit':'Сохраняется отгрузка с резервными копиями','readback':'Проверяется запись отгрузки','complete':'Завершается сохранение','recover':'Восстанавливается незавершённая операция'}
+        labels={'check':'Проверяются исходные данные','prepare':'Формируются Word и Excel','verify':'Проверяются Word и Excel','confirm':'Сохраняется ваше подтверждение','release':'Готовятся окончательные документы','commit':'Сохраняется отгрузка с резервными копиями','readback':'Проверяется запись отгрузки','complete':'Завершается сохранение','recover':'Восстанавливается незавершённая операция'}
         self.progress.configure(text=labels.get(task,'Выполняется операция')+'. Дождитесь завершения.');self.root.after(500,lambda:self.poll(root,task,callback,states))
     def poll(self,root,task,callback,states):
         if self.active.poll() is None:self.root.after(500,lambda:self.poll(root,task,callback,states));return
@@ -1157,7 +1197,7 @@ class App:
 
     def prepared(self,result):
         self.write('Word и Excel подготовлены: '+str(result['files'])+' файлов.')
-        self.run('verify',{'path':self.plan,'preview':True},self.verified)
+        self.run('verify',{'path':self.plan,'preview':False},self.verified)
 
 
     def review_preview(self):

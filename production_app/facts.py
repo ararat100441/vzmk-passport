@@ -140,7 +140,9 @@ def validate(facts,vom,project,number,training=False,require_review=False,*,defe
         if start>end or any(not start<=date.fromisoformat(facts[k])<=end
                             for k in ('vik_date','uzk_date','akz_date')):
             raise Stop('Даты контроля вне подтверждённого периода изготовления.')
-    if require_review and not facts.get('documents_reviewed'):raise Stop('Документы ещё не просмотрены ответственным лицом.')
+    if require_review and not (facts.get('documents_reviewed') or
+            (facts.get('direct_issue_confirmed') and control_confirmation)):
+        raise Stop('Документы не просмотрены и прямой выпуск не подтверждён.')
     expected={}
     for row in vom.rows:expected[str(row[0])]=expected.get(str(row[0]),Decimal(0))+row[2]
     owner_control=bool(preparing or control_confirmation)

@@ -349,10 +349,17 @@ def preview(path):
     save(run/'preview.json',data)
     return {'status':'PASS',**data}
 
-def confirm(path,responsible,reviewed,approved=False,current_control=False):
+def confirm(path,responsible,reviewed,approved=False,current_control=False,direct_issue=False):
     d=load_plan(path);run=Path(d['run']);verified=read(run/'verified.json')
-    if not reviewed or responsible!=d['facts']['responsible']:
-        raise Stop('Подтвердите просмотр всех документов и ответственное лицо.')
+    if responsible!=d['facts']['responsible'] or not (reviewed is True or direct_issue is True):
+        raise Stop('Подтвердите ответственного и разрешение на выпуск.')
+    if direct_issue:
+        if reviewed is True or approved is not True:
+            raise Stop('Прямой выпуск требует отдельного явного согласия без просмотра PDF.')
+        if (run/'preview.json').exists() or verified.get('preview_pdf'):
+            raise Stop('Прямой выпуск запрещён для заявки с предварительным PDF.')
+        if verified.get('plan_seal')!=d['seal'] or not verified.get('documents'):
+            raise Stop('Перед прямым выпуском проверьте подготовленные Word и Excel.')
     if d['facts'].get('simple_ui') and approved is not True:
         raise Stop('Не подтверждены достоверность текущих результатов, '
                    'полномочия и утверждённые формы.')
@@ -361,7 +368,9 @@ def confirm(path,responsible,reviewed,approved=False,current_control=False):
         shown=read(run/'preview.json')
         if shown['plan_seal']!=d['seal'] or shown['verified_sha256']!=sha(run/'verified.json'):raise Stop('Просмотрен другой комплект. Сформируйте PDF снова.')
         verify_pins({shown['pdf']:shown['sha256']})
-    confirmation={'plan_seal':d['seal'],'verified_sha256':sha(run/'verified.json'),'responsible':responsible,'reviewed':True,'approved':approved is True,'created_at':datetime.now(timezone.utc).isoformat()}
+    confirmation={'plan_seal':d['seal'],'verified_sha256':sha(run/'verified.json'),'responsible':responsible,
+                  'reviewed':reviewed is True,'direct_issue_confirmed':direct_issue is True,
+                  'approved':approved is True,'created_at':datetime.now(timezone.utc).isoformat()}
     if d['facts'].get('owner_confirmation_required'):
         if current_control is not True:raise Stop('Явно подтвердите выполненный текущий контроль. Старый образец не является подтверждением.')
         from .owner_control import declaration
@@ -444,9 +453,12 @@ def commit(path,release_result):
     verify_pins(released['fingerprints'])
     from .print_pdf import verify_package_print
     verify_package_print(released,target.name,uzk_required=d.get('uzk_required',True))
-    if confirmation['plan_seal']!=d['seal'] or confirmation['verified_sha256']!=sha(run/'verified.json') or not confirmation['reviewed']:raise Stop('Нет действительного подтверждения выпуска.')
+    if (confirmation['plan_seal']!=d['seal'] or confirmation['verified_sha256']!=sha(run/'verified.json')
+            or not (confirmation.get('reviewed') is True or confirmation.get('direct_issue_confirmed') is True)):
+        raise Stop('Нет действительного подтверждения выпуска.')
     verify_pins(verified['fingerprints']);v=model.visible_vom(d['vom'])
-    approved_facts=d['facts']|{'documents_reviewed':True}
+    approved_facts=d['facts']|{'documents_reviewed':confirmation.get('reviewed') is True,
+                               'direct_issue_confirmed':confirmation.get('direct_issue_confirmed') is True}
     if d['facts'].get('simple_ui'):
         if confirmation.get('approved') is not True:
             raise Stop('Нет итогового подтверждения полномочий и текущих результатов.')
@@ -524,7 +536,7 @@ def post_commit_context(journal):
     # exact journal location and confirmed plan below have all been validated.
     journal=post_commit_path(journal);s=journal_read(journal)
     if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза проверки.')
-    plan=safe(s['plan']);d=read(plan);seal=d.get('seal')
+    plan=post_commit_path(s['plan']);d=read(plan);seal=d.get('seal')
     if d.get('schema')!='VZMK_PRODUCTION_PLAN_1' or digest({k:v for k,v in d.items() if k!='seal'})!=seal:
         raise Stop('План повреждён.')
     if (s['id']!=d['id'] or plan!=local_root()/'jobs'/d['id']/'plan.json'
@@ -538,7 +550,8 @@ def post_commit_context(journal):
     confirmation=read(plan.parent/'confirmation.json');released=read(plan.parent/'release.json')
     if (any(v.get('plan_seal')!=seal for v in (prepared,verified,confirmation,released))
             or confirmation.get('verified_sha256')!=sha(plan.parent/'verified.json')
-            or confirmation.get('reviewed') is not True
+            or not (confirmation.get('reviewed') is True or confirmation.get('direct_issue_confirmed') is True)
+            or (confirmation.get('direct_issue_confirmed') is True and confirmation.get('approved') is not True)
             or d['facts'].get('simple_ui') and confirmation.get('approved') is not True):
         raise Stop('Нет действительного подтверждения транзакции.')
     if s.get('participants'):
@@ -567,9 +580,9 @@ def post_commit_context(journal):
     if str(registry)!=s['registry']:raise Stop('Неточный путь участника транзакции.')
     for item in s.get('participants',[]):
         if str(post_commit_path(item['path']))!=item['path']:raise Stop('Неточный путь участника транзакции.')
-        if sha(safe(item['backup']))!=item['original_sha256']:raise Stop('Резервная копия повреждена '+item['role'])
+        if sha(post_commit_path(item['backup']))!=item['original_sha256']:raise Stop('Резервная копия повреждена '+item['role'])
     if any(Path(name).name!=name for name in s['output_hashes']):raise Stop('Неверный путь документа.')
-    if sha(safe(target/'ISSUE.json'))!=s.get('issue_sha256'):raise Stop('Изменены сведения о выпуске.')
+    if sha(post_commit_path(target/'ISSUE.json'))!=s.get('issue_sha256'):raise Stop('Изменены сведения о выпуске.')
     return s,d,registry,target
 
 
@@ -580,7 +593,7 @@ def readback(journal):
         verify_current(s);native_readback(s)
     if sha(registry)!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после записи.')
     for name,h in s['output_hashes'].items():
-        if sha(safe(target/name))!=h:raise Stop('Изменён документ: '+name)
+        if sha(post_commit_path(target/name))!=h:raise Stop('Изменён документ: '+name)
     with excel_session() as app:
         b=app.Workbooks.Open(str(registry),UpdateLinks=0,ReadOnly=True,AddToMru=False)
         try:
@@ -612,7 +625,7 @@ def complete(journal,readback_result):
         if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза завершения.')
         if hashlib.sha256(current).hexdigest()!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после проверки.')
         for name,h in s['output_hashes'].items():
-            if sha(safe(s['target'])/name)!=h:raise Stop('Документ изменился после проверки.')
+            if sha(post_commit_path(safe(s['target'])/name))!=h:raise Stop('Документ изменился после проверки.')
         print_name=Path(s['target']).name+'.pdf'
         if print_name not in s['output_hashes']:
             raise Stop('Не найден проверенный сводный PDF. Завершение запрещено.')
