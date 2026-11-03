@@ -229,7 +229,9 @@ class App:
         root.protocol('WM_DELETE_WINDOW',self.close)
         self.invalidate();self.refresh()
         configured=list(self.cfg.get('profiles',{}));name=self.cfg.get('last_project') or (configured[0] if len(configured)==1 else '')
-        if name in self.projects['values']:self.project.set(name);self.select_project()
+        if name and self.cfg.get('registry') and name in tuple(self.projects['values']):
+            self.project.set(name)
+            self.select_project()
         if not self.cfg.get('registry'):root.after(300,self.settings)
         if config_error:root.after(500,lambda:self.error('Не удалось загрузить настройки. Выберите пути заново. Исходники не изменены. '+config_error))
 
