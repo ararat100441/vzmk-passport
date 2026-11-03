@@ -1082,29 +1082,29 @@ class App:
         except Exception as exc:
             self.error(exc);return
         accounting=d.get('accounting') or {}
-        message=('Формирование итогового комплекта БЕЗ предварительного PDF.\\n'
-                 'Объект: '+str(d['project'])+'\\n'
-                 'Паспорт: '+str(d['number'])+'\\n'
-                 'Дата: '+str(d['date'])+'\\n'
+        message=('Формирование итогового комплекта БЕЗ предварительного PDF.\n'
+                 'Объект: '+str(d['project'])+'\n'
+                 'Паспорт: '+str(d['number'])+'\n'
+                 'Дата: '+str(d['date'])+'\n'
                  +str(d['marks'])+' марок / '+str(d['quantity'])+' изделий / '
-                 +str(d['mass_kg'])+' кг / '+str(d['area_m2'])+' м²\\n'
-                 'Путь к рабочему реестру: '+str(d['registry'])+'\\n'
-                 'Папка итогового комплекта: '+str(d['target'])+'\\n'
+                 +str(d['mass_kg'])+' кг / '+str(d['area_m2'])+' м²\n'
+                 'Путь к рабочему реестру: '+str(d['registry'])+'\n'
+                 'Папка итогового комплекта: '+str(d['target'])+'\n'
                  +('Предупреждение: '+str(len(accounting.get('stock_warnings',[])))
-                   +' ошибок B вне ВОМ (данные сохраняются).\\n'
+                   +' ошибок B вне ВОМ (данные сохраняются).\n'
                    if accounting.get('stock_warnings') else '')
-                 +('Справочник: '+str(accounting['catalog'])+'\\n'
-                   'Общий УЗК: '+str(accounting['uzk'])+'\\n'
-                   'Списание УЗК: '+str(sum(accounting['controls'].values()))+' шт.\\n'
+                 +('Справочник: '+str(accounting['catalog'])+'\n'
+                   'Общий УЗК: '+str(accounting['uzk'])+'\n'
+                   'Списание УЗК: '+str(sum(accounting['controls'].values()))+' шт.\n'
                    if accounting else '')
-                 +'\\nПрограмма уже проверила Word и Excel. Предварительный PDF '
+                 +'\nПрограмма уже проверила Word и Excel. Предварительный PDF '
                  'не создаётся и не открывается. После подтверждения программа '
                  'сформирует ИТОГОВЫЙ PDF, проверит документы и только затем '
-                 'запишет отгрузку в три Excel с резервными копиями.\\n\\n'
+                 'запишет отгрузку в три Excel с резервными копиями.\n\n'
                  'Вы подтверждаете реальные результаты контроля, правильность '
                  'ВОМ и право на официальный выпуск БЕЗ предварительного '
-                 'просмотра PDF.\\n'+STATEMENT+
-                 '\\n\\nПодтвердить выпуск?')
+                 'просмотра PDF.\n'+STATEMENT+
+                 '\n\nПодтвердить выпуск?')
         if not messagebox.askyesno('Подтверждение итогового выпуска',message):
             self.write('Выпуск отменён до записи. Рабочие Excel не изменены.')
             return
