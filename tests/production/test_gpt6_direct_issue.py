@@ -81,7 +81,9 @@ class DirectIssueGui(TestCase):
         a = self.app()
         a.facts = {"responsible": "Operator"}
         a.run = Mock()
-        a.issue()
+        # The shared fixture mocks issue() for unrelated GUI tests.
+        # This case must execute the real method, not that mock.
+        gui.App.issue(a)
         task, payload = a.run.call_args.args[:2]
         self.assertEqual(task, "confirm")
         self.assertFalse(payload["reviewed"])
