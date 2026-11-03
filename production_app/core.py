@@ -221,12 +221,13 @@ def _prepare(d):
     run=safe(d['run']);outputs=run/'documents'
     outputs.mkdir(exist_ok=False)
     registry=Path(d['registry']);snapshot=run/'registry.xlsx'
-    digest=hashlib.sha256()
+    hasher=hashlib.sha256()
     with registry.open('rb') as source, snapshot.open('xb') as output:
         for block in iter(lambda:source.read(1024*1024),b''):
-            digest.update(block)
+            hasher.update(block)
             output.write(block)
-    if digest.hexdigest()!=d['fingerprints'][str(registry)]:
+    if hasher.hexdigest()!=d['fingerprints'][str(registry)]:
+        snapshot.unlink(missing_ok=True)
         raise Stop('SHA реестра изменился.')
     v=model.visible_vom(d['vom']);r=read_registry(snapshot);p=model.select(r,d['project'])
     if d['new']:
