@@ -23,12 +23,19 @@ class ApprovedVisualLayout(unittest.TestCase):
         self.root = tk.Tk()
         self.root.withdraw()
         self.addCleanup(self.root.destroy)
+        self.scheduled=[]
         self.local = patch('production_app.gui.local_root',
                            return_value=Path(self.temp.name))
         self.local.start()
         self.addCleanup(self.local.stop)
         # Never display a modal error over a hidden test root: fail promptly.
-        with patch('production_app.gui.messagebox.showerror',
+        # Do not run delayed settings dialogs under a withdrawn test root.
+        # Check that they were scheduled, without leaving Tk callbacks alive.
+        def capture_after(delay, callback, *args):
+            self.scheduled.append((delay, callback, args))
+            return 'captured-schedule'
+        with patch.object(self.root, 'after', side_effect=capture_after), \
+             patch('production_app.gui.messagebox.showerror',
                    side_effect=AssertionError('Unexpected GUI startup error')):
             self.app = gui.App(self.root)
         self.root.update_idletasks()
@@ -48,6 +55,9 @@ class ApprovedVisualLayout(unittest.TestCase):
         self.assertIsNone(self.app.plan)
         self.assertIn('Выберите рабочие пути',
                       self.app.progress.cget('text'))
+        self.assertEqual(len(self.scheduled), 1)
+        self.assertEqual(self.scheduled[0][0], 300)
+        self.assertEqual(self.scheduled[0][1].__name__, 'settings')
 
     def test_configured_project_still_uses_existing_selection_callback(self):
         # The first-run fix must not suppress selection for a valid profile.
@@ -60,11 +70,14 @@ class ApprovedVisualLayout(unittest.TestCase):
         })
         def fake_refresh(app):
             app.projects['values'] = ('TEST',)
+        configured_root = tk.Toplevel(self.root)
+        configured_root.withdraw()
+        self.addCleanup(configured_root.destroy)
         with patch.object(gui.App, 'refresh', new=fake_refresh), \
              patch.object(gui.App, 'select_project', autospec=True) as selected, \
              patch('production_app.gui.messagebox.showerror',
                    side_effect=AssertionError('Unexpected configured startup error')):
-            configured = gui.App(self.root)
+            configured = gui.App(configured_root)
         self.assertEqual(configured.project.get(), 'TEST')
         selected.assert_called_once_with(configured)
 
@@ -72,9 +85,10 @@ class ApprovedVisualLayout(unittest.TestCase):
         self.assertEqual(len(self.app.buttons), 1)
         self.assertEqual(self.app.buttons[0].cget('text'), 'Сформировать пакет')
         self.assertEqual(self.app.buttons[0].cget('style'), 'Accent.TButton')
-        self.assertEqual(self.app.projects.cget('state'), 'readonly')
-        self.assertEqual(self.app.numbers.cget('state'), 'readonly')
-        self.assertEqual(self.app.source_numbers.cget('state'), 'readonly')
+        # Tcl may return a Tcl_Obj instead of str for the index state.
+        self.assertEqual(str(self.app.projects.cget('state')), 'readonly')
+        self.assertEqual(str(self.app.numbers.cget('state')), 'readonly')
+        self.assertEqual(str(self.app.source_numbers.cget('state')), 'readonly')
         self.assertEqual(self.app.new_widget.cget('text'), 'Новый паспорт')
         self.assertIsNotNone(self.app.shipment_entry)
         self.assertIsNotNone(self.app.log)
