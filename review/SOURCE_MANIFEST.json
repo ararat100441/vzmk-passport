@@ -1,6 +1,6 @@
 {
-  "base_commit": "74c691ae26480741b0701b194cba1c98613076a7",
-  "scope": "public review source; legacy redactions retained",
+  "base_commit": "19eabff52fedcf945f9435aad7a2f411c82633eb",
+  "scope": "public review source; inherited redactions retained",
   "files": {
     ".gitignore": {
       "sha256": "620623255ed071705ee606d85bf899c2c8635beaf4b9edec5cf60d7491d1e2f5",
@@ -11,8 +11,8 @@
       "git_blob_sha": "03ccb41662aa1215478e988856ed1bc74616553e"
     },
     "README.md": {
-      "sha256": "3fe897057deb6629d053eefde7795c619b4cc97bcf39a042f4f1e60f1653869d",
-      "git_blob_sha": "0c90b9032437bf8cd563ae1ee392e33c2a3cbabb"
+      "sha256": "d2589319b909c2958d18d0a380bd2854935680e4848e6c9ceac3fb13265361be",
+      "git_blob_sha": "158c94f00e8bfc3bc271c05f9eab22db1dcbe952"
     },
     "akz_stage6/__init__.py": {
       "sha256": "9a8ec38c0365c94e8c36e819d41ca602ef3791fa0151f7dfe05a06b05504e331",
@@ -53,6 +53,10 @@
     "docs/CODEX49_REVIEW.md": {
       "sha256": "1adccc7a6b97127fa518619b5f8af15901f2fe4f930b6c9f238b164bc6730075",
       "git_blob_sha": "d9abd35e939808b85b589b9049b7e62829a46e76"
+    },
+    "docs/CODEX50_REVIEW.md": {
+      "sha256": "627f4312c1ff91282fa381309d6e8b0adfc1612522727d82c107d44892f2204b",
+      "git_blob_sha": "6e231417c0a88aeb2f0bd46c157a095df1c54e52"
     },
     "docs/production_release_inputs.txt": {
       "sha256": "f477d47d127c3de802b6a534824b0a20564fe54048a00a93687f4269fffa47eb",
@@ -187,8 +191,8 @@
       "git_blob_sha": "2ec8d068910bf96683d301ae338b7fc9b36cf6b4"
     },
     "production_app/core.py": {
-      "sha256": "3c3934f0a1c3af44ffcae8d81831d2c74e0dad6967ca56ab1bcd60fd3b98039e",
-      "git_blob_sha": "99473f8147bec8aef2e4a6f9ac3f497166a50654"
+      "sha256": "06f5a4a6f48f4ede55be2ecb4f046cb6e8b58de8a03edfd4d6dbf6195ecd120d",
+      "git_blob_sha": "5efe1dc878d794ad9d9b7f048a9b80f907cd06ac"
     },
     "production_app/daily_gui.py": {
       "sha256": "17a69e7eb58881ec8dcbe0d7f36ee5af51c378c144bc4cc42f6c9d2ddd0b5518",
@@ -295,8 +299,8 @@
       "git_blob_sha": "62575896b25dd9e1fd6346cb288a5f2f2134e511"
     },
     "production_app/storage.py": {
-      "sha256": "ebb0eba72977d16e4db64fcaf213511d7f03f554eba218fb8ae71987986876d5",
-      "git_blob_sha": "795ba63937b08ee43a2d80baef250e21f94cc523"
+      "sha256": "98f13347cc8926ddea8a0eec0f91ef023d2ca952cac190f94b1e34f4e4e45756",
+      "git_blob_sha": "057402ffe9d54bafc8c88b4cec63e66685f2451d"
     },
     "production_app/templates.py": {
       "sha256": "fc50668690bb542cf743aaeaf62ea94677e4e147594da4a17d6dfe6be70fe6aa",
@@ -354,6 +358,10 @@
       "sha256": "e0cc34b8f9e9592086f75e6cc5dfd8df87f2cbe647a556f5701453d16a72a9c3",
       "git_blob_sha": "3728f0f86a6fb50d7f5b5552f2852dd28333c073"
     },
+    "review/BUILD_INPUTS_CODEX50.json": {
+      "sha256": "7ee47623eddc186df4a720dd428d10d00374beeb421813162f9e25bbfe903e5d",
+      "git_blob_sha": "395030f41800b08ed76fe607e97bec92d44d4ea1"
+    },
     "review/BUILD_INPUTS_R10.json": {
       "sha256": "dc2edc66bfbe11ffd872eadca5cf80f16fc7c3b7dcd7ec7304a0fdea6b3c7966",
       "git_blob_sha": "a58ff8468c2a794a1332163cc1b079efd8929299"
@@ -409,6 +417,10 @@
     "review/CODEX49_ACCEPTANCE.json": {
       "sha256": "5a64186fd22af8db11ba035115e12a285783556b016c32a81deb277217c77402",
       "git_blob_sha": "8ec461aa2a1a06b802ee6ea91e6e65dbe776f8d5"
+    },
+    "review/CODEX50_ACCEPTANCE.json": {
+      "sha256": "f51aa59ca7db3d84a03b7634dc42b84bac4202669cacf13bf9c4a842e8bfdea3",
+      "git_blob_sha": "ec8512dc6e7028b0cfa3d03bdc5f4e9e1e84435b"
     },
     "review/REGRESSION_SUMMARY.json": {
       "sha256": "038ea1dc639ad749651e35938a55320a79ba4f9b94efc634457318a764ac4079",
@@ -813,6 +825,10 @@
     "tests/production/test_codex49.py": {
       "sha256": "5837ca6546d4ced8614303d308ef6b1070c5ec07e955f7386c80eaee71ceb4fe",
       "git_blob_sha": "708be24b655ad742d96d1cd8d0c4282a7854e3b8"
+    },
+    "tests/production/test_codex50.py": {
+      "sha256": "3feff35c2ef06394b5b0ad50cc0092c653547327dfad5e171524ccb982fe9c06",
+      "git_blob_sha": "3fbb561294510723df2f1f703db73e72db773361"
     },
     "tests/production/test_daily_gui.py": {
       "sha256": "aec61d3e5e13c0df2137e2b5f4a696064e10a255269da82e59acc74c3649d320",

@@ -68,10 +68,11 @@ def safe(path):
 
 
 def post_commit_path(path):
-    """No-follow path check for journal-bound participants after replacement.
+    """No-follow path check for confirmed journal/participants after replacement.
 
     Callers must first validate the sealed transaction and exact participant
-    paths, then require candidate SHA. Never use for planning/writing/recovery.
+    paths, then require candidate SHA. The journal additionally requires the
+    sealed NEEDS_READBACK context. Never use for pre-commit writing or recovery.
     Reparse checks and native metadata-query failures still stop the operation.
     """
     return _safe_path(path,check_hardlinks=False)

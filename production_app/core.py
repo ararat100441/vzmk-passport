@@ -520,7 +520,9 @@ def post_commit_context(journal):
     load_plan intentionally cannot be used here: its source pins describe
     the originals, which the confirmed commit has already replaced.
     """
-    journal=safe(journal);s=journal_read(journal)
+    # This exception is provisional until the sealed NEEDS_READBACK context,
+    # exact journal location and confirmed plan below have all been validated.
+    journal=post_commit_path(journal);s=journal_read(journal)
     if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза проверки.')
     plan=safe(s['plan']);d=read(plan);seal=d.get('seal')
     if d.get('schema')!='VZMK_PRODUCTION_PLAN_1' or digest({k:v for k,v in d.items() if k!='seal'})!=seal:
@@ -559,8 +561,8 @@ def post_commit_context(journal):
             raise Stop('Кандидат реестра не совпадает с журналом.')
     elif s.get('candidate_sha256',s['original_sha256'])!=(prepared['snapshot_sha256'] if s['new'] else d['fingerprints'][d['registry']]):
         raise Stop('Кандидат реестра не совпадает с планом.')
-    # Only participant files use the exception. Journal, plan, documents and
-    # backups retain strict safety, including hardlink checks.
+    # Only the confirmed journal and participant files use the after-write
+    # exception. Plan, documents and backups retain strict hardlink checks.
     registry=post_commit_path(registry);target=safe(s['target'])
     if str(registry)!=s['registry']:raise Stop('Неточный путь участника транзакции.')
     for item in s.get('participants',[]):
@@ -600,7 +602,7 @@ def readback(journal):
             'print_pdf_pages':print_manifest['pages']}
 
 def complete(journal,readback_result):
-    journal=safe(journal);s,d,registry,target=post_commit_context(journal)
+    journal=post_commit_path(journal);s,d,registry,target=post_commit_context(journal)
     supervisor_proof(readback_result,'readback',s['plan'])
     if s.get('participants'):
         if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза завершения.')
