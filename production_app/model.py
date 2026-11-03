@@ -211,8 +211,13 @@ def visible_vom(path):
         # external refresh, saving or conversion through Office are involved.
         import tempfile,hashlib
         with tempfile.TemporaryDirectory(prefix='vzmk-vom-') as temp:
-            payload=path.read_bytes();h=hashlib.sha256(payload).hexdigest()
-            snapshot=Path(temp)/'read_only.xlsx';snapshot.write_bytes(payload)
+            snapshot=Path(temp)/'read_only.xlsx'
+            digest=hashlib.sha256()
+            with path.open('rb') as source, snapshot.open('xb') as output:
+                for block in iter(lambda:source.read(1024*1024),b''):
+                    digest.update(block)
+                    output.write(block)
+            h=digest.hexdigest()
             v=visible_vom(snapshot)
             if sha(path)!=h:raise Stop('ВОМ изменился во время чтения.')
             return replace(v,path=path,digest=h)
