@@ -349,7 +349,10 @@ def tokens_excel(sheet,values):
     # placeholder, especially climate and coating-range bounds used by formulas.
     numeric_keys={'AIR','SURFACE','HUMIDITY','DEW','THICKNESS'}
     numeric_keys.update('LAYER_'+str(n)+'_'+edge
-                        for n in (1,2,3) for edge in ('MIN','MAX','DRY_AVG','TOTAL_MIN','TOTAL_MAX'))
+                        for n in (1,2,3) for edge in
+                        ('MIN','MAX','DRY_AVG','WET_AVG','WET_TOTAL',
+                         'TOTAL_MIN','TOTAL_MAX'))
+    numeric_keys.add('WET_TOTAL')
     numeric_keys.update('AKZ_LAYER_'+str(n)+'_WET_AVG' for n in (1,2,3))
     date_keys={'AKZ_DATE'}|{'AKZ_LAYER_'+str(n)+'_APPLICATION_DATE' for n in (1,2,3)}
     time_keys={'AKZ_LAYER_'+str(n)+'_'+suffix for n in (1,2,3) for suffix in ('TIME_START','TIME_END')}
@@ -401,7 +404,8 @@ def akz_values(climate,facts=None):
     measurements and their primary protocols.
     """
     values={str(key).upper():value for key,value in climate.items()
-            if key not in ('variant','layers','dry_averages','layer_details')}
+            if key not in ('variant','layers','dry_averages','layer_details',
+                           'wet_averages')}
     if climate.get('layers'):
         checked=validate_dry_averages(climate['layers'],climate.get('dry_averages'))
         for entry in validate_layer_ranges(climate['layers']):
@@ -415,6 +419,12 @@ def akz_values(climate,facts=None):
             values[prefix+'TOTAL_MIN']=entry['required_total_min']
             values[prefix+'TOTAL_MAX']=entry['required_total_max']
             values[prefix+'TOTAL_RANGE']=entry['required_total_min']+'–'+entry['required_total_max']
+    # Only explicit new template tokens are filled. Historic 3-coat forms'
+    # H27/J27 formula cells must not be overwritten with input measurements.
+    for entry in climate.get('wet_averages',[]):
+        prefix='LAYER_'+str(entry['layer'])+'_'
+        values[prefix+'WET_AVG']=entry['average']
+        values[prefix+'WET_TOTAL']=entry['cumulative']
     if climate.get('layer_details'):
         if not isinstance(facts,dict):raise Stop('Нет подтверждённых фактов по слоям АКЗ.')
         for row in validate_layer_details(climate['layer_details'],facts):

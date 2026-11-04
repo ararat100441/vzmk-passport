@@ -830,14 +830,25 @@ class App:
             ttk.Label(group,text='До').grid(row=1,column=2,sticky='w')
             labels={'air':'Воздух, °C','surface':'Поверхность, °C',
                     'humidity':'Влажность, %'}
-            if coats==1:labels['wet']='Толщина мокрого слоя, мкм'
-            measurements=list(labels.items())+[
-                ('layer_'+str(i),'Толщина сухого слоя, мкм' if coats==1 else 'Фактическая толщина слоя '+str(i)+', мкм')
-                for i in range(1,(coats or 0)+1)]
+            measurements=list(labels.items())
+            for i in range(1,(coats or 0)+1):
+                measurements.append((
+                    'wet' if coats==1 else 'wet_'+str(i),
+                    'Толщина мокрого слоя, мкм' if coats==1
+                    else 'Мокрая толщина слоя '+str(i)+', мкм'))
+                measurements.append((
+                    'layer_'+str(i),
+                    'Толщина сухого слоя, мкм' if coats==1
+                    else 'Сухая толщина слоя '+str(i)+', мкм'))
             for line,(key,title) in enumerate(measurements,start=2):
-                stored=(draft.get('layer_intervals',old_interval.get('layers',[]))
-                        if key.startswith('layer_') else
-                        draft.get(key,old_interval.get(key)))
+                if key.startswith('layer_'):
+                    stored=draft.get('layer_intervals',
+                                     old_interval.get('layers',[]))
+                elif key.startswith('wet_'):
+                    stored=draft.get('wet_intervals',
+                                     old_interval.get('wet_layers',[]))
+                else:
+                    stored=draft.get(key,old_interval.get(key))
                 if isinstance(stored,list):
                     number=int(key.split('_')[1])
                     stored=next((item for item in stored
@@ -856,11 +867,53 @@ class App:
                     pair[label]=var
                 fields[key]=pair
 
+            thickness_status=ttk.Label(
+                group,text='Толщины появятся после заполнения всех слоёв.',
+                wraplength=1010,justify='left')
+            thickness_status.grid(row=len(measurements)+2,column=0,
+                                  columnspan=3,sticky='w',pady=6)
+            def update_thickness_display(*_, inputs=fields, count=coats,
+                                         target=thickness_status):
+                if count not in (1,2,3):
+                    target.configure(text='Выберите утверждённую форму АКЗ.')
+                    return
+                try:
+                    from decimal import Decimal
+                    wet_total=dry_total=Decimal(0)
+                    summary=[]
+                    for i in range(1,count+1):
+                        wet_key='wet' if count==1 else 'wet_'+str(i)
+                        dry_key='layer_'+str(i)
+                        wet=Decimal(midrange(
+                            inputs[wet_key]['min'].get(),
+                            inputs[wet_key]['max'].get(),
+                            'мокрый слой '+str(i),Decimal('.001')))
+                        dry=Decimal(midrange(
+                            inputs[dry_key]['min'].get(),
+                            inputs[dry_key]['max'].get(),
+                            'сухой слой '+str(i),Decimal('.001')))
+                        wet_total+=wet;dry_total+=dry
+                        summary.append(str(i)+': мокрая '+format(wet,'f')+
+                                       ', сухая накопительная '+
+                                       format(dry_total,'f')+' мкм')
+                    target.configure(
+                        text='По слоям: '+'; '.join(summary)+
+                             '. Сумма мокрых: '+format(wet_total,'f')+
+                             ' мкм; сухая: '+format(dry_total,'f')+' мкм.')
+                except (Stop,ValueError,TypeError,KeyError) as exc:
+                    target.configure(text='Заполните мокрую и сухую толщину '
+                                          '«От/До» каждого слоя: '+str(exc))
+            for key,pair in fields.items():
+                if key=='wet' or key.startswith(('wet_','layer_')):
+                    for edge in ('min','max'):
+                        pair[edge].trace_add('write',update_thickness_display)
+            update_thickness_display()
+
             dew_status=ttk.Label(
                 group,text='Точка росы рассчитывается по температуре воздуха '
                            'и влажности (формула Магнуса).',
                 wraplength=1010,justify='left')
-            dew_status.grid(row=len(measurements)+2,column=0,
+            dew_status.grid(row=len(measurements)+3,column=0,
                             columnspan=3,sticky='w',pady=8)
             def update_dew_display(*_, inputs=fields, target=dew_status):
                 required=[inputs[k][edge].get().strip()
@@ -1025,7 +1078,7 @@ class App:
                     for k in ('air','surface','humidity',*(['wet'] if info['coats']==1 else [])):
                         values[k]={edge:info['fields'][k][edge].get().strip()
                                    for edge in ('min','max')}
-                    if info['coats'] in (1,3):
+                    if info['coats'] in (1,2,3):
                         for i in range(1,info['coats']+1):
                             key='layer_'+str(i)
                             values['layer_intervals'].append(
@@ -1033,6 +1086,15 @@ class App:
                                     edge:info['fields'][key][edge].get().strip()
                                     for edge in ('min','max')
                                 }})
+                        if info['coats'] in (2,3):
+                            values['wet_intervals']=[]
+                            for i in range(1,info['coats']+1):
+                                key='wet_'+str(i)
+                                values['wet_intervals'].append(
+                                    {'layer':i,**{
+                                        edge:info['fields'][key][edge].get().strip()
+                                        for edge in ('min','max')
+                                    }})
                     details=info['details']
                     if details is not None:
                         detailkeys=('layer','material','paint_batch',
