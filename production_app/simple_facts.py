@@ -94,8 +94,8 @@ def prepare_for_check(saved):
             raise Stop('Не введён климат АКЗ №'+str(number)+
                        '. Откройте «Фактические результаты».')
         coats=inputs.get('coats')
-        if type(coats) is not int or coats not in (1,3):
-            raise Stop('Не определён утверждённый 1/3-слойный формат '
+        if type(coats) is not int or coats not in (1,2,3):
+            raise Stop('Не определён утверждённый 1/2/3-слойный формат '
                        'АКЗ №'+str(number)+'.')
         measurements={
             key:deepcopy(inputs.get(key))
@@ -105,7 +105,13 @@ def prepare_for_check(saved):
             inputs.get('layer_intervals',[]))
         if coats==1 and inputs.get('wet'):
             measurements['wet']=deepcopy(inputs['wet'])
+        if coats in (2,3):
+            from .akz_layer_totals import with_wet_layers
+            wet=deepcopy(inputs.get('wet_intervals',[]))
+            measurements['wet_intervals']=wet
         climate=measurements_from_ranges(number,measurements,coats=coats)
+        if coats in (2,3):
+            climate=with_wet_layers(climate,wet,coats)
         # Paint type comes from the CURRENT project's catalogue, never
         # hidden first-passport findings. Do not make up missing paint.
         colors=sorted({

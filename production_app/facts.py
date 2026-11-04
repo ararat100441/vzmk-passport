@@ -12,26 +12,27 @@ def numeric(value,label,minimum=None,maximum=None):
     return v
 
 def validate_layer_ranges(layers):
-    """Exactly three positive per-layer ranges, in micrometres.
+    """Two or three positive per-coat intervals in micrometres.
 
-    Ranges are reusable specifications/preferences, not evidence of measured
-    dry/wet coating thickness on a newly manufactured structure.
+    New GUI input intervals are current measurements, not approved
+    specification limits. The existing cumulative validator is retained.
     """
-    if not isinstance(layers, list) or len(layers) != 3:
-        raise Stop('Для трёхслойного АКЗ задайте диапазоны толщины всех трёх слоёв.')
+    if not isinstance(layers, list) or len(layers) not in (2, 3):
+        raise Stop('Для многослойного АКЗ нужны диапазоны 2 или 3 слоёв.')
+    allowed = tuple(range(1, len(layers) + 1))
     result = {}
     for entry in layers:
         if not isinstance(entry, dict) or type(entry.get('layer')) is not int:
             raise Stop('Неверный номер слоя АКЗ.')
         n = entry['layer']
-        if n not in (1, 2, 3) or n in result:
-            raise Stop('Слои АКЗ должны иметь уникальные номера 1, 2, 3.')
+        if n not in allowed or n in result:
+            raise Stop('Слои АКЗ должны иметь уникальные номера от 1 до '+str(len(layers))+'.')
         low = numeric(entry.get('min'), 'минимальная толщина слоя '+str(n), Decimal('0.001'))
         high = numeric(entry.get('max'), 'максимальная толщина слоя '+str(n), Decimal('0.001'))
         if low > high:
             raise Stop('Минимальная толщина превышает максимальную: слой '+str(n))
         result[n] = {'layer': n, 'min': format(low, 'f'), 'max': format(high, 'f')}
-    return [result[n] for n in (1, 2, 3)]
+    return [result[n] for n in allowed]
 
 
 
@@ -82,22 +83,22 @@ def validate_layer_details(entries, facts):
 
 
 def validate_dry_averages(layers, averages):
-    """Compare measured mean dry coating after each layer with cumulative limits.
+    """Validate cumulative dry thickness readings for two or three coats.
 
-    The three measurements are cumulative as in the supplied issued Excel act:
-    average after coat 1, average after coats 1+2, and average after 1+2+3.
-    Ranges are allowed specifications, not measured min/max observations.
+    Each calculated midpoint is additionally checked against its submitted
+    original input interval by verify_midrange_provenance before release.
     """
     limits = validate_layer_ranges(layers)
-    if not isinstance(averages, list) or len(averages) != 3:
-        raise Stop('Укажите среднюю толщину сухого покрытия после каждого из трёх слоёв.')
+    if not isinstance(averages, list) or len(averages) != len(limits):
+        raise Stop('Укажите среднюю толщину сухого покрытия после каждого слоя.')
+    allowed = tuple(range(1, len(limits) + 1))
     raw = {}
     for item in averages:
         if not isinstance(item, dict) or type(item.get('layer')) is not int:
             raise Stop('Неверный номер этапа измерения средней толщины АКЗ.')
         n = item['layer']
-        if n not in (1, 2, 3) or n in raw:
-            raise Stop('Средние толщины АКЗ должны соответствовать слоям 1, 2 и 3 без повторов.')
+        if n not in allowed or n in raw:
+            raise Stop('Средние толщины АКЗ должны соответствовать слоям по порядку без повторов.')
         raw[n] = numeric(item.get('average'), 'средняя сухая толщина после слоя '+str(n), Decimal('0.001'))
     low = high = previous = Decimal(0)
     results = []

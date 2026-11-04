@@ -125,15 +125,13 @@ def measurements_from_ranges(variant,inputs,*,coats=1):
         result['measurement_intervals']['wet']=dict(raw)
     result['measurement_intervals']['layers']=[
         sorted_layers[i] for i in range(1,coats+1)]
-    if coats==2:
-        raise Stop('Двухслойный акт пока не поддерживает расчёт по диапазонам; '
-                   'требуется утверждённая форма и методика для двух слоёв.')
-    if coats==3:
-        # Legacy three-layer forms require 3 cumulative dry-coat averages.
-        # Their measured intervals are distinguishable from allowed spec
-        # limits and shall not be taken from reusable project presets.
+    if coats in (2,3):
+        # Only independent per-coat dry ranges are added; exported
+        # dry_averages are cumulative after each successive coat.
         result['layers']=[sorted_layers[i] for i in range(1,coats+1)]
         result['dry_averages']=dry
+        if coats==2 and not inputs.get('wet_intervals'):
+            raise Stop('Двухслойный акт: укажите мокрую толщину каждого слоя.')
     return result
 
 
@@ -161,15 +159,28 @@ def verify_midrange_provenance(climate):
     if not intervals:
         raise Stop('Не указан фактический диапазон покрытия.')
     total=Decimal(0)
+    cumulative=[]
     for i,row in enumerate(intervals,1):
         if row['layer']!=i:
             raise Stop('Некорректная последовательность слоёв.')
         total+=Decimal(midrange(row['min'],row['max'],'слой '+str(i),
                                 Decimal('.001')))
+        cumulative.append(total)
     if numeric(climate['thickness'],'толщина')!=total:
         raise Stop('Середина диапазона толщины была изменена.')
+    if len(intervals)>1:
+        saved=climate.get('dry_averages')
+        if not isinstance(saved,list) or len(saved)!=len(cumulative):
+            raise Stop('Нет расчётных сухих толщин каждого слоя АКЗ.')
+        for i,(row,expected) in enumerate(zip(saved,cumulative),1):
+            if (not isinstance(row,dict) or
+                    type(row.get('layer')) is not int or row['layer']!=i or
+                    numeric(row.get('average'),'сухой слой '+str(i))!=expected):
+                raise Stop('Изменена накопительная сухая толщина слоя '+str(i)+'.')
     if 'wet' in ints:
         expected=midrange(ints['wet']['min'],ints['wet']['max'],'мокрый слой',Decimal('.001'))
         if numeric(climate.get('wet_thickness'),'мокрый слой')!=Decimal(expected):
             raise Stop('Середина диапазона мокрого слоя была изменена.')
+    from .akz_layer_totals import verify_wet_layers
+    verify_wet_layers(climate)
     return True
