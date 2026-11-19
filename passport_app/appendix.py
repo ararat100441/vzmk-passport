@@ -73,7 +73,7 @@ def find_template(root, configured, project):
     return matches[0]
 
 
-def generate_appendix(excel, path, project, vom, requisites):
+def generate_appendix(excel, path, project, vom, requisites, *, undated_draft=False):
     layout, header, obj = inspect_template(path, project)
     book = open_excel(excel, path)
     try:
@@ -110,15 +110,23 @@ def generate_appendix(excel, path, project, vom, requisites):
             col = layout.columns[field]
             letter = get_column_letter(col)
             sheet.Cells(total, col).Formula = f'=SUM({letter}{layout.start}:{letter}{total - 1})'
+        # Display precision only, on this generated copy. Keep the SUM formula
+        # and every input value at their original calculation precision.
+        sheet.Cells(total, layout.columns['area_total']).NumberFormatLocal = (
+            '0' + str(excel.DecimalSeparator) + '000')
         sheet.Range(sheet.Cells(total, mincol), sheet.Cells(total, maxcol)).Font.Bold = True
         current = str(sheet.Range(header).Value2)
+        day = requisites['date']
+        printed_day = '__________' if day is None and undated_draft else day.strftime('%d.%m.%Y')
         replaced, count = re.subn(r'(№\s*)\S+(\s+от\s+)\d{2}\.\d{2}\.\d{4}(\s*г\.)',
-                                  lambda m: m[1] + str(requisites['number']) + m[2] + requisites['date'].strftime('%d.%m.%Y') + m[3], current)
+                                  lambda m: m[1] + str(requisites['number']) + m[2] + printed_day + m[3], current)
         if count != 1:
             raise PassportError('Не удалось безопасно заменить реквизиты шапки приложения.')
         sheet.Range(header).Value2 = replaced
         prefix = re.match(r'^(\s*Объект\s*:\s*)', str(sheet.Range(obj).Value2), re.I)[1]
         sheet.Range(obj).Value2 = prefix + str(requisites['object'])
+        if undated_draft:
+            sheet.PageSetup.CenterHeader = 'ЧЕРНОВИК — НЕ ДЛЯ ВЫПУСКА'
         # Keep page settings and column widths; update the bottom of the print area.
         if area_match:
             sheet.PageSetup.PrintArea = f'${area_match[1]}${area_match[2]}:${area_match[3]}${total}'

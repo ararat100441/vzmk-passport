@@ -101,7 +101,7 @@ def select_project(registry, name):
                    end['row'], end['number'], next_number)
 
 
-def append_row(excel, stage_path, registry, project, vom, day):
+def append_row(excel, stage_path, registry, project, vom, day, *, fixed_start=None):
     book = open_excel(excel, stage_path)
     try:
         sheet = book.Worksheets(registry.sheet)
@@ -130,6 +130,12 @@ def append_row(excel, stage_path, registry, project, vom, day):
         data['date'] = date(1899, 12, 30) + timedelta(days=int(data['date']))
         if data['number'] != project.next_number or data['date'] != day:
             raise PassportError('Не совпадают реквизиты записанной строки.')
+        if fixed_start is not None:
+            column, start = fixed_start
+            cell = sheet.Cells(target_row, column)
+            if not cell.HasFormula:
+                cell.Value2 = (start - date(1899, 12, 30)).days
+            excel.CalculateFullRebuild()
         book.Save()
         return target_row, data
     finally:

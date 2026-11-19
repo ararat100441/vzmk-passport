@@ -8,6 +8,15 @@ from threading import Lock
 
 _guard_lock=Lock()
 
+def wait_owned_exit(handles,timeout):
+    """Bounded graceful wait with the client's STA alive; never terminate Office."""
+    import pythoncom,win32event,win32con
+    deadline=time.monotonic()+timeout
+    while any(win32event.WaitForSingleObject(h,0)!=win32con.WAIT_OBJECT_0 for h in handles):
+        if time.monotonic()>=deadline:return False
+        pythoncom.PumpWaitingMessages();time.sleep(.05)
+    return True
+
 def process_image(handle):
     import ctypes
     from ctypes import wintypes as W
@@ -34,7 +43,11 @@ def launch_child(progid,probe,worker_pid):
     image=office_image(progid);word=str(progid).casefold()=='word.application'
     # Excel's registered COM server uses automation + COM's -Embedding flag.
     # Do not mix the interactive /x startup mode with automation.
-    switches=['/w','/m'] if word else ['/automation','-Embedding']
+    # One documented Word switch: a private startup ignores global add-ins,
+    # Normal.dotm and user settings. The two-switch /w /m startup could leave
+    # an interactive startup dialog before any _WwG native object existed.
+    # PID/creation-time/retained-handle checks still prove exclusive ownership.
+    switches=['/a'] if word else ['/automation','-Embedding']
     startup=subprocess.STARTUPINFO();startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW;startup.wShowWindow=0
     kernel=ctypes.WinDLL('kernel32',use_last_error=True)
     get=kernel.GetDllDirectoryW;get.argtypes=[W.DWORD,W.LPWSTR];get.restype=W.DWORD
@@ -46,9 +59,35 @@ def launch_child(progid,probe,worker_pid):
     record={'pid':child.pid,'creation_time':win32process.GetProcessTimes(child._handle)['CreationTime'].isoformat(),
             'image':process_image(child._handle),'hwnd':0,'progid':progid,'worker_pid':worker_pid,
             'launcher_pid':os.getpid(),'actual_child':True,'owned':True,'absent_before_dispatch':True,'quit_attempted':False,
-            'retained_handle':int(child._handle),'handle_source':'CREATE_PROCESS'}
+            'retained_handle':int(child._handle),'handle_source':'CREATE_PROCESS',
+            'startup_switches':switches}
     if record['image'].casefold()!=image.casefold():raise RuntimeError('OFFICE_CHILD_IMAGE_CHANGED')
     return child,record
+
+def startup_problem(windows,expected):
+    """Explain a real modal; do not misdiagnose a slow splash as a dialog."""
+    dialogs=[w for w in windows if w.get('class')=='#32770' and w.get('visible')]
+    if not dialogs:return ''
+    texts=[]
+    for window in dialogs:
+        texts.append(window.get('title',''))
+        texts.extend(c.get('text','') for c in window.get('children',[]) if c.get('text'))
+    return 'Office: рабочее окно '+expected+' не создано; запуск остановил диалог: '+' | '.join(dict.fromkeys(texts))
+
+def owned_window_snapshot(record):
+    """Local diagnostics, restricted to the retained process's PID."""
+    import win32gui,win32process
+    windows=[]
+    def visit(hwnd,_):
+        if win32process.GetWindowThreadProcessId(hwnd)[1]!=record['pid']:return
+        info={'hwnd':hwnd,'class':win32gui.GetClassName(hwnd),
+              'title':win32gui.GetWindowText(hwnd),'visible':bool(win32gui.IsWindowVisible(hwnd)),'children':[]}
+        def child(ch,_):
+            if win32process.GetWindowThreadProcessId(ch)[1]==record['pid']:
+                info['children'].append({'hwnd':ch,'class':win32gui.GetClassName(ch),'text':win32gui.GetWindowText(ch)[:500]})
+        win32gui.EnumChildWindows(hwnd,child,None);windows.append(info)
+    win32gui.EnumWindows(visit,None)
+    return windows
 
 @contextmanager
 def native_application(record,handle,trace=lambda *args:None):
@@ -64,7 +103,14 @@ def native_application(record,handle,trace=lambda *args:None):
                 if win32gui.GetClassName(child_hwnd)==expected and win32process.GetWindowThreadProcessId(child_hwnd)[1]==record['pid']:candidates.append((priority,child_hwnd))
             win32gui.EnumChildWindows(hwnd,child,None)
     win32gui.EnumWindows(window,None)
-    if not candidates:raise RuntimeError('OWNED_NATIVEOM_WINDOW_MISSING')
+    if not candidates:
+        import win32event,win32process
+        snapshot=owned_window_snapshot(record)
+        trace('NATIVEOM_NOT_READY',{'pid':record['pid'],'creation_time':record['creation_time'],
+                                  'expected_class':expected,'windows':snapshot})
+        if win32event.WaitForSingleObject(handle,0)==0:
+            raise RuntimeError('Собственный процесс Office завершился до подключения; код '+str(win32process.GetExitCodeProcess(handle)))
+        raise RuntimeError(startup_problem(snapshot,expected) or 'OWNED_NATIVEOM_WINDOW_MISSING')
     obj=native=app=None
     try:
         fn=ctypes.OleDLL('oleacc').AccessibleObjectFromWindow
@@ -216,7 +262,7 @@ def _owned_office(diagnostic, *, supervised=False, cleanup_errors=None):
         deadline=time.monotonic()+30
         while True:
             try:
-                with native_application(record,handle) as native:app=native
+                with native_application(record,handle,lambda phase,details:event(phase,{'pid':record['pid'],'details':details})) as native:app=native
                 native=None;break
             except RuntimeError as exc:
                 if str(exc)!='OWNED_NATIVEOM_WINDOW_MISSING' or time.monotonic()>=deadline:raise
@@ -251,14 +297,15 @@ def _owned_office(diagnostic, *, supervised=False, cleanup_errors=None):
             # Excel Quit can require the client's STA to service final calls.
             # Keep that apartment alive after releasing proxies until process
             # exit is observed; a dead worker is too late for this handshake.
-            deadline=time.monotonic()+15
-            while any(win32event.WaitForSingleObject(h,0)!=win32con.WAIT_OBJECT_0 for h in owned) and time.monotonic()<deadline:
-                pythoncom.PumpWaitingMessages();time.sleep(.05)
+            wait_owned_exit(owned,15)
             for handle,record in zip(owned,records):
                 if win32event.WaitForSingleObject(handle,0)!=win32con.WAIT_OBJECT_0:request_empty_excel_close(record,handle,event)
-            deadline=time.monotonic()+15
-            while any(win32event.WaitForSingleObject(h,0)!=win32con.WAIT_OBJECT_0 for h in owned) and time.monotonic()<deadline:
-                pythoncom.PumpWaitingMessages();time.sleep(.05)
+            # Office's background shutdown (including its power-manager window)
+            # can take almost a minute after Quit with zero COM interfaces and
+            # zero workbooks. Observe that exit in the live STA instead of
+            # prematurely ending the worker; ownership/exit-code checks below
+            # remain mandatory and the wait is still bounded.
+            wait_owned_exit(owned,60)
             for handle,record in zip(owned,records):
                 record['exit_code']=win32process.GetExitCodeProcess(handle)
                 record['still_running']=win32event.WaitForSingleObject(handle,0)!=win32con.WAIT_OBJECT_0
@@ -291,7 +338,15 @@ def _owned_office(diagnostic, *, supervised=False, cleanup_errors=None):
                             event('VIEWER_EMERGENCY_FORCE_RESULT',record)
                         except Exception as exc:errors.append(error_record('Viewer.EmergencyTeardown',exc))
             finally:
+                # Popen owns the same CreateProcess handle in direct/native
+                # calls. Cache exit before closing it, as the supervisor does;
+                # otherwise Popen.__del__ polls an already closed handle.
+                for child in processes:
+                    try:child.poll()
+                    except Exception as exc:errors.append(error_record('Process.ExitCache',exc))
+                live_handles={int(child._handle) for child in processes if child.returncode is None}
                 for handle in owned:
+                    if int(handle) in live_handles:continue  # Popen retains its live handle
                     try:handle.Close()
                     except Exception as exc:errors.append(error_record('ProcessHandle.Close',exc))
         payload={'schema':'STAGE9_OFFICE_OWNERSHIP_V2','instances':records,'supervised':supervised,

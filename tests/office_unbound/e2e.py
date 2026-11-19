@@ -8,7 +8,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True);parser.add_argument('--exe',type=Path)
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=False)
-    workspace=Path(r'C:\Users\arara\AppData\Local\VZMKPassport\workspaces\19c900ed8f7a42f3be9fbc8aa70052f4')
+    workspace=Path(r'C:\Users\PUBLIC_USER\AppData\Local\VZMKPassport\workspaces\19c900ed8f7a42f3be9fbc8aa70052f4')
     prefix=[str(args.exe.resolve())] if args.exe else [sys.executable,'-B',str(ROOT/'stage9.py')]
     env=dict(os.environ);env['LOCALAPPDATA']=str(out/'appdata')
     if args.exe:env['PATH']=str(Path(os.environ['SystemRoot'])/'System32')
@@ -33,7 +33,7 @@ def main():
         reports.append({'task':task,'duration_seconds':time.monotonic()-began,'office':summary,'supervisor_path':result['office_supervisor']})
         print(task,'PASS','office_wait',round(summary['wait_seconds_after_worker'],3),'recovered',summary['owned_unbound_gracefully_recovered'],flush=True)
         return result
-    check=run('check',['--project','Гараж Казахстан','--passport','9/2026','--vom',r'C:\Users\arara\Downloads\ВОМ отгрузочный .xlsx','--variants','0'])
+    check=run('check',['--project','Гараж Казахстан','--passport','9/2026','--vom',r'C:\Users\PUBLIC_USER\Downloads\ВОМ отгрузочный .xlsx','--variants','0'])
     data=check['data']
     assert data['visible_rows']==104 and Decimal(data['quantity'])==288 and Decimal(data['mass_kg'])==Decimal('15822.14') and data['variants']==[0],data
     generated=run('generate',['--preview',check['preview'],'--confirm-test'])

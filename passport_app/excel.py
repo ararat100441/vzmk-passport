@@ -9,7 +9,8 @@ from .config import PassportError
 
 def sha256(path):
     try:
-        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        with Path(path).open('rb') as source:
+            return hashlib.file_digest(source, 'sha256').hexdigest()
     except OSError as exc:
         raise PassportError(f'Не удалось прочитать файл: {path}. Он отсутствует или занят другим процессом.') from exc
 

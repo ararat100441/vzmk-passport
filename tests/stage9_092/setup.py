@@ -7,7 +7,7 @@ from stage8_closure import storage as S
 from stage9_app.workspace import save
 from akz_stage6.core import digest as akz_digest
 OUT=ROOT/'validation/stage9_092_20261012_01'
-seed=Path(r'C:\Users\arara\AppData\Local\Packages\OpenAI.Codex_2p2nqsd0c76g0\LocalCache\Local\VZMKWork09_fa550e56\VZMKPassport\workspaces\64cc6c3c7a0443b68da736b63a8329ee')
+seed=Path(r'C:\Users\PUBLIC_USER\AppData\Local\Packages\OpenAI.Codex_2p2nqsd0c76g0\LocalCache\Local\VZMKWork09_fa550e56\VZMKPassport\workspaces\64cc6c3c7a0443b68da736b63a8329ee')
 meta=S.read(seed/'STAGE9_WORKSPACE.json');assert meta['seal']==S.digest({k:v for k,v in meta.items() if k!='seal'})
 base=Path(os.environ['LOCALAPPDATA'])/('VZMKStage9_092_'+uuid4().hex[:8]);base.mkdir()
 source=base/'source';source.mkdir();copied={}

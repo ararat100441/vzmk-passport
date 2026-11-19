@@ -151,8 +151,14 @@ class CleanupTests(unittest.TestCase):
         def write(path,kind,data):
             if force_log_error and kind=='VIEWER_EMERGENCY_FORCE_BEGIN':raise OSError('FORCE_LOG_DENIED')
             return real(path,kind,data)
+        child=types.SimpleNamespace(_handle=handle,returncode=None)
+        def poll_child():
+            child.returncode=None if alive[0] else 1 if living else 0
+            events.append('Popen.poll')
+            return child.returncode
+        child.poll=poll_child
         with ExitStack() as stack:
-            patches=[patch('stage9_app.ownership.launch_child',return_value=(types.SimpleNamespace(_handle=handle),record)),
+            patches=[patch('stage9_app.ownership.launch_child',return_value=(child,record)),
                 patch('stage9_app.ownership.native_application',side_effect=native),
                 patch('stage9_app.ownership.request_empty_excel_close'),
                 patch('stage9_app.ownership.time.monotonic',side_effect=monotonic),
@@ -185,7 +191,10 @@ class CleanupTests(unittest.TestCase):
             with self.simulated_child(living=True,**kwargs) as (events,_):
                 with self.assertRaises(D.OfficeCleanupError):
                     with owned_office(self.root/(name+'.json')):self.simulate_dispatch()
-                self.assertNotIn('Terminate',events,(name,self.read(self.root/(name+'.json'))));self.assertIn('Handle.Close',events)
+                self.assertNotIn('Terminate',events,(name,self.read(self.root/(name+'.json'))))
+                # The refused live child remains owned by Popen, whose handle
+                # must remain valid for its eventual exit observation.
+                self.assertIn('Popen.poll',events);self.assertNotIn('Handle.Close',events)
     def test_proven_emergency_force_stays_failure_and_records_final_outcome_once(self):
         with self.simulated_child(living=True) as (events,_):
             with self.assertRaises(D.OfficeCleanupError):
