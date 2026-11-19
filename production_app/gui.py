@@ -198,7 +198,8 @@ class App:
         tools.pack(fill='x',padx=16,pady=(0,5))
         # Existing commands and callbacks are preserved.
         for text,command in [('Фактические результаты',self.fact_dialog),
-                             ('Открыть документы',self.open_documents)]:
+                             ('Открыть документы',self.open_documents),
+                             ('Добавить марки в паспорт',self.add_marks)]:
             ttk.Button(tools,text=text,command=command).pack(
                 side='left',padx=(0,8),pady=2)
 
@@ -316,6 +317,7 @@ class App:
             b.configure(state='normal' if not self.active else 'disabled',text='Сформировать пакет')
 
     def inputs_changed(self):
+        self.add_marks_passport=None;self.amendment_rows=None
         self.facts={};self.invalidate()
 
     def project_facts(self,vom):
@@ -332,8 +334,21 @@ class App:
             self.write(str(exc))
             return {'facts_scope':scope}
 
+    def adding_marks(self):
+        return getattr(self,'add_marks_passport',None)==(self.project.get(),self.number.get()) and not self.new.get()
+
+    def control_for_shipment(self,source,vom):
+        from .shared_uzk import planned_control
+        if not self.adding_marks():
+            return planned_control(source,self.project.get(),vom)
+        from .amendment import original_shipment,added_rows,control_plan
+        from .catalog_ledger import shipment_quantities
+        _,_,previous,facts,counts=original_shipment(self.cfg,self.project.get(),self.number.get())
+        return control_plan(source,self.project.get(),added_rows(previous,vom,getattr(self,'amendment_rows',None)),facts,counts,
+                            shipment_quantities(vom))[0]
+
     def synchronized_facts(self):
-        from .shared_uzk import find_shared_uzk,planned_control
+        from .shared_uzk import find_shared_uzk
         from .catalog_assignments import current_assignments
         from .shipment_sync import synchronize
         from .geometry_selection import GeometrySelection
@@ -341,20 +356,20 @@ class App:
                                      manual_dimensions,requires_geometry_catalog)
         v=model.visible_vom(self.vom.get())
         source=find_shared_uzk(self.cfg,require=True)
-        plan=planned_control(source,self.project.get(),v)
+        plan=self.control_for_shipment(source,v)
         profile=model.profile(self.cfg,self.project.get());assignments={}
         if profile.get('catalog'):
             assignments=current_assignments(profile['catalog'],profile['catalog_sha256'],plan)
         saved=self.project_facts(v)
         data=synchronize(saved,self.project.get(),self.number.get(),self.cfg.get('training',False),plan,assignments)
         for row in data['marks']:
-            if plan[row['mark']]['uzk_quantity'] and has_manual_geometry(row):
+            if plan[row['mark']]['uzk_quantity'] and not plan[row['mark']].get('amendment_original') and has_manual_geometry(row):
                 manual_dimensions(row)
-        if requires_geometry_catalog(data['marks']):
+        if requires_geometry_catalog(row for row in data['marks'] if not plan[row['mark']].get('amendment_original')):
             geometry=find_approved_geometry(self.cfg,require=True)
             selection=GeometrySelection(geometry,self.cfg,self.project.get())
             for row in data['marks']:
-                if plan[row['mark']]['uzk_quantity'] and not has_manual_geometry(row):
+                if plan[row['mark']]['uzk_quantity'] and not plan[row['mark']].get('amendment_original') and not has_manual_geometry(row):
                     row['standard']=selection.resolve(row['mark'],row['profile'],saved_standard=row['standard'])
         self.cfg['uzk_registry']=str(source);self.cfg['use_shared_uzk']=True
         return data
@@ -379,8 +394,30 @@ class App:
     def settings_path(self):return getattr(self,'config_path',local_root()/'settings.json')
 
     def shipment_dialog(self):
+        if self.adding_marks():return self.add_marks()
         from .shipment_dialog import open_shipment
         return open_shipment(self)
+
+    def add_marks(self):
+        if self.active:return
+        try:
+            if self.new.get() or not self.number.get():
+                raise Stop('Снимите «Новый паспорт» и выберите выпущенный номер.')
+            from .amendment import original_shipment
+            from .shipment_dialog import open_shipment
+            _,_,original,facts,_=original_shipment(self.cfg,self.project.get(),self.number.get())
+            saved=getattr(self,'amendment_rows',None) if self.adding_marks() else None
+            if saved and saved['appendix_sha256']!=original.digest:saved=None
+            draft=self.shipment_rows if saved else None
+            def select_mode(origins):
+                if not saved:
+                    self.facts={'marks':facts['marks'],'akz_drafts':facts.get('akz_drafts',{})}
+                self.add_marks_passport=(self.project.get(),self.number.get())
+                self.amendment_rows=origins
+            return open_shipment(self,original_rows=original.rows,original_digest=original.digest,
+                                 draft_rows=draft,draft_indices=saved['indices'] if saved else None,
+                                 on_accept=select_mode)
+        except Exception as exc:self.error(exc)
 
     def choose_vom(self):
         self.choose(self.vom,False)
@@ -731,9 +768,9 @@ class App:
         if self.active:return
         try:
             v=model.visible_vom(self.vom.get())
-            from .shared_uzk import find_shared_uzk,planned_control
+            from .shared_uzk import find_shared_uzk
             source=find_shared_uzk(self.cfg,require=True)
-            uzk_plan=planned_control(source,self.project.get(),v)
+            uzk_plan=self.control_for_shipment(source,v)
             # An old saved settings.json may predate the third visible field.
             # Enable the single shared source in-memory for the current job;
             # persist it only if the operator saves Settings.
@@ -1059,7 +1096,7 @@ class App:
         from .automatic_acts import (calculate_design_characteristics,find_approved_geometry,
                                      has_manual_geometry,manual_dimensions,requires_geometry_catalog)
         from .geometry_selection import GeometrySelection
-        positive=any(row['uzk_quantity'] for row in uzk_plan.values())
+        positive=any(row['uzk_quantity'] and not row.get('amendment_original') for row in uzk_plan.values())
         selection=None
         if positive:
             try:
@@ -1072,14 +1109,14 @@ class App:
         standard_status.pack(fill='x',padx=12,pady=5)
         def standard_options(item):
             vals=grid.item(item,'values')
-            if not uzk_plan[str(vals[0])]['uzk_quantity'] or has_manual_geometry(dict(zip(cols,vals))):
+            if not uzk_plan[str(vals[0])]['uzk_quantity'] or uzk_plan[str(vals[0])].get('amendment_original') or has_manual_geometry(dict(zip(cols,vals))):
                 return None
             return selection.options(str(vals[1])) if selection else []
         def update_standards():
             errors=[]
             for item in grid.get_children():
                 vals=list(grid.item(item,'values'))
-                if not uzk_plan[str(vals[0])]['uzk_quantity'] or has_manual_geometry(dict(zip(cols,vals))):
+                if not uzk_plan[str(vals[0])]['uzk_quantity'] or uzk_plan[str(vals[0])].get('amendment_original') or has_manual_geometry(dict(zip(cols,vals))):
                     continue
                 try:vals[4]=selection.resolve(str(vals[0]),str(vals[1]),saved_standard=str(vals[4])) if selection else ''
                 except Stop as exc:errors.append(str(exc))
@@ -1087,7 +1124,9 @@ class App:
             text=('ГОСТ по умолчанию — первый допустимый в порядке строк Профили.xlsx. '
                   'Проверьте соответствие проекту. Если подбор недоступен, введите L и S вручную '
                   'двойным щелчком по соответствующим ячейкам марки. Очистите обе ячейки для автоподбора.')
-            if not positive:text='План УЗК — 0. ГОСТ / НД для расчёта УЗК не требуется.'
+            if not positive:
+                text=('Для добавленных марок УЗК не требуется.' if self.adding_marks()
+                      else 'План УЗК — 0. ГОСТ / НД для расчёта УЗК не требуется.')
             if errors:text+='\n'+'\n'.join(errors)
             standard_status.configure(text=text)
             return errors
@@ -1109,14 +1148,19 @@ class App:
         def recalculate(*_):
             refresh_akz()
             if not positive:return
-            current=[dict(zip(cols,grid.item(item,'values'))) for item in grid.get_children()]
+            current=[dict(zip(cols,grid.item(item,'values'))) for item in grid.get_children()
+                     if not uzk_plan[grid.set(item,'mark')].get('amendment_original')]
+            geometry_vom=v
+            if self.adding_marks():
+                from dataclasses import replace
+                geometry_vom=replace(v,rows=tuple(r for r in v.rows if not uzk_plan[str(r[0])].get('amendment_original')))
             auto=selection if requires_geometry_catalog(current) else None
             try:
                 for row in current:
-                    if uzk_plan[row['mark']]['uzk_quantity'] and has_manual_geometry(row):
+                    if uzk_plan[row['mark']]['uzk_quantity'] and not uzk_plan[row['mark']].get('amendment_original') and has_manual_geometry(row):
                         manual_dimensions(row)
                 design=calculate_design_characteristics(
-                    v,{'marks':current},auto.path if auto else None,
+                    geometry_vom,{'marks':current},auto.path if auto else None,
                     expected_sha=auto.pin if auto else None,
                     approved_rows=auto.known if auto else None)
                 picked={str(grid.item(i,'values')[0]) for i in grid.selection()}
@@ -1128,7 +1172,8 @@ class App:
         update_standards()
         self.editable(grid,immutable={0,3},on_change=recalculate,choices={4:standard_options},
                       on_cell_change=changed_standard,
-                      can_edit=lambda item,col:col not in (5,6) or int(grid.set(item,'uzk_quantity'))>0)
+                      can_edit=lambda item,col:not uzk_plan[grid.set(item,'mark')].get('amendment_original')
+                      and (col not in (5,6) or int(grid.set(item,'uzk_quantity'))>0))
         grid.bind('<<TreeviewSelect>>',recalculate)
         refresh_akz()
 
@@ -1147,9 +1192,9 @@ class App:
                 from .draft_values import preview_values
                 visible=[dict(zip(cols,grid.item(item,'values'))) for item in grid.get_children()]
                 for row in visible:
-                    if uzk_plan[row['mark']]['uzk_quantity'] and has_manual_geometry(row):
+                    if uzk_plan[row['mark']]['uzk_quantity'] and not uzk_plan[row['mark']].get('amendment_original') and has_manual_geometry(row):
                         manual_dimensions(row)
-                if selection and requires_geometry_catalog(visible):
+                if selection and requires_geometry_catalog(row for row in visible if not uzk_plan[row['mark']].get('amendment_original')):
                     selection.verify_source()
                     errors=update_standards()
                     if errors:
@@ -1282,7 +1327,8 @@ class App:
             current=engineering_facts(self.shipment_facts(),model.profile(self.cfg,self.project.get()))
             self.run('check',{'cfg':self.cfg,'project':self.project.get(),
                               'number':self.number.get(),'vom':self.vom.get(),
-                              'facts':current,'new':self.new.get()},self.checked)
+                              'facts':current,'new':self.new.get(),'amend':self.adding_marks(),
+                              'amendment_rows':getattr(self,'amendment_rows',None) if self.adding_marks() else None},self.checked)
         except Exception as exc:
             self.error('Сначала заполните текущие фактические результаты. '
                        'Предварительный пакет не создаётся. '+str(exc))
@@ -1414,6 +1460,8 @@ class App:
                  +str(d['mass_kg'])+' кг / '+str(d['area_m2'])+' м²\n'
                  'Путь к рабочему реестру: '+str(d['registry'])+'\n'
                  'Папка итогового комплекта: '+str(d['target'])+'\n'
+                 +('Корректируется существующий паспорт. Исходный комплект переносится в архив операции.\n'
+                   if d.get('amendment') else '')
                  +('Предупреждение: '+str(len(accounting.get('stock_warnings',[])))
                    +' ошибок B вне ВОМ (данные сохраняются).\n'
                    if accounting.get('stock_warnings') else '')
@@ -1421,6 +1469,8 @@ class App:
                    'Общий УЗК: '+str(accounting['uzk'])+'\n'
                    'Списание УЗК: '+str(sum(accounting['controls'].values()))+' шт.\n'
                    if accounting else '')
+                 +('Возврат УЗК: '+str(sum(accounting.get('refunds',{}).values()))+' шт.\n'
+                   if d.get('amendment') else '')
                  +'\nПрограмма уже проверила Word и Excel. Предварительный PDF '
                  'не создаётся и не открывается. После подтверждения программа '
                  'сформирует ИТОГОВЫЙ PDF, проверит документы и только затем '
@@ -1517,7 +1567,20 @@ class App:
             if code or r['status']!='PASS':raise Stop(str(r.get('error',r))+'\nЖурнал: '+str(root))
             for b,state in zip(self.buttons,states):b.configure(state=state)
             self.progress.configure(text='Проверка завершена.');callback(r)
-        except Exception as exc:self.invalidate();self.progress.configure(text='Операция остановлена. Откройте сообщение об ошибке.');self.error(exc)
+        except Exception as exc:
+            journal=None
+            if self.adding_marks() and task in ('commit','readback','complete'):
+                request=read(root/'request.json')
+                if task=='commit':
+                    plan=read(request['path'])
+                    journal=Path(plan['registry']).parent/'.vzmk-operations'/plan['id']/'journal.json'
+                else:
+                    journal=Path(request['journal'])
+            self.invalidate()
+            self.progress.configure(text='Операция остановлена. Откройте сообщение об ошибке.')
+            self.error(exc)
+            if journal and journal.is_file():
+                self.run('recover',{'journal':str(journal)},lambda result:self.write(result))
 
     def prepared(self,result):
         self.write('Word и Excel подготовлены: '+str(result['files'])+' файлов.')
@@ -1542,6 +1605,7 @@ class App:
                  ('Предупреждение: '+str(len(d['accounting'].get('stock_warnings',[])))+' проблемных строк B вне текущей ВОМ. Их данные не исправляются.\n' if (d.get('accounting') or {}).get('stock_warnings') else '')+
                  (('Справочник отгрузок: '+d['accounting']['catalog']+'\nОбщий УЗК: '+d['accounting']['uzk']+
                    '\nСписание УЗК: '+str(sum(d['accounting']['controls'].values()))+' шт. Три файла — с резервными копиями.\n') if d.get('accounting') else '')+
+                 ('Возврат УЗК: '+str(sum(d['accounting'].get('refunds',{}).values()))+' шт.\n' if d.get('amendment') else '')+
                  ('Будет добавлена одна строка в реестр.\n' if d['new']
                   else 'Новых строк реестра не будет.\n')+
                  '\nОткрылся PDF «Предварительный просмотр — не выпущено». '

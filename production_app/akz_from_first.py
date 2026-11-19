@@ -84,16 +84,24 @@ def _three_coat_reference(c):
                     for col in ('H','J')))
 
 
+def _phosphorit_layout(value, formula):
+    return (value('E17') in (1,'1') and value('H17') in (None,'')
+            and value('I17') in (2,'2') and value('J17') in (None,'')
+            and 'ФОСФОРИТ' in str(value('E7')).upper()
+            and formula('E22')=='I22-5' and formula('I22')=='H4-2')
+
+
 def _two_coat_reference(c):
     """The supplied two-coat act has header H17 but second-coat data in I."""
-    return (bool(re.fullmatch(r'\d+(?:/\d+)?/20\d\d(?:-[1-3])?\s+от\s*',
-                             str(c.get('E4',{}).get('value',''))))
-            and str(c.get('E17',{}).get('value'))=='1'
-            and str(c.get('H17',{}).get('value'))=='2'
-            and c.get('J17',{}).get('value') is None
-            and all(c.get(p,{}).get('formula')==f for p,f in (
-                ('G8','E4'),('I8','H4'),('D49','H4'),
-                ('E22','I22-1'),('I22','H4-1'),('E30','E22'),('I30','I22')))
+    def value(cell):return c.get(cell,{}).get('value')
+    def formula(cell):return c.get(cell,{}).get('formula')
+    standard=(str(value('E17'))=='1' and str(value('H17'))=='2'
+              and value('J17') is None
+              and formula('E22')=='I22-1' and formula('I22')=='H4-1')
+    return (bool(re.fullmatch(r'\d+(?:/\d+)?/20\d\d(?:-[1-3])?\s+от\s*',str(value('E4'))))
+            and (standard or _phosphorit_layout(value,formula))
+            and all(formula(p)==f for p,f in (
+                ('G8','E4'),('I8','H4'),('D49','H4'),('E30','E22'),('I30','I22')))
             and all(c.get(col+'27',{}).get('formula')==f'{col}28*100/L27'
                     or (c.get(col+'27',{}).get('formula') is None
                         and _numeric(c.get(col+'27',{}).get('value'),'thickness')>0)
@@ -167,7 +175,10 @@ def fill_first_akz(s,*,number,akz_date,climate):
     number=act_number(number,climate['variant'])
     coats=3 if all(s.Range(col+'17').Value2 in (i,str(i))
                    for i,col in enumerate(('E','H','J'),1)) else 1
-    if (coats==1 and s.Range('H17').Value2 in (2,'2')
+    phosphorit=coats==1 and _phosphorit_layout(
+        lambda cell:s.Range(cell).Value2,
+        lambda cell:str(s.Range(cell).Formula or '').replace('$','').upper().removeprefix('='))
+    if phosphorit or (coats==1 and s.Range('H17').Value2 in (2,'2')
             and str(s.Range('E22').Formula).replace('$','').upper()=='=I22-1'):
         coats=2
     columns=('E','I') if coats==2 else ('E','H','J')[:coats]
@@ -182,7 +193,9 @@ def fill_first_akz(s,*,number,akz_date,climate):
         raise Stop('АКЗ: изменён исходный номер E4.')
     formulas=[('G8','=E4'),('I8','=H4'),('D49','=H4')]
     formulas+=([('E22','=H4-1'),('E30','=E22')] if coats==1 else [
-        ('E22','=I22-1'),('I22','=H4-1'),('E30','=E22'),('I30','=I22')]
+        ('E22','=I22-5' if phosphorit else '=I22-1'),
+        ('I22','=H4-2' if phosphorit else '=H4-1'),
+        ('E30','=E22'),('I30','=I22')]
         if coats==2 else [
         ('E22','=H22-1'),('H22','=J22-1'),('J22','=H4-1'),
         ('E30','=E22'),('H30','=H22'),('J30','=J22')])
@@ -216,7 +229,7 @@ def fill_first_akz(s,*,number,akz_date,climate):
     for col in columns:
         for row,key in ((31,'surface'),(32,'air'),(33,'humidity'),(34,'dew')):
             updates[col+str(row)]=_numeric(climate.get(key),key)
-    if coats==2:
+    if coats==2 and not phosphorit:
         # These are the original unprinted climate helpers, not control
         # results. Replace their random climate formulas in the COPY too;
         # the global prohibition of random data remains unchanged.
@@ -231,7 +244,7 @@ def fill_first_akz(s,*,number,akz_date,climate):
     if before_format!=(cell.NumberFormat,cell.NumberFormatLocal):
         raise Stop('АКЗ: изменён исходный формат даты.')
     for position,value in updates.items():s.Range(position).Value2=value
-    if coats==2:
+    if coats==2 and not phosphorit:
         # The supplied I27 has a RUB currency format. It is a thickness,
         # so use the first coat's numeric format in the new copy only.
         s.Range('I27').NumberFormat=s.Range('E27').NumberFormat

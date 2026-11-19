@@ -264,6 +264,14 @@ def selected_source_profile(cfg,name):
     """The explicitly selected issued passport is the ONLY document source."""
     from .first_passport import discover_first_passport_for_config
     inventory=discover_first_passport_for_config(cfg,select(read_registry(cfg['registry']),name))
+    if name=='Фосфорит 80 тн':
+        original=inventory['sources'].get('akz0')
+        if original and inventory['first_number']=='1/2026':
+            working=safe(Path(cfg['documents'])/name/'1_2026 - akz0.xlsx')
+            if working.is_file():
+                if sha(working)!=original['sha256']:
+                    raise Stop('Фосфорит 80 тн: рабочий акт АКЗ №0 отличается от исходного акта.')
+                inventory['sources']['akz0']={**original,'path':str(working)}
     result={'root':inventory['project_root'],'templates':dict(inventory['sources']),
             'first_passport_sources':inventory}
     catalog=inventory.get('catalog')

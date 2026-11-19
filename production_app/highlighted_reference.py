@@ -277,26 +277,44 @@ def _strip_unused_old_links(document):
             del document.part.rels[rid]
 
 
+def _phosphorit_uzk_layout(document):
+    if len(document.tables)!=2:
+        return False
+    table,executor=document.tables
+    if len(table.rows)<5 or len(executor.rows)!=2:
+        return False
+    return (table.rows[1].cells[0].text.strip()=='Объект:'
+            and 'ФОСФОРИТ' in table.rows[1].cells[2].text.upper()
+            and 'Е250-0134-ДР.Ф.2023.12' in table.rows[1].cells[2].text
+            and table.rows[2].cells[0].text.startswith('Тип и № дефектоскопа:')
+            and tuple(c.grid_span for c in table.rows[3]._tr.tc_lst)==(1,2,1,1,1,1,1,1)
+            and table.rows[3].cells[8].text.replace('\n',' ').strip()=='Заключение по стыку'
+            and executor.rows[0].cells[0].text.strip()=='Контроль выполнил'
+            and tuple(len(r._tr.tc_lst) for r in executor.rows)==(3,1))
+
+
 def _copy_uzk_rows(document,design_rows,control_date):
     table=document.tables[0]
-    if len(document.tables)<2 or len(table.rows)<6:
+    phosphorit=_phosphorit_uzk_layout(document)
+    body_start=4 if phosphorit else 5
+    if len(document.tables)<2 or len(table.rows)<=body_start:
         raise Stop('УЗК: отличается структура таблицы первого паспорта.')
-    header=' '.join(x.text for x in table.rows[4].cells)
+    header=' '.join(x.text for x in table.rows[body_start-1].cells)
     if 'Характеристика сварного соединения' not in header:
         raise Stop('УЗК: не найдена исходная шапка характеристик.')
-    original=table.rows[5]
+    original=table.rows[body_start]
     if len(original.cells)!=9 or not original.cells[0].text.strip():
         raise Stop('УЗК: в первом документе неверная структура строк.')
     if original.cells[1]._tc is not original.cells[2]._tc:
         raise Stop('УЗК: характеристика должна занимать два объединённых столбца.')
-    for old in list(table.rows[5:]):
+    for old in list(table.rows[body_start:]):
         table._tbl.remove(old._tr)
     template=deepcopy(original._tr)
     # A complete mark row (including all welders) must stay on one page.
     # The original five-row heading is a contiguous group in this exact
     # user form; repeat it together when the dynamic body continues.
     from docx.oxml import OxmlElement
-    for heading in table.rows[:5]:
+    for heading in table.rows[:body_start]:
         properties=heading._tr.get_or_add_trPr()
         if properties.find(qn('w:tblHeader')) is None:
             properties.append(OxmlElement('w:tblHeader'))
@@ -317,9 +335,10 @@ def _copy_uzk_rows(document,design_rows,control_date):
         _set_cell_keep_layout(row.cells[5],'\n'.join(f for _,_,f,_ in records))
         _set_cell_keep_layout(row.cells[6],'\n'.join(a for _,_,_,a in records))
     _strip_unused_old_links(document)
-    if len(table.rows)!=5+len(mapped):
+    if len(table.rows)!=body_start+len(mapped):
         raise Stop('УЗК: после подстановки марок неверное число строк.')
-    _uzk_print_layout(document)
+    if not phosphorit:
+        _uzk_print_layout(document)
     return tuple(mapped)
 
 
@@ -421,14 +440,17 @@ def supports_uzk_first(first):
     """Recognize exact table/heading pattern; never an arbitrary DOCX."""
     try:
         d=Document(first)
-        if len(d.tables)<2 or len(d.tables[0].rows)<6:
+        if len(d.tables)<2:
             return False
         t=d.tables[0]
+        body_start=4 if _phosphorit_uzk_layout(d) else 5
+        if len(t.rows)<=body_start:
+            return False
         return (
-            len(t.rows[5].cells)==9
-            and t.rows[5].cells[1]._tc is t.rows[5].cells[2]._tc
+            len(t.rows[body_start].cells)==9
+            and t.rows[body_start].cells[1]._tc is t.rows[body_start].cells[2]._tc
             and 'Характеристика сварного соединения' in
-            ' '.join(c.text for c in t.rows[4].cells)
+            ' '.join(c.text for c in t.rows[body_start-1].cells)
             and sum(1 for p in d.paragraphs
                     if re.fullmatch(
                         r'Акт № [0-9]+/20[0-9]{2} от '

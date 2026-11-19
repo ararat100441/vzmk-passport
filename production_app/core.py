@@ -60,10 +60,11 @@ def pending(registry):
     root=safe(registry).parent/'.vzmk-operations'
     return [p for p in root.glob('*/journal.json') if journal_read(p).get('phase') not in ('COMPLETE','ROLLED_BACK','ABORTED','COMPENSATED')]
 
-def plan(cfg,project,number,vom,facts,new):
+def plan(cfg,project,number,vom,facts,new,amend=False,amendment_rows=None):
     registry,documents,output=model.validate_paths(cfg);training_guard(cfg)
     if pending(registry):raise Stop('Есть незавершённая операция. Откройте «Восстановление»: '+str(pending(registry)[0]))
     r=read_registry(registry);p=model.select(r,project);profile=model.profile(cfg,project)
+    if amend and new:raise Stop('Добавление марок требует существующего паспорта.')
     if new and number!=p.next_number:raise Stop('Следующий номер изменился: '+p.next_number)
     if not new and number==p.first_number:raise Stop('Первый паспорт оформляется владельцем самостоятельно и не выпускается программой повторно.')
     existing=[e for e in r.projects[project] if e['number']==number]
@@ -74,6 +75,14 @@ def plan(cfg,project,number,vom,facts,new):
         if choice:row['standard']=choice
     v=model.visible_vom(safe(vom))
     if v.area is None:raise Stop('Для Приложения №1 и приложений АКЗ заполните площадь текущей ВОМ. Неизвестная площадь не равна нулю.')
+    previous=None
+    if amend:
+        from .amendment import original_shipment,added_rows
+        from .catalog_ledger import shipment_quantities
+        old_target,old_hashes,old_vom,old_facts,old_quantities=original_shipment(cfg,project,number,profile,r)
+        delta=added_rows(old_vom,v,amendment_rows)
+        final_quantities=shipment_quantities(v)
+        previous={'documents':old_hashes,'quantities':old_quantities}
     shared_uzk=None;shared_uzk_sha=None
     if cfg.get('use_shared_uzk'):
         from .shared_uzk import (
@@ -81,9 +90,16 @@ def plan(cfg,project,number,vom,facts,new):
         )
         shared_uzk=find_shared_uzk(cfg)
         shared_uzk_sha=sha(shared_uzk)
-        expected=planned_control(shared_uzk,project,v)
+        if amend:
+            from .amendment import control_plan,refund_sources
+            expected,new_controls,refunds=control_plan(
+                shared_uzk,project,delta,old_facts,old_quantities,final_quantities)
+            refund_rows,refund_pins=refund_sources(
+                registry,old_target,shared_uzk,project,old_hashes['ISSUE.json'],refunds)
+        else:
+            expected=planned_control(shared_uzk,project,v)
         verify_planned_quantities(facts,expected)
-    if not new and abs(v.mass-Decimal(str(existing[0]['mass'])))>Decimal('.005'):
+    if not new and not amend and abs(v.mass-Decimal(str(existing[0]['mass'])))>Decimal('.005'):
         raise Stop('Масса ВОМ не совпадает с существующим паспортом.')
     # Derive UZK DESIGN characteristics from current marks and the accepted
     # Stage4 profile geometry when its approved workbook is available.
@@ -100,18 +116,37 @@ def plan(cfg,project,number,vom,facts,new):
                   historical_uzk)
     from .automatic_acts import (find_approved_geometry,calculate_design_characteristics,
                                  has_manual_geometry,requires_geometry_catalog)
+    geometry_facts=facts
+    if amend:
+        original_marks={x['mark']:x for x in old_facts['marks']}
+        for row in facts['marks']:
+            if row['mark'] in original_marks:
+                old=original_marks[row['mark']]
+                fields=('profile','akz','paint')
+                if expected[row['mark']].get('amendment_original'):
+                    fields+=('standard','uzk_length_mm','uzk_thickness_mm')
+                for field in fields:row[field]=old.get(field,'')
+        # An existing design already contains the established per-piece geometry.
+        # Scale it to the new total; only marks without a retained design need lookup.
+        needs_design={mark for mark in new_controls if not expected[mark].get('amendment_original')}
+        geometry_facts={'marks':[row for row in facts['marks'] if row['mark'] in needs_design]}
+        geometry_vom=replace(delta,rows=tuple(row for row in delta.rows if row[0] in needs_design))
     manual=any(has_manual_geometry(row) and row.get('uzk_quantity') not in (0,'0')
-               for row in facts['marks'])
+               for row in geometry_facts['marks'])
     if uzk_required and (wants_design or shared_uzk is not None or manual):
         # A shipment using the shared plan must validate its positive UZK.
         # Only compatible forms consume the calculated design rows.
-        if requires_geometry_catalog(facts['marks']):
+        if requires_geometry_catalog(geometry_facts['marks']):
             profile_geometry_source=find_approved_geometry(cfg,require=True)
             profile_geometry_sha=sha(profile_geometry_source)
         computed=calculate_design_characteristics(
-            v,facts,profile_geometry_source,
+            geometry_vom if amend else v,geometry_facts,profile_geometry_source,
             expected_sha=(cfg.get('profiles_workbook_sha256') or profile_geometry_sha) if profile_geometry_source else None)
+        if amend:
+            from .amendment import retained_design
+            computed=[*retained_design(old_facts,expected),*computed]
         if wants_design or manual:facts={**facts,'uzk_design':computed}
+    if amend and not uzk_required:facts={**facts,'uzk_design':[]}
     if facts.get('auto_registry_dates'):
         from .registry_dates import resolve_registry_dates
         # For a new row, today's ending date is a PROPOSAL.
@@ -131,9 +166,14 @@ def plan(cfg,project,number,vom,facts,new):
     if shared_uzk is not None and sha(shared_uzk)!=shared_uzk_sha:
         raise Stop('Общий УЗК изменился после расчёта количества. Повторите проверку.')
     accounting=None
-    if new:
+    if new or amend:
         from .coordinated import accounting_plan
-        accounting=accounting_plan(cfg,project,number,v,facts,profile,r.projects[project])
+        accounting=accounting_plan(cfg,project,number,delta if amend else v,facts,profile,r.projects[project],
+                                   original_quantities=old_quantities if amend else None,
+                                   controls={m:x['uzk_quantity'] for m,x in new_controls.items()} if amend else None,
+                                   final_quantities=final_quantities if amend else None,
+                                   refunds=refunds if amend else None,
+                                   refund_rows=refund_rows if amend else None)
     for n in variants:
         for role in (f'akz{n}',f'akz_appendix{n}'):
             if role not in profile['templates']:raise Stop('Нет собственного шаблона '+role)
@@ -172,8 +212,16 @@ def plan(cfg,project,number,vom,facts,new):
     passport_folder=model.output_passport_directory(cfg,project,profile)
     target=passport_folder/(model.filename(number)+' от '+date.fromisoformat(facts['date']).strftime('%d.%m.%Y'))
     safe(target)
-    if target.exists():raise Stop('Папка готового комплекта уже существует: '+str(target))
+    if amend:
+        if target!=old_target:raise Stop('Дата или путь исходного паспорта изменились.')
+        inputs.extend(target/name for name in old_hashes)
+        inputs.extend(refund_pins)
+    elif target.exists():raise Stop('Папка готового комплекта уже существует: '+str(target))
     hashes=pins(inputs)
+    if amend and any(hashes.get(str(target/name))!=h for name,h in old_hashes.items()):
+        raise Stop('Исходный комплект изменился во время проверки.')
+    if amend and any(hashes.get(p)!=h for p,h in refund_pins.items()):
+        raise Stop('История списания УЗК изменилась во время проверки.')
     if accounting:
         for path,expected in accounting.get('history_fingerprints',{}).items():
             if hashes.get(path)!=expected:raise Stop('Историческое приложение изменилось после проверки: '+path)
@@ -189,6 +237,7 @@ def plan(cfg,project,number,vom,facts,new):
           'new':bool(new),'facts':facts,'vom':str(v.path),'fingerprints':hashes,'target':str(target),
           'marks':len(v.rows),'quantity':str(v.quantity),'mass_kg':str(v.mass),'area_m2':str(v.area),
           'variants':variants,'registry':str(registry),'date':facts['date'],'accounting':accounting,'uzk_required':uzk_required}
+    if amend:data['amendment']=previous
     run=local_root()/'jobs'/data['id'];run.mkdir(parents=True,exist_ok=False)
     data['run']=str(run);data['seal']=digest(data)
     save(run/'plan.json',data)
@@ -235,21 +284,35 @@ def _prepare(d):
             row=next(e['row'] for e in r.projects[d['project']] if e['number']==d['number'])
             b=open_excel(app,snapshot)
             try:
+                if d.get('amendment'):
+                    sheet=b.Worksheets(r.sheet)
+                    for key,value in (('mass',float(v.mass)),('connections',v.connections)):
+                        cell=sheet.Cells(row,r.columns[key])
+                        if cell.HasFormula:raise Stop('Корректировка не заменяет формулы реестра.')
+                        cell.Value2=value
                 app.CalculateFullRebuild();b.Save()
             finally:b.Close(SaveChanges=False)
     staged=read_registry(snapshot)
-    if d['new']:verify_registry(registry,snapshot,d['project'],d['number'],v,date.fromisoformat(d['date']))
+    if d['new'] or d.get('amendment'):
+        verify_registry(registry,snapshot,d['project'],d['number'],v,date.fromisoformat(d['date']),
+                        amend=bool(d.get('amendment')))
     out=office.render(model.profile(d['cfg'],d['project']),p,staged,row,v,d['facts'],outputs,d['cfg'].get('training',False))
     from .coordinated import prepare_candidates
     accounting=prepare_candidates(d)
     save(run/'prepared.json',{'plan_seal':d['seal'],'outputs':out,'output_fingerprints':pins([o['path'] for o in out]),'registry':str(snapshot),'row':row,'snapshot_sha256':sha(snapshot),'accounting':accounting})
     return {'status':'PASS','folder':str(outputs),'files':len(out)}
 
-def verify_registry(original,after,project,number,vom,expected_date=None):
+def verify_registry(original,after,project,number,vom,expected_date=None,*,amend=False):
     r0=read_registry(original);r1=read_registry(after)
     entries=[e for e in r1.projects[project] if e['number']==number]
-    if len(entries)!=1 or sum(map(len,r1.projects.values()))!=sum(map(len,r0.projects.values()))+1:raise Stop('Реестр должен содержать ровно одну новую строку.')
+    if len(entries)!=1 or sum(map(len,r1.projects.values()))!=sum(map(len,r0.projects.values()))+(0 if amend else 1):
+        raise Stop('Неверное число записей реестра после операции.')
     e=entries[0]
+    editable=set()
+    if amend:
+        old,=[entry for entry in r0.projects[project] if entry['number']==number]
+        if old['row']!=e['row']:raise Stop('Изменилась строка исправляемого паспорта.')
+        editable={r0.columns['mass'],r0.columns['connections']}
     if abs(Decimal(str(e['mass']))-vom.mass)>Decimal('.000001') or e['connections']!=vom.connections:raise Stop('Неверные масса/соединения новой строки.')
     if expected_date is not None:
         actual=e['date'].date() if isinstance(e['date'],datetime) else e['date']
@@ -266,7 +329,7 @@ def verify_registry(original,after,project,number,vom,expected_date=None):
                     bounds=list(area.bounds)
                     # Excel extends an existing print area ending at the last
                     # table row when ListRows.Add inserts the single new row.
-                    if extend and sa.title==r0.sheet and bounds[3]==e['row']-1:bounds[3]+=1
+                    if extend and not amend and sa.title==r0.sheet and bounds[3]==e['row']-1:bounds[3]+=1
                     ranges.append(tuple(bounds))
                 return sorted(ranges)
             if print_ranges(sa,True)!=print_ranges(sb) or sa.print_title_rows!=sb.print_title_rows or sa.print_title_cols!=sb.print_title_cols:
@@ -275,13 +338,14 @@ def verify_registry(original,after,project,number,vom,expected_date=None):
                 for ca in row:
                     # Insertion must not change any pre-existing cell's value/formula/style.
                     cb=sb.cell(ca.row,ca.column)
-                    if ca.value!=cb.value or ca.number_format!=cb.number_format or copy(ca.font)!=copy(cb.font) or copy(ca.border)!=copy(cb.border) or copy(ca.alignment)!=copy(cb.alignment) or copy(ca.fill)!=copy(cb.fill) or copy(ca.protection)!=copy(cb.protection):
+                    changed_value=ca.value!=cb.value and not (sa.title==r0.sheet and ca.row==e['row'] and ca.column in editable)
+                    if changed_value or ca.number_format!=cb.number_format or copy(ca.font)!=copy(cb.font) or copy(ca.border)!=copy(cb.border) or copy(ca.alignment)!=copy(cb.alignment) or copy(ca.fill)!=copy(cb.fill) or copy(ca.protection)!=copy(cb.protection):
                         raise Stop('Изменилась исходная ячейка реестра: '+sa.title+'!'+ca.coordinate)
         source=model.select(r0,project)
         s0=a[r0.sheet];s1=b[r1.sheet]
         for col in range(1,r0.width+1):
             c=s0.cell(source.first_row,col);n=s1.cell(e['row'],col)
-            if c.data_type=='f' and n.data_type!='f':raise Stop('Утрачена формула новой строки.')
+            if not amend and c.data_type=='f' and n.data_type!='f':raise Stop('Утрачена формула новой строки.')
         if len(b[r1.sheet].tables)!=len(a[r0.sheet].tables):raise Stop('Утрачена Excel-таблица.')
         from openpyxl.utils.cell import range_boundaries
         for sa in a.worksheets:
@@ -290,7 +354,7 @@ def verify_registry(original,after,project,number,vom,expected_date=None):
             for name,table in sa.tables.items():
                 old=sa.tables[name];new=sb.tables[name]
                 bounds=list(range_boundaries(old.ref))
-                if sa.title==r0.sheet and name==r0.table:bounds[3]+=1
+                if not amend and sa.title==r0.sheet and name==r0.table:bounds[3]+=1
                 if tuple(bounds)!=range_boundaries(new.ref) or old.tableStyleInfo!=new.tableStyleInfo:
                     raise Stop('Неверное расширение/оформление Excel-таблицы: '+name)
     finally:a.close();b.close()
@@ -471,7 +535,13 @@ def commit(path,release_result):
                      d['cfg'].get('training',False),True,control_confirmation=owner)
     if d.get('accounting'):
         from .coordinated import commit as commit_accounting
-        return commit_accounting(d,prepared,released,confirmation,approved_facts)
+        try:
+            return commit_accounting(d,prepared,released,confirmation,approved_facts)
+        except Exception:
+            if d.get('amendment'):
+                journal=Path(d['registry']).parent/'.vzmk-operations'/d['id']/'journal.json'
+                if journal.is_file():recover(journal)
+            raise
     with mutex(registry),frozen(p for p in d['fingerprints'] if p!=str(registry)):
         if pending(registry):raise Stop('Незавершённая операция: используйте восстановление.')
         if target.exists():raise Stop('Папка уже существует, перезапись запрещена.')

@@ -15,7 +15,8 @@ from passport_app.excel import locked_file,atomic_replace
 from stage8_closure.storage import frozen
 
 
-def accounting_plan(cfg,project,number,vom,facts,profile,registry_entries):
+def accounting_plan(cfg,project,number,vom,facts,profile,registry_entries,*,original_quantities=None,controls=None,
+                    final_quantities=None,refunds=None,refund_rows=None):
     if not cfg.get('use_shared_uzk'):
         if cfg.get('auto_first_passport'):raise Stop('Для официального выпуска подключите общий УЗК.xlsm; учёт остатков нельзя пропустить.')
         return None # Compatibility for the older, explicitly configured engine.
@@ -34,12 +35,15 @@ def accounting_plan(cfg,project,number,vom,facts,profile,registry_entries):
         if any(not path.is_relative_to(sandbox) for path in paths):
             raise Stop('Учебный официальный цикл разрешён только с копиями всех трёх файлов внутри учебной папки.')
     quantities=shipment_quantities(vom)
-    history=validate_stock(catalog,project,number,quantities,registry_entries)
-    controls={str(row['mark']):int(row['uzk_quantity']) for row in facts['marks']}
-    index=read_shared_uzk(uzk,project=project,marks=controls)
-    for mark,count in controls.items():
-        if count and len(index[(_key(project),_key(mark))]['rows'])!=1:raise Stop('Общий УЗК: дубли строк марки '+mark+'; запись запрещена.')
-    return {'catalog':str(paths[0]),'uzk':str(paths[1]),'quantities':quantities,'controls':controls,'history_sources':[h['source'] for h in history['history'] if h.get('source')],
+    history=validate_stock(catalog,project,number,quantities,registry_entries,original_quantities=original_quantities,
+                           final_quantities=final_quantities)
+    if controls is None:controls={str(row['mark']):int(row['uzk_quantity']) for row in facts['marks']}
+    refunds=refunds or {}
+    index=read_shared_uzk(uzk,project=project,marks=controls.keys()|refunds.keys())
+    for mark,count in {**controls,**refunds}.items():
+        if count and len(index.get((_key(project),_key(mark)),{}).get('rows',[]))>1:
+            raise Stop('Общий УЗК: дубли строк марки '+mark+'; запись запрещена.')
+    return {'final_quantities':final_quantities,'refunds':refunds,'refund_rows':refund_rows or {},'catalog':str(paths[0]),'uzk':str(paths[1]),'quantities':quantities,'controls':controls,'history_sources':[h['source'] for h in history['history'] if h.get('source')],
             'stock_warnings':history.get('stock_warnings',[]),
             'history_fingerprints':{h['source']:h['sha256'] for h in history['history'] if h.get('source')},
             'history_binding_updates':[{'number':h['number'],**u} for h in history['history'] for u in h.get('binding_updates',[])]}
@@ -48,13 +52,21 @@ def accounting_plan(cfg,project,number,vom,facts,profile,registry_entries):
 def prepare_candidates(d):
     if not d.get('accounting'):return []
     from .catalog_ledger import shipment_candidate
-    from .shared_uzk import decrement_candidate
+    from .shared_uzk import decrement_candidate,refund_candidate
     from .model import read_registry
     from passport_app.excel import excel_session
     a=d['accounting'];root=Path(d['run'])/'accounting';root.mkdir(exist_ok=False)
     ledger=root/'catalog.xlsx';uzk=root/'УЗК.xlsm'
-    ledger_result=shipment_candidate(a['catalog'],ledger,d['project'],d['number'],d['date'],a['quantities'],read_registry(d['registry']).projects[d['project']])
-    decrement_candidate(a['uzk'],uzk,d['project'],a['controls'])
+    ledger_result=shipment_candidate(a['catalog'],ledger,d['project'],d['number'],d['date'],a['quantities'],
+                                     read_registry(d['registry']).projects[d['project']],
+                                     original_quantities=(d.get('amendment') or {}).get('quantities'),
+                                     final_quantities=a.get('final_quantities'))
+    if a.get('refunds'):
+        debited=root/'debited.xlsm'
+        decrement_candidate(a['uzk'],debited,d['project'],a['controls'])
+        refund_candidate(debited,uzk,d['project'],a['refunds'],a['refund_rows'])
+    else:
+        decrement_candidate(a['uzk'],uzk,d['project'],a['controls'])
     # Native Save/Open acceptance applies only to private candidates. XLSM
     # is opened read-only: keep its opaque VBA ZIP parts exactly unchanged.
     with excel_session() as app:
@@ -98,19 +110,35 @@ def commit(d,prepared,released,confirmation,approved_facts):
         if expected!=item['original_sha256'] or sha(item['candidate'])!=item['candidate_sha256']:raise Stop('Кандидат учёта изменён.')
         item['backup']=str(stage/('backup-'+item['role']+Path(item['path']).suffix))
     paths={i['path'] for i in participants}
+    amendment=d.get('amendment')
+    original_docs=amendment['documents'] if amendment else {}
+    doc_paths={str(target/name) for name in original_docs}
+    archive=stage/'original_documents'
+    if amendment and stage.drive.casefold()!=target.drive.casefold():
+        raise Stop('Архив корректировки и исходный комплект должны находиться на одном диске.')
     with ExitStack() as stack:
         payloads=_lock_all(stack,participants,True)
-        stack.enter_context(frozen(p for p in d['fingerprints'] if p not in paths))
-        verify_pins({p:h for p,h in d['fingerprints'].items() if p not in paths})
+        unchanged={p:h for p,h in d['fingerprints'].items() if p not in paths|doc_paths}
+        stack.enter_context(frozen(unchanged))
+        verify_pins(unchanged)
+        if amendment:
+            from .amendment import document_hashes
+            if document_hashes(target)!=original_docs:
+                raise Stop('Исходный комплект изменился после проверки.')
+        source_locks=stack.enter_context(ExitStack())
+        old_payloads={name:source_locks.enter_context(locked_file(target/name)) for name in original_docs}
+        if any(hashlib.sha256(value).hexdigest()!=original_docs[name] for name,value in old_payloads.items()):
+            raise Stop('Исходный комплект изменился при блокировке.')
         for item in participants:
             if hashlib.sha256(payloads[item['path']]).hexdigest()!=item['original_sha256']:raise Stop('Другой пользователь изменил '+item['path'])
         if pending(registry):raise Stop('Есть незавершённая операция; требуется восстановление.')
-        if target.exists():raise Stop('Комплект уже существует; повторная запись запрещена.')
+        if not amendment and target.exists():raise Stop('Комплект уже существует; повторная запись запрещена.')
         stage.mkdir(parents=True,exist_ok=False)
         state={'id':d['id'],'phase':'STARTED','registry':str(registry),'target':str(target),'plan':str(Path(d['run'])/'plan.json'),
                'backup':participants[0]['backup'],'original_sha256':participants[0]['original_sha256'],'candidate_sha256':participants[0]['candidate_sha256'],
                'new':True,'participants':participants,
                'current_control':confirmation.get('current_control')}
+        if amendment:state['original_documents']=original_docs
         journal_write(journal,state)
         try:
             for item in participants:
@@ -129,7 +157,22 @@ def commit(d,prepared,released,confirmation,approved_facts):
                 state['output_hashes'][dest.name]=sha(dest)
             save(private/'ISSUE.json',{'project':d['project'],'number':d['number'],'training':bool(d['cfg'].get('training')),'facts':approved_facts,
                                      'approved_at':confirmation['created_at'],'files':state['output_hashes'],'source_registry_sha256':state['original_sha256']})
+            if amendment:
+                prior=__import__('json').loads(old_payloads['ISSUE.json'])
+                extras=set(original_docs)-set(prior['files'])-{'ISSUE.json'}
+                if extras & state['output_hashes'].keys():
+                    raise Stop('Дополнительный файл совпадает по имени с выпускаемым документом.')
+                state['extra_hashes']={name:original_docs[name] for name in extras}
+                for name in extras:_write_bytes(private/name,old_payloads[name])
             state['issue_sha256']=sha(private/'ISSUE.json');state['phase']='PUBLISH_INTENT';journal_write(journal,state)
+            if amendment:
+                if {p.name for p in target.iterdir()}!=set(original_docs):
+                    raise Stop('Изменился состав исходной папки.')
+                source_locks.close()
+                target.rename(archive)
+                if document_hashes(archive)!=original_docs:
+                    archive.rename(target)
+                    raise Stop('Исходный комплект изменился во время переноса.')
             private.rename(target);state['phase']='DOCUMENTS_PUBLISHED';journal_write(journal,state)
             for item in participants:
                 state['phase']='REPLACE_INTENT_'+item['role'].upper();journal_write(journal,state)
@@ -140,7 +183,8 @@ def commit(d,prepared,released,confirmation,approved_facts):
             state['error']=str(exc);journal_write(journal,state)
             raise Stop('Запись трёх файлов не завершена. До восстановления работа заблокирована: '+str(journal)+'; '+str(exc)) from exc
     verify_current(state)
-    verify_registry(participants[0]['backup'],registry,d['project'],d['number'],visible_vom(d['vom']),date.fromisoformat(d['date']))
+    verify_registry(participants[0]['backup'],registry,d['project'],d['number'],visible_vom(d['vom']),
+                    date.fromisoformat(d['date']),amend=bool(d.get('amendment')))
     return {'status':'PASS','state':'ТРЕБУЕТСЯ ПРОВЕРКА OFFICE','folder':str(target),'backup':state['backup'],'journal':str(journal),'training':bool(d['cfg'].get('training'))}
 
 
@@ -161,11 +205,15 @@ def native_readback(state):
     try:
         history=metadata(book)['history'];matches=[(column,h) for column,h in enumerate(history,6) if h['number']==data['number']]
         if len(matches)!=1 or matches[0][1]['date']!=data['date']:raise Stop('Readback: нет единственного паспорта в справочнике.')
-        column,_=matches[0];sheet=book.worksheets[0];expected={}
+        column,entry=matches[0];sheet=book.worksheets[0];expected={}
+        original=(data.get('amendment') or {}).get('quantities',{})
+        combined=a.get('final_quantities')
+        if combined is None:combined=original|a['quantities']
+        if entry['quantities']!=combined:raise Stop('Readback: состав исправленной отгрузки не совпадает.')
         for no in range(2,sheet.max_row+1):
             mark=str(sheet.cell(no,1).value or '')
-            if mark in a['quantities']:
-                if sheet.cell(no,column).value!=a['quantities'][mark]:raise Stop('Readback: неверная отгрузка '+mark)
+            if mark in combined or mark in original:
+                if sheet.cell(no,column).value!=combined.get(mark,0):raise Stop('Readback: неверная отгрузка '+mark)
                 expected[no]=quantity(sheet.cell(no,2).value,mark,True)-sum(h['quantities'].get(mark,0) for h in history)
     finally:book.close()
     with excel_session() as app:
@@ -181,12 +229,17 @@ def native_readback(state):
         try:
             if not native.ReadOnly:raise Stop('Readback: общий УЗК открыт не только для чтения.')
             # post_commit_context already pins this exact backup by role/path/SHA.
-            before=read_shared_uzk(uzk['backup'],project=data['project'],marks=a['controls'],post_commit=True)
-            after=read_shared_uzk(uzk['path'],project=data['project'],marks=a['controls'],post_commit=True)
-            for mark,consumed in a['controls'].items():
-                if not consumed:continue
-                key=(_key(data['project']),_key(mark));remaining=before[key]['remaining']-consumed
-                if remaining and after.get(key,{}).get('remaining')!=remaining or not remaining and key in after:
+            changes={m:-q for m,q in a['controls'].items() if q}
+            for mark,amount in a.get('refunds',{}).items():
+                changes[mark]=changes.get(mark,0)+amount
+            before=read_shared_uzk(uzk['backup'],project=data['project'],marks=changes,post_commit=True)
+            after=read_shared_uzk(uzk['path'],project=data['project'],marks=changes,post_commit=True)
+            for mark,change in changes.items():
+                key=(_key(data['project']),_key(mark))
+                remaining=before.get(key,{}).get('remaining',0)+change
+                actual=after.get(key,{})
+                if (remaining and (actual.get('remaining')!=remaining or len(actual['rows'])!=1)
+                        or not remaining and key in after):
                     raise Stop('Readback: неверный остаток общего УЗК '+mark)
         finally:native.Close(SaveChanges=False)
     return True
@@ -203,8 +256,17 @@ def complete(journal,state):
             if sha(target/name)!=h:raise Stop('После readback изменён документ '+name)
         if target.name+'.pdf' not in state['output_hashes']:raise Stop('Отсутствует итоговый PDF.')
         if sha(target/'ISSUE.json')!=state.get('issue_sha256'):raise Stop('После readback изменены сведения о выпуске.')
+        if state.get('original_documents'):
+            from .amendment import document_hashes
+            archived=Path(journal).parent/'original_documents'
+            if document_hashes(archived)!=state['original_documents']:
+                raise Stop('Архив исходного комплекта изменился.')
+            for name,h in state.get('extra_hashes',{}).items():
+                if sha(target/name)!=h:raise Stop('Дополнительный документ изменился после записи.')
         state['phase']='COMPLETE';journal_write(journal,state)
     result={'status':'PASS','state':'ГОТОВО','folder':str(target),'journal':str(journal),'backup':state['backup'],'print_pdf':str(target/(target.name+'.pdf'))}
+    if state.get('original_documents'):
+        result['previous_documents']=str(Path(journal).parent/'original_documents')
     # COMPLETE is already durable; housekeeping cannot reverse the release.
     try:result['service_archive']=archive_completed(journal)
     except Exception as exc:
@@ -231,15 +293,24 @@ def recover(journal,state):
                 if backup.parent!=stage or not backup.is_file() or sha(backup)!=item['original_sha256']:raise Stop('Резервная копия повреждена '+item['role'])
                 changed.append(item)
         target=safe(state['target'])
-        if target.exists():
-            if sha(target/'ISSUE.json')!=state.get('issue_sha256') or {p.name for p in target.iterdir()}!=set(state.get('output_hashes',{}))|{'ISSUE.json'}:raise Stop('Комплект изменён после сбоя; откат запрещён.')
-            for name,h in state['output_hashes'].items():
+        archived=stage/'original_documents'
+        original_docs=state.get('original_documents')
+        if original_docs:
+            from .amendment import document_hashes
+            if document_hashes(archived if archived.exists() else target)!=original_docs:
+                raise Stop('Исходный комплект изменён после сбоя; откат запрещён.')
+        published=target.exists() and (not original_docs or archived.exists())
+        if published:
+            written=state.get('output_hashes',{})|state.get('extra_hashes',{})
+            if sha(target/'ISSUE.json')!=state.get('issue_sha256') or {p.name for p in target.iterdir()}!=set(written)|{'ISSUE.json'}:raise Stop('Комплект изменён после сбоя; откат запрещён.')
+            for name,h in written.items():
                 if sha(target/name)!=h:raise Stop('Изменён документ '+name+'; откат всех файлов запрещён.')
         for item in reversed(changed):
             path=Path(item['path']);restore=path.with_name('.vzmk-restore-'+uuid4().hex+path.suffix)
             _write_bytes(restore,Path(item['backup']).read_bytes())
             atomic_replace(restore,path,backup=stage/('pre-restore-'+uuid4().hex+path.suffix))
-        if target.exists():target.rename(stage/'unpublished_documents')
+        if published:target.rename(stage/'unpublished_documents')
+        if original_docs and archived.exists():archived.rename(target)
     for item in participants:
         if sha(item['path'])!=item['original_sha256']:raise Stop('Не подтверждено восстановление '+item['path'])
     state['phase']='ROLLED_BACK';journal_write(journal,state)

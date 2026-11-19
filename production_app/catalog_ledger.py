@@ -159,13 +159,17 @@ def update_balance(sheet,row,count,complete,*,strict=True):
     sheet.cell(row,5,'=B'+str(row)+('-SUM(F'+str(row)+':'+get_column_letter(5+count)+str(row)+')' if count else ''))
 
 
-def validate_stock(path,project,number,quantities,registered=None):
+def validate_stock(path,project,number,quantities,registered=None,*,original_quantities=None,final_quantities=None):
     source=Path(path);before=sha(source)
     b=load_workbook(path,data_only=False)
     try:
         data=metadata(b);s=b.worksheets[0]
         if data['project']!=project:raise Stop('Справочник учёта другого проекта.')
-        if number in [h['number'] for h in data['history']]:raise Stop('Паспорт '+number+' уже записан в историю справочника.')
+        existing=[h for h in data['history'] if h['number']==number]
+        if original_quantities is None and existing:
+            raise Stop('Паспорт '+number+' уже записан в историю справочника.')
+        if original_quantities is not None and (len(existing)!=1 or existing[0]['quantities']!=original_quantities):
+            raise Stop('Исходная отгрузка не совпадает с историей справочника.')
         if registered is not None:
             expected={str(e['number']):(e['date'].date() if isinstance(e['date'],datetime) else e['date']).isoformat() for e in registered}
             actual={h['number']:h['date'] for h in data['history']}
@@ -202,6 +206,10 @@ def validate_stock(path,project,number,quantities,registered=None):
                 warnings.append({'mark':mark,'row':no,'total':raw,'shipped':shipped,'reason':str(exc)})
                 continue
             available[mark]=total-shipped
+        if final_quantities is not None:
+            for mark,count in original_quantities.items():
+                if final_quantities.get(mark,0)<count and (mark not in rows or mark not in available):
+                    raise Stop('Справочник: нельзя подтвердить остаток для возврата по марке '+mark+'.')
         for mark,requested in quantities.items():
             if mark not in rows:raise Stop('В справочнике отсутствует марка '+mark)
             requested=quantity(requested,'Заявка '+mark,True)
@@ -211,20 +219,38 @@ def validate_stock(path,project,number,quantities,registered=None):
     finally:b.close()
 
 
-def shipment_candidate(source,target,project,number,day,quantities,registered=None):
-    before=sha(source);data=validate_stock(source,project,number,quantities,registered)
+def shipment_candidate(source,target,project,number,day,quantities,registered=None,*,original_quantities=None,final_quantities=None):
+    before=sha(source)
+    data=validate_stock(source,project,number,quantities,registered,original_quantities=original_quantities,
+                        final_quantities=final_quantities)
     if Path(target).exists():raise Stop('Кандидат справочника уже существует.')
     b=load_workbook(source)
     try:
-        s=b.worksheets[0];col=6+len(data['history'])
-        if s.max_column>=col:raise Stop('В справочнике есть неучтённые столбцы отгрузок.')
-        s.cell(1,col,'Паспорт '+number+' от '+date.fromisoformat(day).strftime('%d.%m.%Y'))
+        s=b.worksheets[0]
+        updated={'number':number,'date':day,'complete':True,
+                 'quantities':quantities,'origin':'CONFIRMED_CURRENT_ISSUE'}
+        if original_quantities is None:
+            col=6+len(data['history'])
+            if s.max_column>=col:raise Stop('В справочнике есть неучтённые столбцы отгрузок.')
+            s.cell(1,col,'Паспорт '+number+' от '+date.fromisoformat(day).strftime('%d.%m.%Y'))
+            data['history'].append(updated)
+        else:
+            index=next(i for i,h in enumerate(data['history']) if h['number']==number)
+            col=6+index
+            updated['quantities']=final_quantities if final_quantities is not None else original_quantities|quantities
+            data['history'][index]=updated
+        final=updated['quantities']
+        changed=set(quantities)
+        if final_quantities is not None:
+            changed.update(m for m,q in original_quantities.items() if q!=final.get(m,0))
         for no in range(2,s.max_row+1):
             mark=str(s.cell(no,1).value or '').strip()
-            if mark:s.cell(no,col,quantities.get(mark,0));update_balance(s,no,len(data['history'])+1,True,strict=mark in quantities)
+            if mark and (original_quantities is None or mark in changed):
+                s.cell(no,col,final.get(mark,0))
+                update_balance(s,no,len(data['history']),True,strict=mark in changed)
         warnings=data.pop('stock_warnings',[])
-        data['history'].append({'number':number,'date':day,'complete':True,'quantities':quantities,'origin':'CONFIRMED_CURRENT_ISSUE'})
-        write_metadata(b[META],data);s.auto_filter.ref=s.dimensions;b.save(target)
+        if original_quantities is None:s.auto_filter.ref=s.dimensions
+        write_metadata(b[META],data);b.save(target)
     finally:b.close()
     if sha(source)!=before or read_assignments(source)!=read_assignments(target):raise Stop('Изменились назначения при подготовке отгрузки.')
     return {'number':number,'column':col,'sha256':sha(target),

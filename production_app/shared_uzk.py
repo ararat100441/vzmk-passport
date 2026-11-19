@@ -310,6 +310,77 @@ def decrement_candidate(source,target,project,quantities):
             if key not in after or after[key]['remaining']!=rec['remaining']:raise Stop('УЗК: изменена другая марка.')
     return {'sha256':sha(target),'deleted_rows':deletions,'updated_rows':updates,'sheet_xml':sheet_path,'changed_parts':list(changed_parts)}
 
+def refund_candidate(source,target,project,quantities,originals):
+    """Restore confirmed quantities on the private XLSM without shifting rows."""
+    import posixpath,re
+    from zipfile import ZipFile
+    from lxml import etree as E
+
+    source=safe(source);target=safe(target)
+    if source==target or target.exists():raise Stop('УЗК: нужен отдельный кандидат возврата.')
+    before=sha(source)
+    rows=read_shared_uzk(source,project=project,marks=quantities)
+    X='{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+    R='{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
+    with ZipFile(source) as z:
+        book=E.fromstring(z.read('xl/workbook.xml'))
+        sheet=next(e for e in book.find(X+'sheets') if e.get('name')=='УЗК')
+        rels=E.fromstring(z.read('xl/_rels/workbook.xml.rels'))
+        ref=next(r.get('Target') for r in rels if r.get('Id')==sheet.get(R+'id'))
+        part=ref.lstrip('/') if ref.startswith('/') else posixpath.normpath('xl/'+ref)
+        tree=E.fromstring(z.read(part))
+        data=tree.find(X+'sheetData')
+        dimension=tree.find(X+'dimension')
+        by_row={int(row.get('r')):row for row in data}
+        last=max(by_row,default=1)
+        expected=dict(rows)
+        for mark,qty in quantities.items():
+            count=_qty(qty,mark)
+            key=(_key(project),_key(mark))
+            original=originals[mark]
+            if (_key(original['project']),_key(original['mark']))!=key:
+                raise Stop('УЗК: не совпала исходная строка марки '+mark+'.')
+            current=rows.get(key)
+            if current:
+                if len(current['rows'])!=1:
+                    raise Stop('УЗК: дубли строк марки '+mark+'; возврат остановлен.')
+                no=current['rows'][0];row=by_row[no]
+                count+=current['remaining']
+            else:
+                extent=re.fullmatch(r'A1:([A-Z]+)([0-9]+)',dimension.get('ref','')) if dimension is not None else None
+                if extent is None or any(tree.find(X+t) is not None for t in ('tableParts','autoFilter','mergeCells')):
+                    raise Stop('УЗК: не подтверждено безопасное место для восстановления строки '+mark+'.')
+                last=max(last,int(extent[2]))+1
+                if last>1048576:raise Stop('УЗК: лист заполнен.')
+                no=last;row=E.SubElement(data,X+'row',r=str(no))
+                for col,name in (('A','project'),('B','mark')):
+                    cell=E.SubElement(row,X+'c',r=col+str(no),t='inlineStr')
+                    val=E.SubElement(E.SubElement(cell,X+'is'),X+'t')
+                    val.set('{http://www.w3.org/XML/1998/namespace}space','preserve')
+                    val.text=original[name]
+                dimension.set('ref','A1:'+extent[1]+str(no))
+            ref='C'+str(no)
+            cell=next((c for c in row if c.get('r')==ref),None)
+            if cell is None:
+                cell=E.Element(X+'c',r=ref)
+                # XML cells are stored in ascending column order.
+                following=next((c for c in row if c.tag!=X+'c' or
+                                len(c.get('r','').rstrip('0123456789'))>1 or c.get('r','')>ref),None)
+                row.insert(row.index(following) if following is not None else len(row),cell)
+            cell.attrib.pop('t',None)
+            for node in list(cell):
+                if node.tag in (X+'f',X+'v',X+'is'):cell.remove(node)
+            cell.insert(0,E.Element(X+'v'))
+            cell[0].text=str(count)
+            expected[key]={**(current or original),'rows':[no],'remaining':count}
+        changed=E.tostring(tree,encoding='UTF-8',xml_declaration=True)
+        with ZipFile(target,'x') as out:
+            for item in z.infolist():
+                out.writestr(item,changed if item.filename==part else z.read(item.filename))
+    if sha(source)!=before or read_shared_uzk(target,project=project,marks=quantities)!=expected:
+        raise Stop('УЗК: не подтверждён кандидат возврата.')
+
+
 def _updated_native_filter(workbook_xml, old_sheet_xml, new_sheet_xml, removed):
     """Allow only the expected shrink of the УЗК sheet's built-in auto-filter."""
     import re
