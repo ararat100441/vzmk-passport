@@ -209,6 +209,25 @@ class OwnedApplication:
         except BaseException as exc:
             self._record['quit_error']=repr(exc);self._event('QUIT_ERROR',self._record);raise
 
+def _read_launch_response(path, timeout=30):
+    """Wait for the published response to be readable, not just visible."""
+    from stage8_closure import storage as S
+
+    deadline=time.monotonic()+timeout
+    while True:
+        try:
+            return S.read(path)
+        except S.Stop as exc:
+            cause=exc.__cause__
+            if not isinstance(cause,(FileNotFoundError,PermissionError)):
+                raise
+            if time.monotonic()>=deadline:
+                if isinstance(cause,FileNotFoundError):
+                    raise RuntimeError('OFFICE_LAUNCH_RESPONSE_TIMEOUT') from exc
+                raise
+            time.sleep(.05)
+
+
 @contextmanager
 def _owned_office(diagnostic, *, supervised=False, cleanup_errors=None):
     import win32com.client,win32process,win32api,win32con,win32event,pythoncom
@@ -250,10 +269,7 @@ def _owned_office(diagnostic, *, supervised=False, cleanup_errors=None):
             from stage8_closure import storage as S
             request=diagnostic.parent/('launch_'+uuid4().hex+'.json')
             save(request,{'progid':progid,'probe':str(probe),'probe_sha256':S.sha(probe),'worker_pid':os.getpid()})
-            response=request.with_suffix('.response.json');deadline=time.monotonic()+30
-            while not response.exists() and time.monotonic()<deadline:time.sleep(.05)
-            if not response.exists():raise RuntimeError('OFFICE_LAUNCH_RESPONSE_TIMEOUT')
-            reply=S.read(response)
+            reply=_read_launch_response(request.with_suffix('.response.json'))
             if reply['status']!='PASS':raise RuntimeError('OFFICE_LAUNCH_FAILED: '+reply['error'])
             record=reply['record'];handle=win32api.OpenProcess(win32con.PROCESS_QUERY_INFORMATION|win32con.SYNCHRONIZE,False,record['pid'])
         else:
