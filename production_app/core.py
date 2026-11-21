@@ -21,6 +21,51 @@ def journal_read(path):
         validate_closed(path,d)
     return d
 
+def require_current_journal(path, expected):
+    if journal_read(path) != expected:
+        raise Stop('Состояние операции изменилось. Откройте журнал повторно.')
+
+
+def recovery_archive(stage, path, filename):
+    # Windows rename/ReplaceFileW require the backup on the same volume.
+    # Preserve the historical journal location whenever that is possible.
+    stage, path = Path(stage), Path(path)
+    if stage.stat().st_dev == path.parent.stat().st_dev:
+        return stage / filename
+    directory = safe(path.parent / '.vzmk-service-archive' / stage.name / 'recovery')
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / filename
+
+
+def unpublish_for_recovery(stage, state, target, published):
+    if not published and not state.get('issue_sha256'):
+        return  # The durable transaction had not reached publication.
+    expected = state.get('output_hashes', {}) | state.get('extra_hashes', {})
+    expected['ISSUE.json'] = state.get('issue_sha256')
+    if not expected['ISSUE.json'] or any(Path(name).name != name for name in expected):
+        raise Stop('Не подтверждён манифест документов восстановления.')
+
+    def verify_folder(folder):
+        folder = safe(folder)
+        if (not folder.is_dir() or {p.name for p in folder.iterdir()} != set(expected)
+                or any(sha(safe(folder/name)) != h for name, h in expected.items())):
+            raise Stop('Комплект или архив изменён после сбоя; откат запрещён.')
+
+    archive = recovery_archive(stage, target, 'unpublished_documents')
+    if published:
+        verify_folder(target)
+        if archive.exists():raise Stop('Архив восстановления уже существует.')
+        target.rename(archive)
+    if archive.exists():
+        verify_folder(archive)
+    elif state['phase'] == 'PUBLISH_INTENT':
+        # Crash before the pending directory was renamed to its public name.
+        verify_folder(target.parent/('.pending-'+state['id']))
+    else:
+        raise Stop('Не найден опубликованный комплект или его проверяемый архив.')
+
+
+
 def training_copy(cfg,parent):
     """A dedicated, explicitly chosen copy. Never infer production destinations."""
     source,documents,output=model.validate_paths(cfg)
@@ -549,7 +594,8 @@ def commit(path,release_result):
         stage.mkdir(parents=True,exist_ok=False)
         backup=stage/'backup.xlsx';candidate=stage/'candidate.xlsx';journal=stage/'journal.json'
         state={'id':token,'phase':'STARTED','registry':str(registry),'target':str(target),
-            'backup':str(backup),'original_sha256':d['fingerprints'][str(registry)],'new':d['new'],'plan':str(path)}
+            'backup':str(backup),'original_sha256':d['fingerprints'][str(registry)],'new':d['new'],'plan':str(path),
+            'project':d['project'],'number':d['number']}
         journal_write(journal,state)
         try:
             with locked_file(registry,writable=d['new']) as original:
@@ -691,6 +737,7 @@ def complete(journal,readback_result):
         from .coordinated import complete as complete_accounting
         return complete_accounting(journal,s)
     with mutex(registry,post_commit=True),locked_file(registry) as current:
+        require_current_journal(journal, s)
         if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза завершения.')
         if hashlib.sha256(current).hexdigest()!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после проверки.')
         for name,h in s['output_hashes'].items():
@@ -716,24 +763,20 @@ def recover(journal):
     backup=journal.parent/'backup.xlsx'
     if not backup.exists() and s['phase']=='STARTED':
         with mutex(registry),locked_file(registry,writable=True) as current:
+            require_current_journal(journal, s)
             if hashlib.sha256(current).hexdigest()!=s['original_sha256'] or Path(s['target']).exists():raise Stop('Неизвестное состояние до резервного копирования.')
             s['phase']='ABORTED';journal_write(journal,s)
         return {'status':'PASS','phase':'ABORTED'}
     if safe(s['backup'])!=backup or not backup.is_file() or sha(backup)!=s['original_sha256']:raise Stop('Резервная копия отсутствует/повреждена. Ручная проверка; запись запрещена.')
     with mutex(registry),locked_file(registry,writable=True) as current:
+        require_current_journal(journal, s)
         h=hashlib.sha256(current).hexdigest()
         if h not in (s['original_sha256'],s.get('candidate_sha256')):raise Stop('Реестр изменён другим пользователем. Откат запрещён.')
         target=safe(s['target'])
-        if target.exists():
-            if not s.get('output_hashes') or sha(target/'ISSUE.json')!=s.get('issue_sha256'):raise Stop('Комплект изменён после сбоя. Ручная проверка.')
-            expected=set(s['output_hashes'])|{'ISSUE.json'}
-            if {p.name for p in target.iterdir()}!=expected:raise Stop('В папке появились чужие файлы. Откат запрещён.')
-            for name,expected_hash in s['output_hashes'].items():
-                if sha(target/name)!=expected_hash:raise Stop('Готовый документ изменён. Откат запрещён.')
+        unpublish_for_recovery(journal.parent, s, target, target.exists())
         if h!=s['original_sha256']:
             restore=journal.parent/('restore_'+uuid4().hex+'.xlsx');shutil.copyfile(backup,restore)
             atomic_replace(restore,registry,backup=journal.parent/('pre_restore_'+uuid4().hex+'.xlsx'))
-        if target.exists():target.rename(journal.parent/'unpublished_documents')
         if h!=s['original_sha256'] and sha(registry)!=s['original_sha256']:raise Stop('Не совпал SHA восстановленного реестра.')
         s['phase']='ROLLED_BACK';journal_write(journal,s)
         return {'status':'PASS','phase':'ROLLED_BACK','journal':str(journal),'registry_sha256':s['original_sha256']}

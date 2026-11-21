@@ -9,6 +9,40 @@ from uuid import uuid4
 from .workspace import save
 from .ownership import process_image
 
+# These production tasks perform Office work on private output or read-only
+# copies. Never interrupt commit, recovery or completion with a time limit.
+_TIMED_TASKS={'prepare','verify','preview','release','readback','inspect-existing','check','draft'}
+
+
+def _worker_timeout(arguments):
+    if '--task' not in arguments or arguments[arguments.index('--task')+1] not in _TIMED_TASKS:
+        return None
+    seconds=int(os.environ.get('VZMK_OFFICE_TASK_TIMEOUT_SECONDS','3600'))
+    if seconds<1:
+        raise ValueError('VZMK_OFFICE_TASK_TIMEOUT_SECONDS must be positive')
+    return seconds
+
+
+def _read_job_record(path, errors, timeout=5):
+    """A failed diagnostic read must not skip cleanup of an owned process."""
+    deadline=time.monotonic()+timeout
+    while True:
+        try:
+            record=json.loads(path.read_text(encoding='utf8'))
+            if not isinstance(record,dict):
+                raise ValueError('expected JSON object')
+            return record
+        except (FileNotFoundError, PermissionError) as exc:
+            if time.monotonic()<deadline:
+                time.sleep(.05)
+                continue
+            error=exc
+        except (OSError, ValueError) as exc:
+            error=exc
+        errors.append({'path':str(path),'error':repr(error)})
+        return None
+
+
 def cleanup_entry(path):
     import win32api,win32con
     from stage8_closure import storage as S
@@ -44,6 +78,9 @@ def supervise(arguments, *, entrypoint=None):
     result=base/'worker_result.json';diagnostic=base/'office.json'
     prefix=[sys.executable] if getattr(sys,'frozen',False) else [sys.executable,'-B',str(entrypoint or Path(__file__).resolve().parents[1]/'stage9.py')]
     before=set(win32process.EnumProcesses());handles={};records=[];seen=set();launched=set();office_children=[];ownership_errors=[]
+    timeout=_worker_timeout(args)
+    deadline=time.monotonic()+timeout if timeout else None
+    timed_out=False
     child=subprocess.Popen(prefix+args+['--result',str(result),'--office-worker',str(diagnostic)],
         creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     child_birth=win32process.GetProcessTimes(child._handle)['CreationTime'].timestamp()
@@ -90,12 +127,24 @@ def supervise(arguments, *, entrypoint=None):
     try:
         while child.poll() is None:
             collect()
-            if ownership_errors:child.terminate();child.wait(timeout=30);break
+            timed_out=deadline is not None and time.monotonic()>=deadline
+            if ownership_errors or timed_out:
+                child.terminate()
+                child.wait(timeout=30)
+                break
             time.sleep(.05)
         collect();code=child.wait();normal=result.exists()
-        data=json.loads(result.read_text(encoding='utf8')) if normal else {'status':'FAIL','error':'OFFICE_WORKER_DIED','worker_returncode':code}
+        data=_read_job_record(result,ownership_errors) if normal else None
+        if data is None or not isinstance(data.get('status'),str):
+            data={'status':'FAIL','error':'OFFICE_WORKER_RESULT_UNAVAILABLE' if normal else 'OFFICE_WORKER_DIED','worker_returncode':code}
+        if timed_out:
+            data={'status':'FAIL','error':'OFFICE_WORKER_TIMEOUT','timeout_seconds':timeout}
         for path in base.glob('office_QUIT_RETURNED_*.json'):
-            event=json.loads(path.read_text(encoding='utf8'))
+            event=_read_job_record(path,ownership_errors)
+            if event is None:continue
+            if not isinstance(event.get('data'),dict) or not {'pid','creation_time'}<=event['data'].keys() or 'worker_pid' not in event:
+                ownership_errors.append({'path':str(path),'error':'invalid Office event'})
+                continue
             for r in records:
                 if event['worker_pid']==child.pid and event['data']['pid']==r['pid'] and event['data']['creation_time']==r['creation_time']:
                     r.update(quit_attempted=True,quit_returned=True)
@@ -103,10 +152,14 @@ def supervise(arguments, *, entrypoint=None):
                         if key in event['data']:r[key]=event['data'][key]
         ended=time.monotonic()
         for path in base.glob('office_EMPTY_EXCEL_WM_CLOSE_POSTED_*.json'):
-            event=json.loads(path.read_text(encoding='utf8'))
+            event=_read_job_record(path,ownership_errors)
+            if event is None:continue
+            if not isinstance(event.get('data'),dict) or not {'pid','creation_time'}<=event['data'].keys() or 'worker_pid' not in event:
+                ownership_errors.append({'path':str(path),'error':'invalid Office event'})
+                continue
             for r in records:
                 if event['worker_pid']==child.pid and event['data']['pid']==r['pid'] and event['data']['creation_time']==r['creation_time']:
-                    r['normal_window_close_requested']=event['data']['normal_window_close_requested']
+                    r['normal_window_close_requested']=event['data'].get('normal_window_close_requested',False)
         # An owned Office child may remain unbound (no *_START record or
         # QUIT_RETURNED) even when the document worker reports PASS. Always
         # recover such a proven child after the worker has exited, using the
@@ -124,7 +177,8 @@ def supervise(arguments, *, entrypoint=None):
             try:helper.wait(timeout=60)
             except subprocess.TimeoutExpired:helper.terminate();helper.wait(timeout=10);r['cleanup_helper_timeout']=True
             report=plan.with_suffix('.result.json')
-            r['crash_cleanup']=json.loads(report.read_text(encoding='utf8')) if report.exists() else {'status':'FAIL','helper_returncode':helper.returncode}
+            cleanup_record=_read_job_record(report,ownership_errors) if report.exists() else None
+            r['crash_cleanup']=cleanup_record or {'status':'FAIL','helper_returncode':helper.returncode}
         deadline=time.monotonic()+120;sample_at=ended+2;window_samples=[]
         while time.monotonic()<deadline and any(win32event.WaitForSingleObject(h,0)!=win32con.WAIT_OBJECT_0 for h in handles.values()):
             if time.monotonic()>=sample_at:
@@ -159,7 +213,8 @@ def supervise(arguments, *, entrypoint=None):
             for r in records)
         summary={'schema':'STAGE9_SUPERVISOR_V1','worker_pid':child.pid,'worker_returncode':code,
             'wait_seconds_after_worker':time.monotonic()-ended,'instances':records,'ownership_errors':ownership_errors,
-            'owned_orphans':sum(r.get('still_running',False) for r in records),'normal_result':normal,'wait_window_samples':window_samples,
+            'owned_orphans':sum(r.get('still_running',False) for r in records),'normal_result':normal,
+            'worker_timed_out':timed_out,'worker_timeout_seconds':timeout,'wait_window_samples':window_samples,
             'owned_unbound_gracefully_recovered':sum(
                 'crash_cleanup' in r and r['crash_cleanup'].get('status')=='PASS' and r['crash_cleanup'].get('exit_code')==0
                 for r in records)}

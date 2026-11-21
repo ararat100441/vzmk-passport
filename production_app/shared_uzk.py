@@ -331,6 +331,8 @@ def refund_candidate(source,target,project,quantities,originals):
         tree=E.fromstring(z.read(part))
         data=tree.find(X+'sheetData')
         dimension=tree.find(X+'dimension')
+        auto_filter=tree.find(X+'autoFilter')
+        workbook_changed=False
         by_row={int(row.get('r')):row for row in data}
         last=max(by_row,default=1)
         expected=dict(rows)
@@ -348,11 +350,15 @@ def refund_candidate(source,target,project,quantities,originals):
                 count+=current['remaining']
             else:
                 extent=re.fullmatch(r'A1:([A-Z]+)([0-9]+)',dimension.get('ref','')) if dimension is not None else None
-                if extent is None or any(tree.find(X+t) is not None for t in ('tableParts','autoFilter','mergeCells')):
+                if extent is None or any(tree.find(X+t) is not None for t in ('tableParts','mergeCells')):
                     raise Stop('УЗК: не подтверждено безопасное место для восстановления строки '+mark+'.')
                 last=max(last,int(extent[2]))+1
                 if last>1048576:raise Stop('УЗК: лист заполнен.')
-                no=last;row=E.SubElement(data,X+'row',r=str(no))
+                no=last
+                if auto_filter is not None:
+                    _extend_plain_refund_filter(book, tree, dimension, no)
+                    workbook_changed=True
+                row=E.SubElement(data,X+'row',r=str(no))
                 for col,name in (('A','project'),('B','mark')):
                     cell=E.SubElement(row,X+'c',r=col+str(no),t='inlineStr')
                     val=E.SubElement(E.SubElement(cell,X+'is'),X+'t')
@@ -373,12 +379,47 @@ def refund_candidate(source,target,project,quantities,originals):
             cell.insert(0,E.Element(X+'v'))
             cell[0].text=str(count)
             expected[key]={**(current or original),'rows':[no],'remaining':count}
-        changed=E.tostring(tree,encoding='UTF-8',xml_declaration=True)
+        changed={part:E.tostring(tree,encoding='UTF-8',xml_declaration=True)}
+        if workbook_changed:
+            changed['xl/workbook.xml']=E.tostring(book,encoding='UTF-8',xml_declaration=True)
         with ZipFile(target,'x') as out:
             for item in z.infolist():
-                out.writestr(item,changed if item.filename==part else z.read(item.filename))
+                payload=changed[item.filename] if item.filename in changed else z.read(item.filename)
+                out.writestr(item,payload)
     if sha(source)!=before or read_shared_uzk(target,project=project,marks=quantities)!=expected:
         raise Stop('УЗК: не подтверждён кандидат возврата.')
+
+
+def _extend_plain_refund_filter(book, tree, dimension, new_last):
+    """Append under a plain three-column filter and keep its scoped name in sync."""
+    import re
+
+    x='{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
+    old_last=new_last-1
+    old_range=f'A1:C{old_last}'
+    filters=tree.findall(x+'autoFilter')
+    properties=tree.find(x+'sheetPr')
+    extent=re.fullmatch(r'A1:([A-Z]+)([1-9][0-9]*)',dimension.get('ref',''))
+    if (extent is None or extent[1] in ('A','B') or int(extent[2])!=old_last
+            or len(filters)!=1 or filters[0].get('ref')!=old_range or len(filters[0])
+            or set(filters[0].attrib)-{'ref','{http://schemas.microsoft.com/office/spreadsheetml/2014/revision}uid'}
+            or (properties is not None and properties.get('filterMode') not in (None,'0','false'))):
+        raise Stop('УЗК: для возврата нужна проверка настроек автофильтра.')
+    scope=next(str(i) for i,s in enumerate(book.find(x+'sheets')) if s.get('name')=='УЗК')
+    names=book.findall(f'{x}definedNames/{x}definedName')
+    local=[n for n in names if n.get('localSheetId')==scope
+           and n.get('name')=='_xlnm._FilterDatabase']
+    if len(local)!=1 or local[0].get('hidden') not in ('1','true'):
+        raise Stop('УЗК: не подтверждено имя диапазона автофильтра.')
+    name=local[0]
+    expression=re.fullmatch(r"((?:'УЗК'|УЗК)!\$A\$1:\$C\$)([1-9][0-9]*)",name.text or '')
+    if expression is None or int(expression[2])!=old_last:
+        raise Stop('УЗК: имя диапазона не совпадает с границей автофильтра.')
+    if any(n is not name and (n.get('localSheetId')==scope or 'УЗК!' in (n.text or '').upper()
+                              or "'УЗК'!" in (n.text or '').upper()) for n in names):
+        raise Stop('УЗК: проверьте дополнительные именованные диапазоны перед возвратом.')
+    filters[0].set('ref',f'A1:C{new_last}')
+    name.text=expression[1]+str(new_last)
 
 
 def _updated_native_filter(workbook_xml, old_sheet_xml, new_sheet_xml, removed):

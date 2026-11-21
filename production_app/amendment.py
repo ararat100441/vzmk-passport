@@ -120,6 +120,10 @@ def control_plan(source,project,delta,facts,original_quantities,final_quantities
         if refund:refunds[mark]=refund
         historical=inspected-refund
         added=extra.get(mark,{}).get('uzk_quantity',0)
+        if refund and added < additions.get(mark, 0):
+            raise Stop(f'УЗК: удаляемые и добавляемые строки марки {mark} меняют объём '
+                       'контроля. Требуется подтвердить УЗК заменяемых изделий '
+                       'до корректировки паспорта.')
         if mark in final_quantities:
             plan[mark]={'uzk_quantity':historical+added,
                         'amendment_original':bool(historical) or not added}

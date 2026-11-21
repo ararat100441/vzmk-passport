@@ -94,6 +94,13 @@ def replacement_path(path, operation_id):
     return path.with_name('.vzmk-replaced-' + operation_id + path.suffix)
 
 
+def replacement_paths(items, operation_id):
+    # Historical names stay valid for every layout accepted by older builds.
+    paths = [replacement_path(item['path'], operation_id) for item in items]
+    return [replacement_path(item['path'], operation_id + '-' + item['role'])
+            if paths.count(path) > 1 else path for item, path in zip(items, paths)]
+
+
 def archive_completed(journal):
     """Only exact, unreferenced duplicates of sealed coordinated backups."""
     from .core import journal_read
@@ -136,7 +143,7 @@ def _archive_unreferenced(journal, state):
     roles = {'registry', 'catalog', 'uzk'}
     if len(items) != 3 or {item['role'] for item in items} != roles:
         raise Stop('Не подтверждены участники завершённой операции.')
-    sources = [replacement_path(item['path'], state['id']) for item in items]
+    sources = replacement_paths(items, state['id'])
     if len(set(sources)) != len(items):
         raise Stop('Совпадают пути служебных копий участников операции.')
     for item, source in zip(items, sources):
