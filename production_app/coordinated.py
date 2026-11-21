@@ -10,7 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 import hashlib,os,shutil
 from .storage import Stop,safe,sha,save,read,verify_pins,mutex,post_commit_path
-from .service_archive import archive_completed,replacement_path
+from .service_archive import archive_completed,replacement_paths
 from passport_app.excel import locked_file,atomic_replace
 from stage8_closure.storage import frozen
 
@@ -138,13 +138,14 @@ def commit(d,prepared,released,confirmation,approved_facts):
                'backup':participants[0]['backup'],'original_sha256':participants[0]['original_sha256'],'candidate_sha256':participants[0]['candidate_sha256'],
                'new':True,'participants':participants,
                'current_control':confirmation.get('current_control')}
+        state.update(project=d['project'], number=d['number'])
         if amendment:state['original_documents']=original_docs
         journal_write(journal,state)
         try:
             for item in participants:
                 _write_bytes(item['backup'],payloads[item['path']])
                 if sha(item['backup'])!=item['original_sha256']:raise Stop('Повреждена резервная копия '+item['role'])
-                local=Path(item['path']).with_name('.vzmk-candidate-'+d['id']+Path(item['path']).suffix)
+                local=Path(item['path']).with_name('.vzmk-candidate-'+d['id']+'-'+item['role']+Path(item['path']).suffix)
                 _write_bytes(local,Path(item['candidate']).read_bytes())
                 if sha(local)!=item['candidate_sha256']:raise Stop('Повреждён кандидат '+item['role'])
                 item['local_candidate']=str(local)
@@ -174,9 +175,9 @@ def commit(d,prepared,released,confirmation,approved_facts):
                     archive.rename(target)
                     raise Stop('Исходный комплект изменился во время переноса.')
             private.rename(target);state['phase']='DOCUMENTS_PUBLISHED';journal_write(journal,state)
-            for item in participants:
+            for item, displaced in zip(participants, replacement_paths(participants, d['id'])):
                 state['phase']='REPLACE_INTENT_'+item['role'].upper();journal_write(journal,state)
-                atomic_replace(item['local_candidate'],item['path'],backup=replacement_path(item['path'],d['id']))
+                atomic_replace(item['local_candidate'],item['path'],backup=displaced)
                 state['phase']='REPLACED_'+item['role'].upper();journal_write(journal,state)
             state['phase']='NEEDS_READBACK';journal_write(journal,state)
         except BaseException as exc:
@@ -246,9 +247,10 @@ def native_readback(state):
 
 
 def complete(journal,state):
-    from .core import journal_write
+    from .core import journal_write,require_current_journal
     with ExitStack() as stack:
         payloads=_lock_all(stack,state['participants'],False,post_commit=True)
+        require_current_journal(journal, state)
         for item in state['participants']:
             if hashlib.sha256(payloads[item['path']]).hexdigest()!=item['candidate_sha256']:raise Stop('После readback изменён '+item['path'])
         target=Path(state['target'])
@@ -275,7 +277,7 @@ def complete(journal,state):
 
 
 def recover(journal,state):
-    from .core import journal_write
+    from .core import journal_write,require_current_journal,recovery_archive,unpublish_for_recovery
     if state['phase'] in ('COMPLETE','ROLLED_BACK','ABORTED'):return {'status':'PASS','phase':state['phase']}
     stage=Path(journal).parent;registry=safe(state['registry'])
     if stage.parent!=registry.parent/'.vzmk-operations' or stage.name!=state['id']:raise Stop('Журнал вне папки операций.')
@@ -283,6 +285,7 @@ def recover(journal,state):
     if len(participants)!=3 or len({i['path'] for i in participants})!=3 or participants[0]['path']!=str(registry):raise Stop('Повреждены участники транзакции.')
     with ExitStack() as stack:
         payloads=_lock_all(stack,participants,True)
+        require_current_journal(journal, state)
         changed=[]
         # Validate EVERY participant and EVERY document BEFORE restoring any.
         for item in participants:
@@ -300,18 +303,15 @@ def recover(journal,state):
             if document_hashes(archived if archived.exists() else target)!=original_docs:
                 raise Stop('Исходный комплект изменён после сбоя; откат запрещён.')
         published=target.exists() and (not original_docs or archived.exists())
-        if published:
-            written=state.get('output_hashes',{})|state.get('extra_hashes',{})
-            if sha(target/'ISSUE.json')!=state.get('issue_sha256') or {p.name for p in target.iterdir()}!=set(written)|{'ISSUE.json'}:raise Stop('Комплект изменён после сбоя; откат запрещён.')
-            for name,h in written.items():
-                if sha(target/name)!=h:raise Stop('Изменён документ '+name+'; откат всех файлов запрещён.')
+        unpublish_for_recovery(stage, state, target, published)
         for item in reversed(changed):
             path=Path(item['path']);restore=path.with_name('.vzmk-restore-'+uuid4().hex+path.suffix)
             _write_bytes(restore,Path(item['backup']).read_bytes())
-            atomic_replace(restore,path,backup=stage/('pre-restore-'+uuid4().hex+path.suffix))
-        if published:target.rename(stage/'unpublished_documents')
+            backup=recovery_archive(stage, path, 'pre-restore-'+uuid4().hex+path.suffix)
+            atomic_replace(restore,path,backup=backup)
+            restored=stack.enter_context(locked_file(path, writable=True))
+            if hashlib.sha256(restored).hexdigest()!=item['original_sha256']:
+                raise Stop('Не подтверждено восстановление '+str(path))
         if original_docs and archived.exists():archived.rename(target)
-    for item in participants:
-        if sha(item['path'])!=item['original_sha256']:raise Stop('Не подтверждено восстановление '+item['path'])
-    state['phase']='ROLLED_BACK';journal_write(journal,state)
+        state['phase']='ROLLED_BACK';journal_write(journal,state)
     return {'status':'PASS','phase':'ROLLED_BACK','journal':str(journal),'participants':len(participants)}

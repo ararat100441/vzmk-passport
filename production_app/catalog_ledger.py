@@ -187,6 +187,11 @@ def validate_stock(path,project,number,quantities,registered=None,*,original_qua
             rows[mark]=no
         if s.max_column!=5+len(data['history']):raise Stop('В справочнике есть неучтённые столбцы отгрузок.')
         for col,h in enumerate(data['history'],6):
+            missing_marks = [mark for mark in h['quantities'].keys() - rows.keys()
+                             if quantity(h['quantities'][mark], 'История ' + mark, True)]
+            if missing_marks:
+                raise Stop('В справочнике отсутствуют строки подтверждённой отгрузки '
+                           + h['number'] + ': ' + ', '.join(sorted(missing_marks)))
             if s.cell(1,col).value!='Паспорт '+h['number']+' от '+date.fromisoformat(h['date']).strftime('%d.%m.%Y'):raise Stop('Изменён заголовок истории '+h['number'])
         available={};warnings=[]
         for mark,no in rows.items():
@@ -213,6 +218,13 @@ def validate_stock(path,project,number,quantities,registered=None,*,original_qua
         for mark,requested in quantities.items():
             if mark not in rows:raise Stop('В справочнике отсутствует марка '+mark)
             requested=quantity(requested,'Заявка '+mark,True)
+            if final_quantities is not None:
+                # Free stock already excludes the old passport. Only book its increase.
+                final = quantity(final_quantities.get(mark, 0), 'Итог ' + mark, True)
+                previous = original_quantities.get(mark, 0)
+                if not 0 <= final - requested <= previous:
+                    raise Stop('Несовместимы исходные, добавленные и итоговые количества ' + mark)
+                requested = max(0, final - previous)
             if requested>available[mark]:raise Stop(f'Марка {mark}: доступный остаток {available[mark]}, запрошено {requested}.')
         if sha(source)!=before:raise Stop('Справочник изменился во время проверки остатков.')
         return {**data,'stock_warnings':warnings}

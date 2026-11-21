@@ -1,4 +1,4 @@
-import os,subprocess,sys,traceback
+import os,subprocess,sys,time,traceback
 from pathlib import Path
 from uuid import uuid4
 from datetime import date, datetime
@@ -1541,8 +1541,34 @@ class App:
         try:
             paths=core.pending(self.cfg['registry'])
             if not paths:messagebox.showinfo('Восстановление','Незавершённых операций нет.');return
-            journal=str(paths[0])
-            if messagebox.askyesno('Откат незавершённой операции',journal+'\nВосстановить только при совпадении SHA? Изменённые пользователем документы/реестр не будут перезаписаны.'):
+            entries=[]
+            for path in sorted(paths):
+                state=core.journal_read(path)
+                target=state.get('target',str(path))
+                identity=f"{state['project']} · паспорт №{state['number']}" if state.get('project') and state.get('number') else target
+                entries.append((str(path),state['phase'],target,identity))
+            index=1
+            if len(entries)>1:
+                choices='\n'.join(f'{i}. {identity} ({phase})' for i, (_,phase,_,identity) in enumerate(entries,1))
+                index=simpledialog.askinteger('Выбор операции',choices+'\nВведите номер операции.',
+                                              parent=self.root,minvalue=1,maxvalue=len(entries))
+                if index is None:return
+            journal,phase,target,identity=entries[index-1]
+            label=f'{identity}\nФаза: {phase}\nЖурнал: {journal}'
+            if phase=='NEEDS_READBACK':
+                choice=messagebox.askyesnocancel('Выпуск ожидает проверки',label+
+                    '\nДа — повторить контрольное чтение Word и Excel и завершить выпуск. '
+                    'Нет — перейти к подтверждению отката. Отмена — закрыть окно.')
+                if choice is None:return
+                if choice:
+                    def finish(result):
+                        self.write('Контрольное чтение и завершение выпуска выполнены: '+target)
+                        self.refresh()
+                    self.run('readback',{'journal':journal},
+                             lambda result:self.run('complete',{'journal':journal,'readback_result':self.result_path},finish))
+                    return
+            if messagebox.askyesno('Откат незавершённой операции',label+
+                    '\nПодтвердите откат. Восстановление проверит SHA рабочих файлов.'):
                 self.run('recover',{'journal':journal},lambda r:self.write(r))
         except Exception as exc:self.error(exc)
 
@@ -1557,30 +1583,34 @@ class App:
         for b in self.buttons:b.configure(state='disabled')
         labels={'check':'Проверяются исходные данные','prepare':'Формируются Word и Excel','verify':'Проверяются Word и Excel','confirm':'Сохраняется ваше подтверждение','release':'Готовятся окончательные документы','commit':'Сохраняется отгрузка с резервными копиями','readback':'Проверяется запись отгрузки','complete':'Завершается сохранение','recover':'Восстанавливается незавершённая операция'}
         self.progress.configure(text=labels.get(task,'Выполняется операция')+'. Дождитесь завершения.');self.root.after(500,lambda:self.poll(root,task,callback,states))
-    def poll(self,root,task,callback,states):
+    def poll(self,root,task,callback,states,result_deadline=None):
         if self.active.poll() is None:self.root.after(500,lambda:self.poll(root,task,callback,states));return
+        if result_deadline is None:result_deadline=time.monotonic()+5
+        error=None
+        try:
+            result=read(root/'result.json')
+        except (PermissionError,FileNotFoundError) as exc:
+            if time.monotonic()<result_deadline:
+                self.root.after(100,lambda:self.poll(root,task,callback,states,result_deadline))
+                return
+            error=exc
+        except (OSError,ValueError) as exc:
+            error=exc
         code=self.active.returncode;self.active=None
         self.projects.configure(state='readonly');self.numbers.configure(state='readonly');self.new_widget.configure(state='normal');self.vom_widget.configure(state='normal')
         self.source_numbers.configure(state='readonly');self.shipment_entry.configure(state='normal' if self.new.get() else 'disabled')
         try:
-            r=read(root/'result.json');self.result_path=str(root/'result.json')
+            if error is not None:raise error
+            r=result;self.result_path=str(root/'result.json')
             if code or r['status']!='PASS':raise Stop(str(r.get('error',r))+'\nЖурнал: '+str(root))
             for b,state in zip(self.buttons,states):b.configure(state=state)
             self.progress.configure(text='Проверка завершена.');callback(r)
         except Exception as exc:
-            journal=None
-            if self.adding_marks() and task in ('commit','readback','complete'):
-                request=read(root/'request.json')
-                if task=='commit':
-                    plan=read(request['path'])
-                    journal=Path(plan['registry']).parent/'.vzmk-operations'/plan['id']/'journal.json'
-                else:
-                    journal=Path(request['journal'])
             self.invalidate()
             self.progress.configure(text='Операция остановлена. Откройте сообщение об ошибке.')
             self.error(exc)
-            if journal and journal.is_file():
-                self.run('recover',{'journal':str(journal)},lambda result:self.write(result))
+            if task in ('commit','readback','complete'):
+                self.write('Проверьте состояние выпуска в окне «Незавершённые операции / восстановление».')
 
     def prepared(self,result):
         self.write('Word и Excel подготовлены: '+str(result['files'])+' файлов.')

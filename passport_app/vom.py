@@ -58,6 +58,8 @@ def read_vom(path):
         sheet = values[layout.sheet]
         rows, source_rows, names = [], [], []
         stop = layout.total_row or sheet.max_row + 1
+        optional_area = (getattr(sheet, 'max_column', 0) >= 10
+                         and sheet.cell(1, 10).value == 'VZMK_CLIPBOARD_VOM_1')
         for r in range(layout.start, stop):
             cells = [sheet.cell(r, layout.columns[f]) for f in FIELDS]
             if all(c.value is None for c in cells):
@@ -67,7 +69,6 @@ def read_vom(path):
                 raise PassportError(f'Не найдена марка в строке {r} ВОМ.')
             if name is not None and not isinstance(name, str):
                 raise PassportError(f'Наименование марки должно быть текстом: строка {r}.')
-            optional_area=getattr(sheet,'max_column',0)>=10 and sheet.cell(1,10).value=='VZMK_CLIPBOARD_VOM_1'
             nums = [None if optional_area and i>=3 and c.value is None else number(c.value, c.coordinate) for i,c in enumerate(cells[2:])]
             if nums[0] != nums[0].to_integral_value():
                 raise PassportError(f'Количество должно быть целым неотрицательным: строка {r}.')

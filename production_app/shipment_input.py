@@ -54,16 +54,29 @@ def parse_tsv(text):
     if not isinstance(text,str) or len(text)>5_000_000:raise Stop('Некорректный буфер ВОМ.')
     rows=[r for r in csv.reader(io.StringIO(text),delimiter='\t') if any(c.strip() for c in r)]
     if not rows:raise Stop('В буфере нет строк ВОМ.')
-    # A real mark/name/quantity header establishes the optional sheet column.
-    header=next((i for i,r in enumerate(rows[:5]) if any(str(c).strip().casefold() in ('марка','отправочная марка') for c in r)),None)
+    # A mark label by itself is also a possible value in a data row.
+    def is_header(row):
+        labels = [cell.strip().casefold() for cell in row]
+        offset = int(bool(labels) and 'лист' in labels[0])
+        return (len(labels) >= offset + 3
+                and labels[offset] in ('марка', 'отправочная марка')
+                and labels[offset + 1].startswith('наименование')
+                and labels[offset + 2].startswith(('количество', 'кол-во')))
+
+    header = next((i for i, row in enumerate(rows[:5]) if is_header(row)), None)
     sheet_column=False
     if header is not None:
         r=rows[header];mark=next(i for i,c in enumerate(r) if c.strip().casefold() in ('марка','отправочная марка'))
         if mark==1 and len(r)==8 and 'лист' in r[0].casefold():sheet_column=True
         elif mark!=0:raise Stop('Неоднозначная шапка ВОМ: скопируйте B:H либо пять обязательных колонок.')
+        if any(sum(bool(cell.strip()) for cell in row) >= 5 for row in rows[:header]):
+            raise Stop('Строки данных перед заголовком ВОМ. Скопируйте таблицу с одной шапкой.')
         rows=rows[header+1:]
-        # Grouped Excel header may have a second 1 шт/Всего row.
-        if rows and any('всего' in c.casefold() or 'всех' in c.casefold() for c in rows[0]) and not any(c.strip().isdigit() for c in rows[0][:3]):rows=rows[1:]
+        # Excel merges the identifying columns vertically in a two-line header.
+        data_start = 4 if sheet_column else 3
+        if (rows and not any(cell.strip() for cell in rows[0][:data_start])
+                and any(cell.strip().casefold() in ('всего', 'всех') for cell in rows[0][data_start:])):
+            rows = rows[1:]
     output=[]
     for r in rows:
         if len(r)==8:

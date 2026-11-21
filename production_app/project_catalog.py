@@ -1,5 +1,7 @@
 """Project-local ledger naming and explicit conflict resolution."""
+import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from .storage import Stop,sha
 
 def catalog_name(project):
@@ -45,7 +47,20 @@ def create_catalog(root,project,cfg=None):
     s.freeze_panes='F2'
     for key,width in [('A',24),('B',16),('C',24),('D',12),('E',16)]:s.column_dimensions[key].width=width
     target=root/catalog_name(project)
+    staged = None
     try:
-        with target.open('xb') as f:b.save(f)
-    finally:b.close()
+        with NamedTemporaryFile(dir=root, prefix='.vzmk-catalog-', suffix='.tmp', delete=False) as stream:
+            staged = Path(stream.name)
+            b.save(stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Publish a complete workbook without replacing a concurrent creator.
+        if os.name == 'nt':
+            staged.rename(target)
+        else:
+            os.link(staged, target)
+    finally:
+        b.close()
+        if staged is not None:
+            staged.unlink(missing_ok=True)
     return {'path':str(target),'sha256':sha(target),'marks':len(marks),'registered_history':len(history),'notice':'Общее количество и назначения заполняются владельцем. Неизвестный остаток не равен нулю.'}

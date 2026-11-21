@@ -41,7 +41,7 @@ def verify_document_marks(text, *, training=False, draft=True):
     if not draft and any(mark in text.upper() for mark in (
             PREVIEW_MARK,'ЧЕРНОВИК','НЕ ДЛЯ ВЫПУСКА','УЧЕБНЫЙ КОМПЛЕКТ')):
         raise Stop('В окончательном документе осталась предварительная маркировка.')
-from passport_app.excel import excel_session,open_excel,load_book
+from passport_app.excel import excel_session,open_excel,load_book,assert_range_formulas
 from passport_app.vik import word_session,open_word
 from passport_app.appendix import generate_appendix,inspect_template
 from .storage import Stop,sha
@@ -53,6 +53,15 @@ from .automatic_acts import ordered_vik_names,joint_text
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
+
+def _range_values(value):
+    """Excel returns a scalar for one cell and a 2D array for larger ranges."""
+    if isinstance(value,(tuple,list)):
+        for row in value:
+            yield from row
+    else:
+        yield value
+
 
 def fields(registry,row):
     cols=columns(registry);w=load_book(registry.path,values=True)
@@ -550,10 +559,8 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                     try:
                         for s in b.Worksheets:
                             s.PageSetup.CenterHeader=prefix
-                            for line in s.UsedRange.Value2:
-                                if any(isinstance(v,str) and TOKEN.search(v)
-                                       for v in line):
-                                    raise Stop('Незаполненное поле '+role)
+                            if any(isinstance(v,str) and TOKEN.search(v) for v in _range_values(s.UsedRange.Value2)):
+                                raise Stop('Незаполненное поле '+role)
                         b.Save()
                     finally:b.Close(SaveChanges=False)
                     outputs.append({'role':role,'path':str(target)})
@@ -589,8 +596,8 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
             try:
                 for s in b.Worksheets:
                     s.PageSetup.CenterHeader=prefix
-                    for r in s.UsedRange.Value2:
-                        if any(isinstance(v,str) and TOKEN.search(v) for v in r):raise Stop('Незаполненное поле шаблона '+role)
+                    if any(isinstance(v,str) and TOKEN.search(v) for v in _range_values(s.UsedRange.Value2)):
+                        raise Stop('Незаполненное поле шаблона '+role)
                 b.Save()
             finally:b.Close(SaveChanges=False)
             outputs.append({'role':role,'path':str(target)})
@@ -702,21 +709,20 @@ def verify_documents(outputs,number,training=False,draft=True):
         for out in outputs:
             path=Path(out['path'])
             if path.suffix!='.xlsx':continue
-            b=open_excel(app,path)
+            b=open_excel(app,path,read_only=True)
             try:
                 app.CalculateFullRebuild()
                 for s in b.Worksheets:
-                    text=' '.join(str(v) for r in s.UsedRange.Value2 for v in r if v is not None)
-                    formulas=' '.join(str(v) for r in s.UsedRange.Formula for v in r if v is not None)
-                    if TOKEN.search(text) or any(t in (text+' '+formulas).upper() for t in forbidden):raise Stop('Неподтверждённые/случайные данные Excel: '+str(path))
+                    used=s.UsedRange
+                    text=' '.join(str(v) for v in _range_values(used.Value2) if v is not None)
+                    formulas=' '.join(str(v) for v in _range_values(used.Formula) if v is not None)
                     headers=' '.join(str(getattr(s.PageSetup,key) or '') for key in ('LeftHeader','CenterHeader','RightHeader','LeftFooter','CenterFooter','RightFooter'))
-                    verify_document_marks(text+' '+headers,training=training,draft=draft)
+                    visible=text+' '+headers
+                    if TOKEN.search(visible) or any(t in (visible+' '+formulas).upper() for t in forbidden):raise Stop('Неподтверждённые/случайные данные Excel: '+str(path))
+                    verify_document_marks(visible,training=training,draft=draft)
                     if out['role']=='appendix' or out['role'].startswith('akz_appendix'):
                         verify_appendix_print_layout(s)
-                    errors=None
-                    try:errors=s.UsedRange.SpecialCells(-4123,16)
-                    except Exception:pass
-                    if errors is not None:raise Stop('Ошибка формулы Excel: '+str(path))
+                    assert_range_formulas(s,used)
                 report.append({'file':str(path),'engine':'Microsoft Excel','status':'PASS'})
             finally:b.Close(SaveChanges=False)
     with word_session() as app:
@@ -726,12 +732,12 @@ def verify_documents(outputs,number,training=False,draft=True):
             d=open_word(app,path,readonly=True)
             try:
                 d.Repaginate();text=d.Content.Text
-                if number not in text or TOKEN.search(text):raise Stop('Неверный номер/незаполненные поля Word: '+str(path))
-                if any(t in text.upper() for t in forbidden):raise Stop('Неподтверждённые данные Word: '+str(path))
+                if number not in text:raise Stop('Неверный номер Word: '+str(path))
                 for section in d.Sections:
                     for collection in (section.Headers,section.Footers):
                         for item in collection:
                             if item.Exists:text+=' '+item.Range.Text
+                if TOKEN.search(text) or any(t in text.upper() for t in forbidden):raise Stop('Незаполненные поля/неподтверждённые данные Word: '+str(path))
                 verify_document_marks(text,training=training,draft=draft)
                 report.append({'file':str(path),'engine':'Microsoft Word','pages':d.ComputeStatistics(2),'status':'PASS'})
             finally:d.Close(SaveChanges=False)

@@ -15,6 +15,15 @@ def sha256(path):
         raise PassportError(f'Не удалось прочитать файл: {path}. Он отсутствует или занят другим процессом.') from exc
 
 
+def _extended_windows_name(absolute):
+    prefix = '\\\\?\\'
+    if absolute.startswith(prefix):
+        return absolute
+    if absolute.startswith('\\\\'):
+        return prefix + 'UNC\\' + absolute[2:]
+    return prefix + absolute
+
+
 def atomic_replace(source, target, *, backup=None):
     """Native Windows replacement preserves target ACLs/metadata and supports delete sharing."""
     kernel = ctypes.WinDLL('kernel32', use_last_error=True)
@@ -23,7 +32,7 @@ def atomic_replace(source, target, *, backup=None):
                          ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p]
     function.restype = ctypes.c_int
     def extended(path):
-        return '\\\\?\\' + str(Path(path).resolve())
+        return _extended_windows_name(str(Path(path).resolve()))
     if not function(extended(target), extended(source), extended(backup) if backup else None, 0, None, None):
         raise ctypes.WinError(ctypes.get_last_error())
 
@@ -92,21 +101,42 @@ def excel_session():
         pythoncom.CoUninitialize()
 
 
-def open_excel(excel, path):
-    book = excel.Workbooks.Open(Filename=str(Path(path).resolve()), UpdateLinks=0, ReadOnly=False,
+def open_excel(excel, path, *, read_only=False):
+    book = excel.Workbooks.Open(Filename=str(Path(path).resolve()), UpdateLinks=0, ReadOnly=read_only,
                                 IgnoreReadOnlyRecommended=True, Notify=False, AddToMru=False)
-    if book.ReadOnly:
+    if bool(book.ReadOnly) != read_only:
         book.Close(SaveChanges=False)
+        if read_only:
+            raise PassportError(f'Excel не подтвердил режим чтения: {path}')
         raise PassportError(f'Excel открыл временную книгу только для чтения: {path}')
     return book
 
 
-def assert_no_formula_errors(sheet, row, columns):
-    # SpecialCells(xlCellTypeFormulas, xlErrors) checks actual native calculation.
-    region = sheet.Range(sheet.Cells(row, 1), sheet.Cells(row, columns))
-    try:
-        errors = region.SpecialCells(-4123, 16)
-    except Exception:
+def assert_range_formulas(sheet, region):
+    """Check only formula cells, and propagate a failed native calculation."""
+    has_formula = region.HasFormula
+    if has_formula is False:
         return
-    if errors is not None:
-        raise PassportError(f'В новой строке Excel есть ошибка формулы: {errors.Address}.')
+    # Null denotes a mix of formula and non-formula cells. Knowing that there
+    # are formulas lets us select them without mistaking an RPC error for
+    # Excel's ordinary "no cells were found" error on an error-free range.
+    formulas = region if has_formula is True else region.SpecialCells(-4123)
+    import pythoncom
+    # Worksheet.Evaluate parses function names using its COM invocation LCID.
+    # Request English explicitly, matching the names in the expression.
+    dispatch = sheet._oleobj_
+    english_lcid = 1033
+    evaluate = dispatch.GetIDsOfNames(english_lcid, 'Evaluate')
+    for area in formulas.Areas:
+        address = area.Address
+        errors = dispatch.Invoke(evaluate, english_lcid, pythoncom.DISPATCH_METHOD, True,
+                                 f'SUMPRODUCT(--ISERROR({address}))')
+        # Excel errors returned via COM are signed integers. Only an explicit
+        # numeric zero from this native calculation proves this area clean.
+        if type(errors) not in (int, float) or errors != 0:
+            raise PassportError(f'Excel не подтвердил отсутствие ошибок формул: {address}.')
+
+
+def assert_no_formula_errors(sheet, row, columns):
+    region = sheet.Range(sheet.Cells(row, 1), sheet.Cells(row, columns))
+    assert_range_formulas(sheet, region)

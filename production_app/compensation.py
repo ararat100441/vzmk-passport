@@ -11,6 +11,7 @@ import hashlib,json,os,shutil
 from uuid import uuid4
 from .storage import Stop,safe,sha,read,save,digest,mutex,post_commit_path,windows_file_identity
 from .coordinated import _lock_all,_write_bytes
+from .core import require_current_journal,recovery_archive
 from passport_app.excel import atomic_replace,locked_file
 
 SCHEMA='VZMK_COMPENSATION_1'
@@ -32,6 +33,12 @@ def _event(stage,event,**fields):
     with (stage/'audit.jsonl').open('ab') as stream:
         stream.write((json.dumps({'at':datetime.now(timezone.utc).isoformat(),'event':event,**fields},ensure_ascii=False)+'\n').encode('utf8'))
         stream.flush();os.fsync(stream.fileno())
+
+def _archive(stage, path, name):
+    if stage.stat().st_dev == Path(path).parent.stat().st_dev:
+        return stage / name
+    return recovery_archive(stage.parent, path, 'compensation-' + name)
+
 
 def _documents(state,folder):
     folder=safe(folder);expected=state['output_hashes']|{'ISSUE.json':state['issue_sha256']}
@@ -72,6 +79,8 @@ def validate_closed(journal,state):
     tail=[json.loads(line) for line in audit[size:].splitlines()]
     if len(tail)!=1 or tail[0].get('event')!='CLOSING_COMPENSATED' or tail[0].get('receipt_sha256')!=info['receipt_sha256']:raise Stop('Не подтверждено завершение audit trail.')
     unpublished=journal.parent/'unpublished_documents'
+    if r.get('unpublished_documents')!=str(unpublished):
+        unpublished=Path(state['target']).parent/'.vzmk-service-archive'/state['id']/'recovery'/'unpublished_documents'
     if r.get('unpublished_documents')!=str(unpublished):raise Stop('Неверный путь неопубликованного комплекта.')
     _documents(old,unpublished)
     return r
@@ -109,7 +118,7 @@ def apply(manifest,approval):
     manifest,m,journal,state=_context(manifest)
     if (approval.get('approved') is not True or approval.get('manifest_sha256')!=sha(manifest)
             or not approval.get('owner_statement') or not approval.get('at')):raise Stop('Нет явного подтверждения владельца для этих кандидатов.')
-    stage=journal.parent/'compensation';unpublished=journal.parent/'unpublished_documents'
+    stage=journal.parent/'compensation';unpublished=recovery_archive(journal.parent, state['target'], 'unpublished_documents')
     if stage.exists() or unpublished.exists():raise Stop('У компенсации уже есть история; повторная запись запрещена.')
     from .core import journal_write
     original_bytes=journal.read_bytes();old=deepcopy(state);items=deepcopy(m['participants'])
@@ -134,7 +143,7 @@ def apply(manifest,approval):
             _write_bytes(item['after_copy'],payload)
             local=Path(item['path']).with_name('.vzmk-compensation-'+uuid4().hex+suffix)
             _write_bytes(local,payload);item['local_candidate']=str(local)
-            item['replaced_current']=str(stage/('replaced-current-'+role+suffix))
+            item['replaced_current']=str(_archive(stage, item['path'], 'replaced-current-'+role+suffix))
         intent={'schema':SCHEMA,'id':state['id'],'journal':str(journal),'original_journal_sha256':m['journal_sha256'],
                 'manifest_sha256':sha(manifest),'participants':items,'approval':approval,'target':str(target)}
         _write_new_json(stage/'intent.json',intent)
@@ -184,7 +193,7 @@ def apply(manifest,approval):
                         raise Stop('Неизвестное изменение при сбое '+item['role'])
                     restore=Path(item['path']).with_name('.vzmk-compensation-restore-'+uuid4().hex+Path(item['path']).suffix)
                     _write_bytes(restore,Path(item['before_copy']).read_bytes())
-                    atomic_replace(restore,item['path'],backup=stage/('failed-after-'+item['role']+Path(item['path']).suffix))
+                    atomic_replace(restore,item['path'],backup=_archive(stage, item['path'], 'failed-after-'+item['role']+Path(item['path']).suffix))
                 except BaseException as error:errors.append(str(error))
             if moved or unpublished.exists() and not target.exists():
                 try:unpublished.rename(target)
@@ -219,17 +228,18 @@ def recover_interrupted(journal):
             or sha(safe(stage/'manifest.json'))!=intent['manifest_sha256']):raise Stop('Нет проверенной прерванной компенсации.')
     with ExitStack() as stack:
         payloads=_lock_all(stack,items,True)
+        require_current_journal(journal, live)
         for item in items:
             if (item['path']!=expected[item['role']] or item['before_copy']!=str(stage/('before-'+item['role']+Path(item['path']).suffix))
                     or sha(safe(item['before_copy']))!=item['before_sha256']
                     or hashlib.sha256(payloads[item['path']]).hexdigest() not in [item['before_sha256'],item['after_sha256']]):raise Stop('Неизвестное изменение; восстановление компенсации запрещено.')
-        target=safe(intent['target']);unpublished=journal.parent/'unpublished_documents'
+        target=safe(intent['target']);unpublished=recovery_archive(journal.parent, target, 'unpublished_documents')
         if target.exists()==unpublished.exists():raise Stop('Неизвестное состояние комплекта компенсации.')
         _documents(old,target if target.exists() else unpublished)
         for item in items:
             if hashlib.sha256(payloads[item['path']]).hexdigest()==item['before_sha256']:continue
             restore=Path(item['path']).with_name('.vzmk-compensation-restore-'+uuid4().hex+Path(item['path']).suffix)
-            _write_bytes(restore,Path(item['before_copy']).read_bytes());atomic_replace(restore,item['path'],backup=stage/('interrupted-after-'+uuid4().hex+Path(item['path']).suffix))
+            _write_bytes(restore,Path(item['before_copy']).read_bytes());atomic_replace(restore,item['path'],backup=_archive(stage, item['path'], 'interrupted-after-'+uuid4().hex+Path(item['path']).suffix))
         if unpublished.exists():unpublished.rename(target)
         _restore_journal(journal,original.read_bytes());_event(stage,'INTERRUPTED_RESTORED_CURRENT')
     if any(sha(safe(i['path']))!=i['before_sha256'] for i in items):raise Stop('Не подтверждено восстановление CURRENT.')
