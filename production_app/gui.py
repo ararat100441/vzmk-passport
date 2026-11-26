@@ -384,7 +384,62 @@ class App:
             self.facts={}
             self.write('Фактические результаты требуют проверки: '+str(exc))
 
-    def error(self,exc):self.write(str(exc));messagebox.showerror('Не удалось продолжить',str(exc))
+    def error(self,exc,*,parent=None):
+        text=str(exc)
+        self.write(text)
+        if parent is None:
+            messagebox.showerror('Не удалось продолжить',text)
+            return
+
+        previous_grab=parent.grab_current()
+        previous_focus=parent.focus_lastfor()
+        dialog=tk.Toplevel(parent)
+        dialog.withdraw()
+        dialog.title('Не удалось продолжить')
+        dialog.transient(parent)
+
+        def dismiss(_=None):
+            dialog.destroy()
+            return 'break'
+
+        footer=ttk.Frame(dialog,padding=(12,8))
+        footer.pack(side='bottom',fill='x')
+        ok=ttk.Button(footer,text='ОК',command=dismiss)
+        ok.pack(side='right')
+        content=ttk.Frame(dialog,padding=(12,12,12,0))
+        content.pack(fill='both',expand=True)
+        message=tk.Text(content,wrap='word',font=('Segoe UI',10),height=1,width=1,
+                        padx=8,pady=6)
+        scrollbar=ttk.Scrollbar(content,orient='vertical',command=message.yview)
+        message.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right',fill='y')
+        message.pack(side='left',fill='both',expand=True)
+        message.insert('1.0',text)
+        message.configure(state='disabled')
+        dialog.protocol('WM_DELETE_WINDOW',dismiss)
+        dialog.bind('<Escape>',dismiss)
+        dialog.bind('<Return>',dismiss)
+
+        screen_w,screen_h=dialog.winfo_screenwidth(),dialog.winfo_screenheight()
+        width,height=min(600,screen_w-40),min(340,screen_h-80)
+        x=parent.winfo_rootx()+(parent.winfo_width()-width)//2
+        y=parent.winfo_rooty()+(parent.winfo_height()-height)//2
+        x=max(0,min(x,screen_w-width-20))
+        y=max(0,min(y,screen_h-height-60))
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
+        try:
+            dialog.deiconify()
+            dialog.wait_visibility()
+            dialog.grab_set()
+            ok.focus_set()
+            parent.wait_window(dialog)
+        finally:
+            if dialog.winfo_exists():
+                dialog.destroy()
+            if previous_grab is not None and previous_grab.winfo_exists():
+                previous_grab.grab_set()
+            if previous_focus is not None and previous_focus.winfo_exists():
+                previous_focus.focus_set()
 
     def choose(self,var,directory):
         if self.active:return
@@ -1261,7 +1316,7 @@ class App:
                            'в текущей заявке. Реестр не изменён. '
                            'Проверка достоверности и комплектности '
                            'выполняется при «Сформировать пакет».')
-            except Exception as exc:self.error(exc)
+            except Exception as exc:self.error(exc,parent=window)
         window.protocol('WM_DELETE_WINDOW',go_back)
         window.bind('<Escape>',lambda event:go_back())
 
@@ -1278,7 +1333,10 @@ class App:
             if col in (choices or {}):
                 options=choices[col](item)
                 if options is None:return
-                if not options:self.error('Нет утверждённого ГОСТ для профиля этой марки.');return
+                if not options:
+                    self.error('Нет утверждённого ГОСТ для профиля этой марки.',
+                               parent=tree.winfo_toplevel())
+                    return
                 entry=ttk.Combobox(tree,values=options,state='readonly')
                 current=tree.item(item,'values')[col]
                 entry.set(current if current in options else '')

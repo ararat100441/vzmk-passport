@@ -5,7 +5,7 @@ Automatic defaults are engineering suggestions, never proof of compliance.
 """
 from copy import deepcopy
 from pathlib import Path
-from profiles_stage4.model import normalize_profile
+from profiles_stage4.model import normalize_profile,profile_family_matches
 from .automatic_acts import _approved_rows
 from .storage import Stop,sha
 
@@ -26,7 +26,8 @@ class GeometrySelection:
         return key
 
     def options(self,profile):
-        return list(dict.fromkeys(p['standard'] for _,p in self.known.get(self.key(profile),[]) if p['standard']))
+        return list(dict.fromkeys(p['standard'] for _,p in self.known.get(self.key(profile),[])
+                                  if p['standard'] and profile_family_matches(profile,p['family'])))
 
     def resolve(self,mark,profile,*,saved_standard=''):
         if not str(profile or '').strip():return ''  # no invented profile

@@ -20,7 +20,7 @@ from openpyxl import load_workbook
 
 from profiles_stage4.model import (
     normalize_profile,calculate_uzk,ProfileError,
-    SUPPORTED_RULES,frequency_angle,
+    SUPPORTED_RULES,frequency_angle,profile_family_matches,
 )
 from .storage import Stop,sha,safe
 
@@ -198,7 +198,8 @@ def calculate_design_characteristics(vom,facts,profile_workbook,*,expected_sha=N
             raise Stop('УЗК: у выбранной марки '+mark+
                        ' не указан профиль в справочнике проекта.')
         profile_key=normalize_profile(assigned)
-        candidates=known.get(profile_key,[])
+        candidates=[(line,p) for line,p in known.get(profile_key,[])
+                    if profile_family_matches(assigned,p['family'])]
         # Stage4 accepted channel alias: [16П => 16П, but ONLY when its
         # profile is the unique unambiguous channel identity.
         if not candidates and profile_key.startswith('['):
@@ -264,7 +265,7 @@ def calculate_design_characteristics(vom,facts,profile_workbook,*,expected_sha=N
 
 def profile_standards(path,assigned):
     known=_approved_rows(Path(path));key=normalize_profile(assigned)
-    found=known.get(key,[])
+    found=[(line,p) for line,p in known.get(key,[]) if profile_family_matches(assigned,p['family'])]
     if not found and key.startswith('['):
         found=[x for x in known.get(key[1:],[]) if x[1]['family']=='Швеллер']
     return list(dict.fromkeys(p['standard'] for _,p in found))

@@ -56,12 +56,25 @@ def fmt(value):
     return format(Decimal(str(value)).normalize(), 'f')
 
 
+def _named_channel(text):
+    compact = re.sub(r'\s+', '', str(text)).upper().replace(',', '.')
+    return re.fullmatch(r'ШВЕЛЛЕР\[?(\d+(?:\.\d+)?(?:[А-ЯЁ]+\d*)*)', compact)
+
+
+def profile_family_matches(text, family):
+    """An explicit channel name must never resolve to a different family."""
+    return family == 'Швеллер' or _named_channel(text) is None
+
+
 def normalize_profile(text):
     """Recognized family labels only; series letters and asterisks survive."""
     value = str(text).strip().upper().replace('\u00a0', ' ')
     value = re.sub(r'\s+', ' ', value).replace(',', '.')
     compact = re.sub(r'\s+', '', value)
     beam = r'\d+(?:\.\d+)?(?:[А-ЯЁ]+\d*)*'
+    channel = _named_channel(compact)
+    if channel:
+        return channel[1]
     candidate = re.sub(r'^(?:ДВУТАВР|I)', '', compact)
     if candidate != compact and re.fullmatch(beam, candidate):
         return candidate  # Preserve every series digit, including a leading zero.
@@ -275,7 +288,7 @@ class Catalog:
 
     def lookup(self, profile_text, standard=None):
         key = normalize_profile(profile_text)
-        rows = self.by_key.get(key, [])
+        rows = [r for r in self.by_key.get(key, []) if profile_family_matches(profile_text, r['family'])]
         if not rows and re.fullmatch(r'\[\d+(?:\.\d+)?[А-ЯЁ]*', key):
             # Lookup-only fallback. Do not strip arbitrary brackets or hide collisions.
             candidates = self.by_key.get(key[1:], [])
