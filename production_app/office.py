@@ -49,7 +49,7 @@ from .model import filename,columns
 from .word_controls import fill_word_controls
 from .facts import validate_layer_ranges,validate_dry_averages,validate_layer_details
 from .real_forms import values_for_documents,validate_uzk_details,UZK_HEADERS,uzk_details_to_table
-from .automatic_acts import ordered_vik_names,joint_text
+from .automatic_acts import ordered_vik_names,joint_text,control_group_note
 
 ROLES={'appendix':'.xlsx','vik':'.docx','uzk':'.docx','quality':'.docx'}
 TOKEN=re.compile(r'\{\{[A-Z_0-9]+\}\}')
@@ -480,11 +480,15 @@ def document_values(registry,row,vom,facts):
     values['VIK_PROCESS_NUMBER']=facts['number']+'-1'
     values['VIK_MARKS']='; '.join(ordered_vik_names(vom))
     values['UZK_DESIGN']='; '.join(
-        row['mark']+': '+joint_text(row)
+        row['mark']+': '+_uzk_geometry_text(row)
         for row in facts.get('uzk_design',[])
     )
     values.update(values_for_documents(facts,{c['variant'] for c in facts['climates']}))
     return values
+
+
+def _uzk_geometry_text(record):
+    return joint_text(record)+control_group_note(record)
 
 
 def render(profile,project,registry,row,vom,facts,folder,training=False):
@@ -683,11 +687,12 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                     else:
                         rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
                         headers=('Марка','ВОМ, шт','УЗК, шт','Результат','Основание')
-                        manual={record['mark']:joint_text(record) for record in facts.get('uzk_design',[])
-                                if record['geometry_reference'].get('source')=='MANUAL'}
-                        if manual and 'UZK_DESIGN' not in template_tokens | bound_controls:
+                        if facts.get('uzk_design') and 'UZK_DESIGN' not in template_tokens | bound_controls:
+                            geometry={}
+                            for record in facts['uzk_design']:
+                                geometry.setdefault(record['mark'],[]).append(_uzk_geometry_text(record))
                             headers+=('Расчётная геометрия',)
-                            rows=[row+(manual.get(row[0],''),) for row in rows]
+                            rows=[row+('; '.join(geometry.get(row[0],())),) for row in rows]
                         word_table(doc,'{{UZK_TABLE}}',headers,rows)
                 if role=='vik' and '{{VIK_TABLE}}' in doc.Content.Text:
                     rows=[(m,totals[m],by_mark[m].get('vik_result','УЧЕБНЫЕ ДАННЫЕ'),by_mark[m].get('vik_basis','УЧЕБНЫЕ ДАННЫЕ')) for m in totals]

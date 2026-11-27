@@ -283,6 +283,15 @@ def joint_text(record):
             record['length_mm']+' мм')
 
 
+def control_group_note(record):
+    """Origin and group size, separate from the mark total and geometry method."""
+    source={'MANUAL':'дополнительный контроль','REGISTRY':'контроль по реестру'}.get(record.get('control_source'))
+    count=record.get('control_quantity')
+    if source and type(count) is int and type(record.get('quantity')) is int and 0<count<=record['quantity']:
+        return f' [{source}, {count} шт.]'
+    return ''
+
+
 def ordered_vik_names(vom):
     """Only current visible VOM, exact mark spelling and order."""
     return tuple(dict.fromkeys(str(row[0]).strip() for row in vom.rows))

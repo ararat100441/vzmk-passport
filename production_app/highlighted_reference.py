@@ -26,11 +26,14 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+from .automatic_acts import control_group_note
 from .storage import Stop,sha
 
 VIK_LEFT='НШ, ТШ, СШ соединения '
 VIK_RIGHT=' МП в соответствии'
 UZK_DESIGN_COLS=(0,1,4,5,6)
+UZK_PARTS_PER_ROW=10
+UZK_MAX_MARKS=5000
 SAFE_NUMBER=re.compile(r'^[1-9][0-9]*/20[0-9]{2}$')
 WORD_DATE=re.compile(r'^[0-3][0-9]\.[01][0-9]\.20[0-9]{2}$')
 
@@ -237,10 +240,13 @@ def _replace_uzk_heading(document,number,control_date):
         raise Stop('УЗК: не заменена дата акта.')
 
 
-def _normalize_design(design_rows):
+def _normalize_design(design_rows,*,allow_group_rows=False):
     if not isinstance(design_rows,(list,tuple)) or not design_rows:
         raise Stop('УЗК: нет подтверждённых плановых марок/характеристик.')
+    if len(design_rows)>UZK_PARTS_PER_ROW*UZK_MAX_MARKS:
+        raise Stop('УЗК: превышен допустимый размер таблицы.')
     grouped=OrderedDict()
+    without_groups=set()
     for record in design_rows:
         if not isinstance(record,dict):
             raise Stop('УЗК: некорректная строка расчёта.')
@@ -259,9 +265,10 @@ def _normalize_design(design_rows):
             data.append(text.replace('.',','))
         group=grouped.setdefault(mark,[])
         group.append(tuple(data))
-        if len(group)>10:
+        if not control_group_note(record):without_groups.add(mark)
+        if len(group)>UZK_PARTS_PER_ROW and (not allow_group_rows or mark in without_groups):
             raise Stop('УЗК: слишком много отдельных толщин по марке '+mark)
-    if len(grouped)>5000:
+    if len(grouped)>UZK_MAX_MARKS:
         raise Stop('УЗК: превышен допустимый размер таблицы.')
     return grouped
 
@@ -321,21 +328,29 @@ def _copy_uzk_rows(document,design_rows,control_date):
     properties=template.get_or_add_trPr()
     if properties.find(qn('w:cantSplit')) is None:
         properties.append(OxmlElement('w:cantSplit'))
-    mapped=_normalize_design(design_rows)
+    mapped=_normalize_design(design_rows,allow_group_rows=True)
+    notes={}
+    for record in design_rows:
+        notes.setdefault(str(record['mark']).strip(),[]).append(control_group_note(record))
+    written=0
     for mark,records in mapped.items():
-        table._tbl.append(deepcopy(template))
-        row=table.rows[-1]
-        if len(row.cells)!=9:
-            raise Stop('УЗК: при добавлении марки нарушена структура таблицы.')
-        _unset_old_mark_link(row.cells[0])
-        _set_cell_keep_layout(row.cells[0],mark)
-        _set_cell_keep_layout(row.cells[1],'\n'.join(
-            'L='+length+'х'+thick+' мм' for length,thick,_,_ in records))
-        _set_cell_keep_layout(row.cells[4],control_date)
-        _set_cell_keep_layout(row.cells[5],'\n'.join(f for _,_,f,_ in records))
-        _set_cell_keep_layout(row.cells[6],'\n'.join(a for _,_,_,a in records))
+        for start in range(0,len(records),UZK_PARTS_PER_ROW):
+            end=start+UZK_PARTS_PER_ROW
+            parts=records[start:end]
+            table._tbl.append(deepcopy(template))
+            row=table.rows[-1]
+            if len(row.cells)!=9:
+                raise Stop('УЗК: при добавлении марки нарушена структура таблицы.')
+            _unset_old_mark_link(row.cells[0])
+            _set_cell_keep_layout(row.cells[0],mark)
+            _set_cell_keep_layout(row.cells[1],'\n'.join(
+                'L='+length+'х'+thick+' мм'+note for (length,thick,_,_),note in zip(parts,notes[mark][start:end])))
+            _set_cell_keep_layout(row.cells[4],control_date)
+            _set_cell_keep_layout(row.cells[5],'\n'.join(f for _,_,f,_ in parts))
+            _set_cell_keep_layout(row.cells[6],'\n'.join(a for _,_,_,a in parts))
+            written+=1
     _strip_unused_old_links(document)
-    if len(table.rows)!=body_start+len(mapped):
+    if len(table.rows)!=body_start+written:
         raise Stop('УЗК: после подстановки марок неверное число строк.')
     if not phosphorit:
         _uzk_print_layout(document)

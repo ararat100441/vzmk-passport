@@ -168,7 +168,7 @@ def manual_control_input(raw,mark,control):
 
 
 def current_design_quantity(row,control):
-    auto=0 if control.get('registry_retained') else control.get('registry_added',control['uzk_quantity'])
+    auto=control.get('registry_added',control['uzk_quantity'])
     return auto+int(row.get('uzk_manual_requested',0))
 
 

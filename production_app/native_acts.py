@@ -12,6 +12,7 @@ import re
 import zipfile
 from lxml import etree as ET
 
+from .automatic_acts import control_group_note
 from .storage import Stop
 
 W='{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
@@ -74,7 +75,9 @@ def native_rows(facts,*,draft=False):
         quantities={r['quantity'] for r in parts};profiles={r['profile'] for r in parts}
         if len(quantities)!=1 or len(profiles)!=1:raise Stop('Неоднозначная геометрия УЗК: '+mark)
         quantity=next(iter(quantities));profile=next(iter(profiles))
-        joint=f'{profile}; {quantity} шт.\n'+'\n'.join('L='+r['length_mm'].replace('.',',')+'х'+r['thickness_mm'].replace('.',',')+' мм' for r in parts)
+        joint=f'{profile}; {quantity} шт.\n'+'\n'.join(
+            'L='+r['length_mm'].replace('.',',')+'х'+r['thickness_mm'].replace('.',',')+' мм'+control_group_note(r)
+            for r in parts)
         freq='\n'.join(r['frequency_mhz'].replace('.',',') for r in parts)
         angle='\n'.join(r['angle_deg'] for r in parts)
         if draft:

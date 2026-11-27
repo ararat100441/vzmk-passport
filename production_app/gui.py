@@ -471,8 +471,8 @@ class App:
                 if not saved:
                     # Historical counts and lengths belong to the issued design,
                     # not to the newly added items of a repeating mark.
-                    rows=[{k:v for k,v in row.items() if k!='uzk_manual_requested'
-                           and (not row.get('uzk_manual_quantity') or k not in ('uzk_length_mm','uzk_thickness_mm'))}
+                    rows=[{k:v for k,v in row.items() if k not in (
+                               'uzk_manual_requested','uzk_length_mm','uzk_thickness_mm')}
                           for row in facts['marks']]
                     self.facts={'marks':rows,'akz_drafts':facts.get('akz_drafts',{})}
                 self.add_marks_passport=(self.project.get(),self.number.get())
@@ -1251,6 +1251,8 @@ class App:
                       else 'План УЗК — 0. ГОСТ / НД для расчёта УЗК не требуется.')
             if any(row.get('manual_limit') for row in uzk_plan.values()):
                 text+='\nУЗК, шт: двойной щелчок для дополнительного контроля марок, отсутствующих в общем реестре.'
+            if positive and self.adding_marks():
+                text+='\nПри корректировке L и S в таблице относятся к добавляемому контролю.'
             if errors:text+='\n'+'\n'.join(errors)
             standard_text=text
             standard_status.configure(text=standard_text)

@@ -1,8 +1,9 @@
 """Amendments of a recorded, program-issued shipment."""
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 import re
 
@@ -166,25 +167,61 @@ def control_plan(source,project,delta,facts,original_quantities,final_quantities
     return plan|{m:{**rec,'registry_added':rec['uzk_quantity']} for m,rec in extra.items() if m not in plan},extra,refunds
 
 
+def _remaining_geometry_by_segment(mark,rows,original_count,kept_count):
+    """Partial removal is safe only with equivalent catalogue geometry per item."""
+    geometry={}
+    quantities=Counter()
+    error='УЗК: для марки '+mark+' нельзя подтвердить геометрию оставшихся изделий.'
+    for row in rows:
+        count=row.get('control_quantity',row['quantity'])
+        reference=row['geometry_reference']
+        if type(count) is not int or count<1 or reference.get('source')=='MANUAL':
+            raise Stop(error)
+        if reference.get('sha256'):
+            reference={k:v for k,v in reference.items() if k!='path'}
+        segment=tuple(row['segments'])
+        signature=(Fraction(Decimal(row['length_mm']))/count,row['profile'],row['thickness_mm'],
+                   row['frequency_mhz'],row['angle_deg'],reference)
+        if geometry.setdefault(segment,signature)!=signature:
+            raise Stop(error)
+        quantities[segment]+=count
+    if not quantities or any(count!=original_count for count in quantities.values()):
+        raise Stop(error)
+    return dict.fromkeys(quantities,kept_count)
+
+
 def retained_design(facts,plan):
+    rows=facts.get('uzk_design',[])
+    registry_parts=defaultdict(list)
+    for row in rows:
+        if row.get('control_source','REGISTRY')=='REGISTRY':
+            registry_parts[row['mark']].append(row)
+    remaining_by_mark={}
+    for historical in facts['marks']:
+        mark=historical['mark']
+        original,_=historical_control(historical)
+        kept=plan.get(mark,{}).get('registry_retained',0)
+        if 0<kept<original:
+            remaining_by_mark[mark]=_remaining_geometry_by_segment(mark,registry_parts[mark],original,kept)
+
     retained=[]
-    for row in facts.get('uzk_design',[]):
-        control=plan.get(row['mark'],{})
+    for row in rows:
+        mark=row['mark'];control=plan.get(mark,{})
         origin=row.get('control_source','REGISTRY')
-        old_count=row.get('control_quantity',row['quantity'])
         if origin=='MANUAL':
-            if not control.get('manual_retained'):continue
-            retained.append(row)
+            if control.get('manual_retained'):retained.append(row)
             continue
-        count=control.get('registry_retained',0)
-        if not count:continue
-        count+=control.get('registry_added',0)
-        if count!=old_count:
-            length=row['length_mm']
-            # The existing automatic rule multiplies by count; manual L is used as entered.
-            if row['geometry_reference'].get('source')!='MANUAL':
-                length=format(Decimal(length)*count/int(old_count),'f')
-            row={**row,'length_mm':length}
+        if not control.get('registry_retained'):continue
+        old_count=row.get('control_quantity',row['quantity'])
+        count=old_count
+        remaining=remaining_by_mark.get(mark)
+        if remaining is not None:
+            segment=tuple(row['segments'])
+            count=min(count,remaining[segment])
+            if not count:continue
+            remaining[segment]-=count
+            if count!=old_count:
+                row={**row,'length_mm':format(Decimal(row['length_mm'])*count/old_count,'f')}
         retained.append({**row,'control_source':'REGISTRY','control_quantity':count})
     return retained
 
