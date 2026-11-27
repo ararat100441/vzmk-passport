@@ -21,7 +21,7 @@ from passport_app.appendix import generate_appendix, inspect_template
 from stage8_closure.storage import frozen
 from . import model, office
 from .storage import Stop, safe, local_root, pins, verify_pins, save, sha
-from .shared_uzk import find_shared_uzk, planned_control
+from .shared_uzk import find_shared_uzk, manual_control_input, planned_control
 from .catalog_assignments import current_assignments
 from .automatic_acts import find_approved_geometry, calculate_design_characteristics
 from .highlighted_reference import (
@@ -59,10 +59,15 @@ def collect_marks(vom, planned, assigned, saved):
         elif isinstance(raw,bool) or str(raw).strip() not in ('0','1','2','3'):
             raise Stop('Некорректный № АКЗ: '+mark)
         else:variant=int(raw)
+        extra=previous.get('uzk_manual_requested',0)
+        if type(extra) is not int:
+            raise Stop('Некорректное ручное количество УЗК: '+mark)
+        quantity=control['uzk_quantity']+extra
+        manual_control_input(quantity,mark,control)
         rows.append({'mark':mark,'profile':str(previous.get('profile',source.get('profile')) or '').strip(),
                      'standard':str(previous.get('standard') or ''),
                      'akz':variant,'paint':str(source.get('paint') or ''),
-                     'uzk_quantity':control['uzk_quantity'],
+                     'uzk_quantity':quantity,
                      'uzk_length_mm':previous.get('uzk_length_mm',''),
                      'uzk_thickness_mm':previous.get('uzk_thickness_mm','')})
     return rows
@@ -197,6 +202,8 @@ def prepare_draft(cfg,project,number,vom,facts=None,new=True):
     registry,_,_=model.validate_paths(cfg)
     from .core import training_guard, pending
     training_guard(cfg)
+    from .project_visibility import ensure_open
+    ensure_open(cfg,project)
     if pending(registry):raise Stop('Есть незавершённая запись. Сначала выполните восстановление.')
     reg=model.read_registry(registry);selected=model.select(reg,project)
     if new and number!=selected.next_number:raise Stop('Следующий номер изменился: '+selected.next_number)
@@ -318,7 +325,7 @@ def prepare_draft(cfg,project,number,vom,facts=None,new=True):
               'outputs':outputs,'print_pdf':result['manifest'],'blocked_documents':blocked,'notes':notes,
               'missing_akz_assignments':missing,'marks':rows,'fingerprints':inputs,
               'output_fingerprints':pins([x['path'] for x in outputs]+[result['output']['path']]),
-              'summary':shipment_summary(v,planned)}
+              'summary':shipment_summary(v,{row['mark']:row for row in rows})}
     save(folder/'DRAFT.json',manifest)
     (folder/'ПРОЧИТАТЬ — ЧЕРНОВИК.txt').write_text(BANNER+'\n\n'+'\n'.join(notes)+'\n\nЧерновик нельзя подтвердить или записать в реестр. Результаты контроля заполняются пользователем самостоятельно.\n',encoding='utf-8-sig')
     save(job/'state.json',{'schema':'VZMK_DRAFT_STATE_1','phase':'DRAFT_READY','official_issue':False,'inputs':inputs})

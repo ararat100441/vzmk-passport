@@ -5,6 +5,41 @@ from pathlib import Path
 import re,zipfile
 from .storage import Stop,safe,sha
 
+# DEV copies of 241 Office packages reached 25 members, 3.1 MiB of
+# expanded data and 3.1 MiB in one XML member. The largest PDF was 0.7 MiB.
+# Allow substantially larger protocols while bounding unverified input.
+EVIDENCE_MAX_FILE_BYTES=64*1024**2
+EVIDENCE_MAX_PACKAGE_MEMBERS=1024
+EVIDENCE_MAX_EXPANDED_BYTES=128*1024**2
+EVIDENCE_MAX_XML_BYTES=32*1024**2
+TEST_EVIDENCE=re.compile(r'\b(TEST|TRAINING|SAMPLE_ONLY|ТЕСТ|ЧЕРНОВИК)\b|УЧЕБН|RANDBETWEEN|СЛУЧМЕЖДУ',re.I)
+
+
+def _evidence_chunks(path):
+    suffix=path.suffix.lower()
+    if suffix in ('.docx','.xlsx'):
+        with zipfile.ZipFile(path) as archive:
+            members=archive.infolist()
+            if len(members)>EVIDENCE_MAX_PACKAGE_MEMBERS:
+                raise Stop('Слишком много частей в первичном протоколе: '+str(path))
+            if sum(item.file_size for item in members)>EVIDENCE_MAX_EXPANDED_BYTES:
+                raise Stop('Превышен размер распакованного первичного протокола: '+str(path))
+            xml=[item for item in members if item.filename.endswith('.xml') and not item.is_dir()]
+            if any(item.file_size>EVIDENCE_MAX_XML_BYTES for item in xml):
+                raise Stop('Слишком большая часть XML в первичном протоколе: '+str(path))
+            for item in xml:
+                yield archive.read(item).decode('utf8',errors='replace')
+    elif suffix in ('.txt','.csv'):
+        yield path.read_text(encoding='utf-8-sig')
+    elif suffix=='.pdf':
+        from pypdf import PdfReader
+        with PdfReader(path) as pdf:
+            for page in pdf.pages:
+                yield page.extract_text() or ''
+    else:
+        raise Stop('Протокол нельзя проверить автоматически. Нужен читаемый PDF/DOCX/XLSX/TXT: '+str(path))
+
+
 def numeric(value,label,minimum=None,maximum=None):
     try:v=Decimal(str(value).replace(',','.'))
     except InvalidOperation:raise Stop('Требуется число: '+label)
@@ -148,8 +183,8 @@ def validate(facts,vom,project,number,training=False,require_review=False,*,defe
     for row in vom.rows:expected[str(row[0])]=expected.get(str(row[0]),Decimal(0))+row[2]
     owner_control=bool(preparing or control_confirmation)
     if control_confirmation:
-        from .owner_control import SCHEMA,STATEMENT
-        if (control_confirmation.get('schema')!=SCHEMA or control_confirmation.get('statement')!=STATEMENT or control_confirmation.get('attested') is not True or control_confirmation.get('project')!=project or control_confirmation.get('number')!=number):raise Stop('Нет достоверного текущего подтверждения владельца.')
+        from .owner_control import SCHEMA,statement_for
+        if (control_confirmation.get('schema')!=SCHEMA or control_confirmation.get('statement')!=statement_for(facts) or control_confirmation.get('attested') is not True or control_confirmation.get('project')!=project or control_confirmation.get('number')!=number):raise Stop('Нет достоверного текущего подтверждения владельца.')
     from .automatic_acts import has_manual_geometry
     rows=facts.get('marks',[])
     if len({str(r.get('mark')) for r in rows})!=len(rows) or {str(r.get('mark')) for r in rows}!=set(expected):raise Stop('Марки фактического контроля не совпадают с видимой ВОМ.')
@@ -202,16 +237,18 @@ def validate(facts,vom,project,number,training=False,require_review=False,*,defe
     if not proofs and not owner_control:raise Stop('Приложите первичные протоколы контроля с подтверждёнными результатами.')
     for proof in proofs:
         path=safe(proof['path'])
-        if not path.is_file() or sha(path)!=proof['sha256']:raise Stop('Изменился/отсутствует первичный протокол: '+str(path))
+        if not path.is_file():raise Stop('Изменился/отсутствует первичный протокол: '+str(path))
+        if not training and path.stat().st_size>EVIDENCE_MAX_FILE_BYTES:
+            raise Stop('Превышен допустимый размер первичного протокола: '+str(path))
+        if sha(path)!=proof['sha256']:raise Stop('Изменился/отсутствует первичный протокол: '+str(path))
         if not training:
-            suffix=path.suffix.lower()
-            if suffix in ('.docx','.xlsx'):
-                with zipfile.ZipFile(path) as z:text=' '.join(z.read(n).decode('utf8',errors='replace') for n in z.namelist() if n.endswith('.xml'))
-            elif suffix in ('.txt','.csv'):text=path.read_text(encoding='utf-8-sig')
-            elif suffix=='.pdf':
-                from pypdf import PdfReader
-                text=' '.join(p.extract_text() or '' for p in PdfReader(path).pages)
-            else:raise Stop('Протокол нельзя проверить автоматически. Нужен читаемый PDF/DOCX/XLSX/TXT: '+str(path))
-            if not text.strip():raise Stop('Протокол не содержит читаемого текста: '+str(path))
-            if re.search(r'\b(TEST|TRAINING|SAMPLE_ONLY|ТЕСТ|ЧЕРНОВИК)\b|УЧЕБН|RANDBETWEEN|СЛУЧМЕЖДУ',text,re.I):raise Stop('В первичном протоколе обнаружены TEST/учебные/модельные данные: '+str(path))
+            readable=False
+            try:
+                for text in _evidence_chunks(path):
+                    if TEST_EVIDENCE.search(text):
+                        raise Stop('В первичном протоколе обнаружены TEST/учебные/модельные данные: '+str(path))
+                    readable=readable or bool(text.strip())
+            except zipfile.BadZipFile as exc:
+                raise Stop('Повреждён пакет первичного протокола: '+str(path)) from exc
+            if not readable:raise Stop('Протокол не содержит читаемого текста: '+str(path))
     return sorted(variants)

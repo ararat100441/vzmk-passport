@@ -3,14 +3,17 @@ import tkinter as tk
 from tkinter import messagebox,ttk
 from uuid import uuid4
 from .storage import local_root
-from .shipment_input import HEADERS,normalize,numeric,parse_tsv,write_internal
+from .shipment_input import HEADERS,manual_row,normalize,parse_tsv,write_internal
 from .storage import Stop
+
+def tree_values(row):
+    return tuple('' if value is None else str(value) for value in row)
 
 def replace_rows(grid,rows):
     """Ctrl+V is a complete shipment replacement, independent of selection."""
     for item in grid.get_children():grid.delete(item)
     for row in rows:
-        grid.insert('','end',values=tuple('' if v is None else str(v) for v in row))
+        grid.insert('','end',values=tree_values(row))
 
 def open_shipment(app,*,original_rows=None,original_digest=None,draft_rows=None,draft_indices=None,on_accept=None):
     if app.active:return
@@ -59,7 +62,7 @@ def open_shipment(app,*,original_rows=None,original_digest=None,draft_rows=None,
         try:rows=visible_vom(app.vom.get()).rows
         except Exception:rows=[]
     for pos,row in enumerate(rows or []):
-        item=grid.insert('','end',values=tuple('' if v is None else str(v) for v in row))
+        item=grid.insert('','end',values=tree_values(row))
         if original_rows is not None and indices[pos] is not None:origins[item]=indices[pos]
     update_status()
     def commit_cell():
@@ -74,9 +77,9 @@ def open_shipment(app,*,original_rows=None,original_digest=None,draft_rows=None,
             shipment=parse_tsv(text)
             if original_rows is None:replace_rows(grid,shipment.rows)
             else:
-                for row in shipment.rows:grid.insert('','end',values=tuple('' if v is None else str(v) for v in row))
+                for row in shipment.rows:grid.insert('','end',values=tree_values(row))
             update_status();grid.focus_set()
-        except Exception as exc:app.error(exc)
+        except Exception as exc:app.error(exc,parent=window)
         return 'break'
     def add():
         commit_cell()
@@ -93,13 +96,11 @@ def open_shipment(app,*,original_rows=None,original_digest=None,draft_rows=None,
 
         def insert(event=None):
             try:
-                mark,name,q,m,a=(entry.get() for entry in fields)
-                q,m,a=(numeric(value,HEADERS[col]) for col,value in ((2,q),(3,m),(5,a)))
-                row=normalize([(mark,name,q,m,q*m,a,q*a)]).rows[0]
+                row=manual_row(*(entry.get() for entry in fields))
             except Stop as exc:
-                messagebox.showerror('Проверьте данные марки',str(exc),parent=form)
+                app.error(exc,parent=form)
                 return
-            item=grid.insert('','end',values=tuple(map(str,row)))
+            item=grid.insert('','end',values=tree_values(row))
             grid.selection_set(item);grid.see(item)
             update_status();close()
 
@@ -129,7 +130,7 @@ def open_shipment(app,*,original_rows=None,original_digest=None,draft_rows=None,
                            'indices':[origins.get(item) for item in grid.get_children()]})
             app.vom.set(str(target));app.shipment_rows=shipment.rows
             app.vom_summary.set(shipment.summary());app.write('Отгрузочная ВОМ: '+shipment.summary());window.destroy()
-        except Exception as exc:app.error(exc)
+        except Exception as exc:app.error(exc,parent=window)
     ttk.Button(controls,text='Добавить марку',command=add).pack(side='left',padx=6)
     ttk.Button(controls,text='Удалить марку',command=remove).pack(side='left',padx=6)
     ttk.Button(controls,text='Отмена',command=window.destroy).pack(side='right')

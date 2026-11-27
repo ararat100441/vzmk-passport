@@ -134,6 +134,31 @@ class Safety(unittest.TestCase):
         for key in ('confirmed','authorized','forms_approved','responsible'):
             bad=copy.deepcopy(f);bad[key]=False
             with self.subTest(key=key),self.assertRaises(Stop):facts.validate(bad,v,'P','1/1/2026')
+    def test_external_ooxml_bounds_checked_before_member_read(self):
+        from zipfile import ZipFile
+        payload,vom=self.valid_facts()
+        path=self.root/'protocol.xlsx'
+        workbook_xml='<inspection>approved</inspection>'
+        with ZipFile(path,'w') as archive:
+            archive.writestr('xl/workbook.xml',workbook_xml)
+            archive.writestr('xl/values.xml','<values>passed</values>')
+        payload['evidence']=[{'path':str(path),'sha256':sha(path)}]
+        self.assertEqual(facts.validate(payload,vom,'P','1/1/2026'),[])
+        limits=(('EVIDENCE_MAX_PACKAGE_MEMBERS',1,'частей'),
+                ('EVIDENCE_MAX_EXPANDED_BYTES',50,'распакованного'),
+                ('EVIDENCE_MAX_XML_BYTES',len(workbook_xml)-1,'часть XML'))
+        for name,limit,reason in limits:
+            with self.subTest(name=name), patch.object(facts,name,limit,create=True), \
+                 patch.object(ZipFile,'read',side_effect=AssertionError('archive member read')):
+                with self.assertRaisesRegex(Stop,reason):facts.validate(payload,vom,'P','1/1/2026')
+    def test_external_pdf_size_checked_before_parse(self):
+        payload,vom=self.valid_facts()
+        path=self.root/'protocol.pdf';path.write_bytes(b'%PDF-1.7\n')
+        payload['evidence']=[{'path':str(path),'sha256':sha(path)}]
+        with patch.object(facts,'EVIDENCE_MAX_FILE_BYTES',8,create=True), \
+             patch('pypdf.PdfReader',side_effect=AssertionError('PDF opened')):
+            with self.assertRaisesRegex(Stop,'размер первичного протокола'):
+                facts.validate(payload,vom,'P','1/1/2026')
     def test_actual_vik_and_uzk_protocol_required(self):
         f,v=self.valid_facts()
         for key in ('vik_result','vik_basis','basis'):

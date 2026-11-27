@@ -129,8 +129,9 @@ class PreviewMargin(unittest.TestCase):
     def test_mark_clears_unshifted_first_line_without_moving_it(self):
         data=BytesIO();c=canvas.Canvas(data,pagesize=(595,842))
         c.setFont('Helvetica',10);c.drawString(45,822,'FIRST CONTINUATION LINE');c.save();data.seek(0)
-        page=PdfReader(data).pages[0];_preview_overlay(page);positions=[]
-        writer=PdfWriter();writer.add_page(page);saved=BytesIO();writer.write(saved);saved.seek(0)
+        writer=PdfWriter();page=writer.add_page(PdfReader(data).pages[0])
+        _preview_overlay(page);positions=[]
+        saved=BytesIO();writer.write(saved);saved.seek(0)
         page=PdfReader(saved).pages[0]
         page.extract_text(visitor_text=lambda text,cm,tm,font,size:positions.append((text.strip(),tm[5],size)))
         body=next(p for p in positions if p[0]=='FIRST CONTINUATION LINE')

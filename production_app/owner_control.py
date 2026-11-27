@@ -14,6 +14,11 @@ STATEMENT=('Подтверждаю, что текущий ВИК выполне�
            'измерения применяемых АКЗ относятся к текущей отгрузке и достоверны. '
            'Исторические заключения и графические подписи образца не являются новым контролем.')
 
+def statement_for(facts):
+    if any(row.get('uzk_manual_quantity', 0) for row in facts.get('marks', ())):
+        return STATEMENT.replace('плановый УЗК', 'весь УЗК по комплекту, включая дополнительный ручной УЗК,')
+    return STATEMENT
+
 def engineering_facts(saved,profile):
     from .automatic_acts import has_manual_geometry
     from .working_facts import form_material
@@ -35,7 +40,7 @@ def engineering_facts(saved,profile):
 def declaration(plan,verified_sha):
     return {'schema':SCHEMA,'project':plan['project'],'number':plan['number'],
             'plan_seal':plan['seal'],'verified_sha256':verified_sha,
-            'statement':STATEMENT,'attested':True}
+            'statement':statement_for(plan.get('facts', {})),'attested':True}
 
 def require_declaration(plan,confirmation):
     owner=confirmation.get('current_control')

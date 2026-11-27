@@ -7,12 +7,15 @@ def synchronize(saved,project,number,training,plan,assignments):
     visible=[]
     for mark,control in plan.items():
         previous=old.get(mark,{});assigned=assignments.get(mark,{})
+        extra=previous.get('uzk_manual_requested',0) if control.get('manual_limit') else 0
+        if type(extra) is not int or not 0<=extra<=control.get('manual_limit',0):
+            extra=0
         visible.append({**previous,'mark':mark,
             'profile':previous.get('profile') or assigned.get('profile',''),
             'akz':previous.get('akz') if previous.get('akz') not in (None,'') else assigned.get('akz',''),
             'paint':previous.get('paint') or assigned.get('paint',''),
             'standard':previous.get('standard',''),
-            'uzk_quantity':control['uzk_quantity']})
+            'uzk_quantity':control['uzk_quantity']+extra,'uzk_manual_requested':extra})
     draft=save_screen_draft(saved,project,number,training,visible,
         {r['mark']:{'paint':r.get('paint','')} for r in visible},
         deepcopy((saved or {}).get('akz_drafts',{})))

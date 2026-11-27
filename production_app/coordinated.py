@@ -8,9 +8,10 @@ spend quantities twice. Unknown/external changes prohibit every rollback.
 from contextlib import ExitStack
 from pathlib import Path
 from uuid import uuid4
-import hashlib,os,shutil
-from .storage import Stop,safe,sha,save,read,verify_pins,mutex,post_commit_path
-from .service_archive import archive_completed,replacement_paths
+import hashlib,json,os,shutil
+from .storage import Stop,safe,sha,save,verify_pins,mutex,post_commit_path
+from .service_archive import (archive_completed, operation_evidence_writes, replacement_paths,
+                              require_disk_space, retain_operation_evidence)
 from passport_app.excel import locked_file,atomic_replace
 from stage8_closure.storage import frozen
 
@@ -20,7 +21,7 @@ def accounting_plan(cfg,project,number,vom,facts,profile,registry_entries,*,orig
     if not cfg.get('use_shared_uzk'):
         if cfg.get('auto_first_passport'):raise Stop('Для официального выпуска подключите общий УЗК.xlsm; учёт остатков нельзя пропустить.')
         return None # Compatibility for the older, explicitly configured engine.
-    from .shared_uzk import find_shared_uzk,read_shared_uzk,_key
+    from .shared_uzk import find_shared_uzk,preflight_accounting
     from .catalog_ledger import validate_stock,shipment_quantities
     for climate in facts.get('climates',[]):
         if not climate.get('layers'):
@@ -39,10 +40,7 @@ def accounting_plan(cfg,project,number,vom,facts,profile,registry_entries,*,orig
                            final_quantities=final_quantities)
     if controls is None:controls={str(row['mark']):int(row['uzk_quantity']) for row in facts['marks']}
     refunds=refunds or {}
-    index=read_shared_uzk(uzk,project=project,marks=controls.keys()|refunds.keys())
-    for mark,count in {**controls,**refunds}.items():
-        if count and len(index.get((_key(project),_key(mark)),{}).get('rows',[]))>1:
-            raise Stop('Общий УЗК: дубли строк марки '+mark+'; запись запрещена.')
+    preflight_accounting(uzk,project,controls,refunds,refund_rows or {})
     return {'final_quantities':final_quantities,'refunds':refunds,'refund_rows':refund_rows or {},'catalog':str(paths[0]),'uzk':str(paths[1]),'quantities':quantities,'controls':controls,'history_sources':[h['source'] for h in history['history'] if h.get('source')],
             'stock_warnings':history.get('stock_warnings',[]),
             'history_fingerprints':{h['source']:h['sha256'] for h in history['history'] if h.get('source')},
@@ -86,11 +84,15 @@ def prepare_candidates(d):
              **({'history_binding_updates':ledger_result['history_binding_updates'],'stock_warnings':ledger_result.get('stock_warnings',[])} if role=='catalog' else {})} for role,candidate in [('catalog',ledger),('uzk',uzk)]]
 
 
-def _lock_all(stack,participants,writable,*,post_commit=False):
+def _lock_all(stack,participants,writable,*,post_commit=False,allow_missing=False):
     payloads={}
     for item in sorted(participants,key=lambda x:x['path'].casefold()):
-        stack.enter_context(mutex(item['path'],post_commit=post_commit))
-        payloads[item['path']]=stack.enter_context(locked_file(item['path'],writable=writable))
+        path=item['path']
+        stack.enter_context(mutex(path,post_commit=post_commit))
+        if allow_missing and not Path(path).exists():
+            payloads[path]=None
+        else:
+            payloads[path]=stack.enter_context(locked_file(path,writable=writable))
     return payloads
 
 
@@ -101,9 +103,11 @@ def _write_bytes(path,payload):
 def commit(d,prepared,released,confirmation,approved_facts):
     from .core import pending,journal_write,verify_registry
     from .model import visible_vom
+    from .project_visibility import ensure_open
     from datetime import date
     registry=safe(d['registry']);target=safe(d['target']);stage=registry.parent/'.vzmk-operations'/d['id'];journal=stage/'journal.json'
-    participants=[{'role':'registry','path':str(registry),'candidate':prepared['registry'],'original_sha256':d['fingerprints'][str(registry)],'candidate_sha256':prepared['snapshot_sha256']},*prepared['accounting']]
+    participants=[{'role':'registry','path':str(registry),'candidate':prepared['registry'],'original_sha256':d['fingerprints'][str(registry)],'candidate_sha256':prepared['snapshot_sha256']},
+                  *(dict(item) for item in prepared['accounting'])]
     if len(participants)!=3:raise Stop('Нет трёх проверенных кандидатов учёта.')
     for item in participants:
         expected=d['fingerprints'].get(item['path'])
@@ -118,6 +122,7 @@ def commit(d,prepared,released,confirmation,approved_facts):
         raise Stop('Архив корректировки и исходный комплект должны находиться на одном диске.')
     with ExitStack() as stack:
         payloads=_lock_all(stack,participants,True)
+        ensure_open(d['cfg'],d['project'])
         unchanged={p:h for p,h in d['fingerprints'].items() if p not in paths|doc_paths}
         stack.enter_context(frozen(unchanged))
         verify_pins(unchanged)
@@ -129,14 +134,29 @@ def commit(d,prepared,released,confirmation,approved_facts):
         old_payloads={name:source_locks.enter_context(locked_file(target/name)) for name in original_docs}
         if any(hashlib.sha256(value).hexdigest()!=original_docs[name] for name,value in old_payloads.items()):
             raise Stop('Исходный комплект изменился при блокировке.')
+        extras=set()
+        if amendment:
+            prior=json.loads(old_payloads['ISSUE.json'])
+            extras=set(original_docs)-set(prior['files'])-{'ISSUE.json'}
+            if extras.intersection(Path(output['path']).name for output in released['outputs']):
+                raise Stop('Дополнительный файл совпадает по имени с выпускаемым документом.')
         for item in participants:
             if hashlib.sha256(payloads[item['path']]).hexdigest()!=item['original_sha256']:raise Stop('Другой пользователь изменил '+item['path'])
         if pending(registry):raise Stop('Есть незавершённая операция; требуется восстановление.')
         if not amendment and target.exists():raise Stop('Комплект уже существует; повторная запись запрещена.')
+        run=Path(d['run'])
+        private=target.parent/('.pending-'+d['id'])
+        writes=list(operation_evidence_writes(stage,run))
+        writes.extend((item['backup'],len(payloads[item['path']])) for item in participants)
+        writes.extend((item['path'],Path(item['candidate']).stat().st_size) for item in participants)
+        writes.extend((private/Path(output['path']).name,Path(output['path']).stat().st_size) for output in released['outputs'])
+        writes.extend((private/name,len(old_payloads[name])) for name in extras)
+        require_disk_space(writes)
         stage.mkdir(parents=True,exist_ok=False)
-        state={'id':d['id'],'phase':'STARTED','registry':str(registry),'target':str(target),'plan':str(Path(d['run'])/'plan.json'),
+        evidence=retain_operation_evidence(stage,run,d,prepared=prepared,confirmation=confirmation,released=released)
+        state={'id':d['id'],'phase':'STARTED','registry':str(registry),'target':str(target),'plan':str(run/'plan.json'),
                'backup':participants[0]['backup'],'original_sha256':participants[0]['original_sha256'],'candidate_sha256':participants[0]['candidate_sha256'],
-               'new':True,'participants':participants,
+               'new':True,'participants':participants,'evidence':evidence,
                'current_control':confirmation.get('current_control')}
         state.update(project=d['project'], number=d['number'])
         if amendment:state['original_documents']=original_docs
@@ -150,19 +170,16 @@ def commit(d,prepared,released,confirmation,approved_facts):
                 if sha(local)!=item['candidate_sha256']:raise Stop('Повреждён кандидат '+item['role'])
                 item['local_candidate']=str(local)
             state['phase']='BACKUP_VERIFIED';journal_write(journal,state)
-            private=target.parent/('.pending-'+d['id']);private.mkdir(parents=True,exist_ok=False)
+            private.mkdir(parents=True,exist_ok=False)
             state['pending']=str(private);state['output_hashes']={}
             for output in released['outputs']:
                 dest=private/Path(output['path']).name;shutil.copyfile(output['path'],dest)
-                if sha(dest)!=released['fingerprints'][output['path']]:raise Stop('Изменён выпускаемый документ.')
-                state['output_hashes'][dest.name]=sha(dest)
-            save(private/'ISSUE.json',{'project':d['project'],'number':d['number'],'training':bool(d['cfg'].get('training')),'facts':approved_facts,
+                current=sha(dest)
+                if current!=released['fingerprints'][output['path']]:raise Stop('Изменён выпускаемый документ.')
+                state['output_hashes'][dest.name]=current
+            save(private/'ISSUE.json',{'operation_id':d['id'],'project':d['project'],'number':d['number'],'training':bool(d['cfg'].get('training')),'facts':approved_facts,
                                      'approved_at':confirmation['created_at'],'files':state['output_hashes'],'source_registry_sha256':state['original_sha256']})
-            if amendment:
-                prior=__import__('json').loads(old_payloads['ISSUE.json'])
-                extras=set(original_docs)-set(prior['files'])-{'ISSUE.json'}
-                if extras & state['output_hashes'].keys():
-                    raise Stop('Дополнительный файл совпадает по имени с выпускаемым документом.')
+            if extras:
                 state['extra_hashes']={name:original_docs[name] for name in extras}
                 for name in extras:_write_bytes(private/name,old_payloads[name])
             state['issue_sha256']=sha(private/'ISSUE.json');state['phase']='PUBLISH_INTENT';journal_write(journal,state)
@@ -178,6 +195,10 @@ def commit(d,prepared,released,confirmation,approved_facts):
             for item, displaced in zip(participants, replacement_paths(participants, d['id'])):
                 state['phase']='REPLACE_INTENT_'+item['role'].upper();journal_write(journal,state)
                 atomic_replace(item['local_candidate'],item['path'],backup=displaced)
+                # The first handle protects the displaced inode. Guard the title now in use, too.
+                current=stack.enter_context(locked_file(post_commit_path(item['path']),writable=True))
+                if hashlib.sha256(current).hexdigest()!=item['candidate_sha256']:
+                    raise Stop('Не совпал SHA записанного файла '+item['path'])
                 state['phase']='REPLACED_'+item['role'].upper();journal_write(journal,state)
             state['phase']='NEEDS_READBACK';journal_write(journal,state)
         except BaseException as exc:
@@ -195,12 +216,12 @@ def verify_current(state):
     return True
 
 
-def native_readback(state):
+def native_readback(state,data):
     from passport_app.excel import excel_session
     from .catalog_ledger import metadata,quantity
     from .shared_uzk import read_shared_uzk,_key
     from openpyxl import load_workbook
-    data=read(state['plan']);a=data['accounting']
+    a=data['accounting']
     catalog=next(i['path'] for i in state['participants'] if i['role']=='catalog')
     book=load_workbook(catalog,data_only=False)
     try:
@@ -282,18 +303,35 @@ def recover(journal,state):
     stage=Path(journal).parent;registry=safe(state['registry'])
     if stage.parent!=registry.parent/'.vzmk-operations' or stage.name!=state['id']:raise Stop('Журнал вне папки операций.')
     participants=state['participants']
-    if len(participants)!=3 or len({i['path'] for i in participants})!=3 or participants[0]['path']!=str(registry):raise Stop('Повреждены участники транзакции.')
+    if (len(participants)!=3 or {i['role'] for i in participants}!={'registry','catalog','uzk'}
+            or len({i['path'] for i in participants})!=3 or participants[0]['path']!=str(registry)
+            or participants[0]['role']!='registry'):
+        raise Stop('Повреждены участники транзакции.')
+    displaced=replacement_paths(participants,state['id'])
     with ExitStack() as stack:
-        payloads=_lock_all(stack,participants,True)
+        payloads=_lock_all(stack,participants,True,allow_missing=True)
         require_current_journal(journal, state)
         changed=[]
         # Validate EVERY participant and EVERY document BEFORE restoring any.
-        for item in participants:
-            current=hashlib.sha256(payloads[item['path']]).hexdigest()
-            if current not in (item['original_sha256'],item['candidate_sha256']):raise Stop('Внешнее изменение '+item['path']+'; автоматический откат всех файлов запрещён.')
+        for item, previous_path in zip(participants,displaced):
+            path=Path(item['path']);payload=payloads[item['path']]
+            current=hashlib.sha256(payload).hexdigest() if payload is not None else None
+            if current is None:
+                # ReplaceFileW can move the original before failing to install the new file.
+                local=path.with_name('.vzmk-candidate-'+state['id']+'-'+item['role']+path.suffix)
+                original=safe(previous_path)
+                if (os.name!='nt' or state['phase']!='REPLACE_INTENT_'+item['role'].upper()
+                        or item.get('local_candidate')!=str(local)
+                        or not original.is_file() or sha(original)!=item['original_sha256']
+                        or not safe(local).is_file() or sha(local)!=item['candidate_sha256']):
+                    raise Stop('Рабочая книга отсутствует, частичная замена не подтверждена: '+str(path))
+            elif current not in (item['original_sha256'],item['candidate_sha256']):
+                raise Stop('Внешнее изменение '+str(path)+'; автоматический откат всех файлов запрещён.')
             if current!=item['original_sha256']:
                 backup=safe(item['backup'])
-                if backup.parent!=stage or not backup.is_file() or sha(backup)!=item['original_sha256']:raise Stop('Резервная копия повреждена '+item['role'])
+                if (backup!=stage/('backup-'+item['role']+path.suffix) or not backup.is_file()
+                        or sha(backup)!=item['original_sha256']):
+                    raise Stop('Резервная копия повреждена '+item['role'])
                 changed.append(item)
         target=safe(state['target'])
         archived=stage/'original_documents'
@@ -302,13 +340,17 @@ def recover(journal,state):
             from .amendment import document_hashes
             if document_hashes(archived if archived.exists() else target)!=original_docs:
                 raise Stop('Исходный комплект изменён после сбоя; откат запрещён.')
+        require_disk_space((item['path'],Path(item['backup']).stat().st_size) for item in changed)
         published=target.exists() and (not original_docs or archived.exists())
         unpublish_for_recovery(stage, state, target, published)
         for item in reversed(changed):
             path=Path(item['path']);restore=path.with_name('.vzmk-restore-'+uuid4().hex+path.suffix)
             _write_bytes(restore,Path(item['backup']).read_bytes())
-            backup=recovery_archive(stage, path, 'pre-restore-'+uuid4().hex+path.suffix)
-            atomic_replace(restore,path,backup=backup)
+            if payloads[item['path']] is None:
+                restore.rename(path)  # Windows fails if another process created the missing name.
+            else:
+                backup=recovery_archive(stage, path, 'pre-restore-'+uuid4().hex+path.suffix)
+                atomic_replace(restore,path,backup=backup)
             restored=stack.enter_context(locked_file(path, writable=True))
             if hashlib.sha256(restored).hexdigest()!=item['original_sha256']:
                 raise Stop('Не подтверждено восстановление '+str(path))

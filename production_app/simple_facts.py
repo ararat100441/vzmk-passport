@@ -45,6 +45,8 @@ def save_screen_draft(previous, project, number, training, visible_marks,
         for field in ('uzk_length_mm','uzk_thickness_mm'):
             if field in item:
                 row[field]=str(item[field] or '').strip()
+        if 'uzk_manual_requested' in item:
+            row['uzk_manual_requested']=item['uzk_manual_requested']
         rows.append(row)
     draft={
         **previous,

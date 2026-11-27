@@ -41,6 +41,8 @@ def main():
         from stage9_app.supervisor import supervise
         return supervise(sys.argv[1:],entrypoint=Path(__file__))
     from stage9_app.ownership import owned_office
+    from production_app.progress import bind
+    bind(args.request)
     result=None
     try:
         with owned_office(Path(args.office_worker),supervised=True):

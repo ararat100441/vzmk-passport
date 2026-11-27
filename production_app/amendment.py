@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+import re
 
 from . import model
 from .history_binding import appendix_accounting
@@ -55,9 +56,20 @@ def original_shipment(cfg,project,number,profile=None,registry=None):
     marks={str(r['mark']):r for r in rows}
     if len(marks)!=len(rows) or set(marks)!=set(actual['quantities']):
         raise Stop('Первоначальный учёт УЗК не соответствует приложению №1.')
+    if any('uzk_manual_quantity' in row or 'uzk_registry_quantity' in row for row in rows):
+        from .core import journal_read
+        operation=issue.get('operation_id','')
+        if not isinstance(operation,str) or not re.fullmatch('[a-f0-9]{32}',operation):
+            raise Stop('УЗК: нет номера журнала для подтверждения происхождения контроля.')
+        journal=safe(Path(cfg['registry']).parent/'.vzmk-operations'/operation/'journal.json')
+        if not journal.is_file():raise Stop('УЗК: отсутствует журнал происхождения контроля '+operation+'.')
+        state=journal_read(journal)
+        if (state['phase'],state.get('target'),state.get('issue_sha256'))!=('COMPLETE',str(target),hashes['ISSUE.json']):
+            raise Stop('УЗК: происхождение контроля не совпадает с завершённым журналом '+operation+'.')
     for name,row in marks.items():
         try:
-            total=int(row['uzk_quantity'])
+            auto,manual=historical_control(row)
+            total=auto+manual
         except (KeyError,ValueError,TypeError) as exc:
             raise Stop('Не подтверждено исходное количество УЗК '+name) from exc
         if not 0<=total<=actual['quantities'][name]:
@@ -98,51 +110,82 @@ def added_rows(original,combined,origins=None):
     return replace(combined,rows=tuple(added))
 
 
-def control_plan(source,project,delta,facts,original_quantities,final_quantities):
+def historical_control(row):
+    from .shared_uzk import _qty
+
+    raw=row['uzk_quantity']
+    if raw is None or not str(raw).strip():
+        raise Stop('УЗК: отсутствует количество в истории марки '+row['mark'])
+    total=_qty(raw,row['mark'],allow_zero=True)
+    if 'uzk_manual_quantity' not in row and 'uzk_registry_quantity' not in row:
+        # Older protected releases only scheduled control from the shared book.
+        return total,0
+    auto,manual=row.get('uzk_registry_quantity'),row.get('uzk_manual_quantity')
+    if type(auto) is not int or type(manual) is not int or min(auto,manual)<0 or auto+manual!=total:
+        raise Stop('УЗК: происхождение ранее учтённого контроля не подтверждено: '+row['mark'])
+    return auto,manual
+
+
+def control_plan(source,project,delta,facts,original_quantities,final_quantities,*,allow_manual=False):
     extra=planned_control(source,project,delta) if delta.rows else {}
     additions=shipment_quantities(delta)
     refunds={}
     plan={}
     for row in facts['marks']:
         mark=str(row['mark'])
-        inspected=int(row['uzk_quantity'])
+        registry_count,manual_count=historical_control(row)
+        inspected=registry_count+manual_count
         before=original_quantities[mark]
         retained=final_quantities.get(mark,0)-additions.get(mark,0)
         if retained==before or not inspected:
             refund=0
         elif retained==0:
-            refund=inspected
-        elif inspected==before:
+            refund=registry_count
+            manual_count=0
+        elif inspected==before and not manual_count:
             refund=before-retained
         else:
-            raise Stop(f'УЗК: марка {mark}, списано {inspected} из {before} шт. '
-                       'Для выбранной строки нельзя подтвердить количество к возврату.')
+            raise Stop(f'УЗК: марка {mark}, из {before} шт. проверено по реестру {registry_count}, '
+                       f'вручную {manual_count}. Для выбранной части нельзя подтвердить '
+                       'происхождение контроля и длину оставшихся изделий.')
         if refund:refunds[mark]=refund
-        historical=inspected-refund
+        historical_auto=registry_count-refund
+        historical=historical_auto+manual_count
         added=extra.get(mark,{}).get('uzk_quantity',0)
-        if refund and added < additions.get(mark, 0):
+        limit=extra.get(mark,{}).get('manual_limit',0) if allow_manual else 0
+        replacement_min=additions.get(mark,0) if refund else 0
+        if added+limit<replacement_min:
             raise Stop(f'УЗК: удаляемые и добавляемые строки марки {mark} меняют объём '
                        'контроля. Требуется подтвердить УЗК заменяемых изделий '
                        'до корректировки паспорта.')
         if mark in final_quantities:
-            plan[mark]={'uzk_quantity':historical+added,
+            plan[mark]={'uzk_quantity':historical+added,'registry_retained':historical_auto,
+                        'manual_retained':manual_count,'registry_added':added,'manual_limit':limit,
+                        'replacement_min':replacement_min,
                         'amendment_original':bool(historical) or not added}
-    return plan|{m:rec for m,rec in extra.items() if m not in plan},extra,refunds
+    return plan|{m:{**rec,'registry_added':rec['uzk_quantity']} for m,rec in extra.items() if m not in plan},extra,refunds
 
 
 def retained_design(facts,plan):
     retained=[]
     for row in facts.get('uzk_design',[]):
         control=plan.get(row['mark'],{})
-        count=control.get('uzk_quantity',0)
-        if not count or not control.get('amendment_original'):continue
-        if count!=row['quantity']:
+        origin=row.get('control_source','REGISTRY')
+        old_count=row.get('control_quantity',row['quantity'])
+        if origin=='MANUAL':
+            if not control.get('manual_retained'):continue
+            retained.append(row)
+            continue
+        count=control.get('registry_retained',0)
+        if not count:continue
+        count+=control.get('registry_added',0)
+        if count!=old_count:
             length=row['length_mm']
             # The existing automatic rule multiplies by count; manual L is used as entered.
             if row['geometry_reference'].get('source')!='MANUAL':
-                length=format(Decimal(length)*count/int(row['quantity']),'f')
-            row={**row,'quantity':count,'length_mm':length}
-        retained.append(row)
+                length=format(Decimal(length)*count/int(old_count),'f')
+            row={**row,'length_mm':length}
+        retained.append({**row,'control_source':'REGISTRY','control_quantity':count})
     return retained
 
 
@@ -184,7 +227,8 @@ def refund_sources(registry,target,source,project,issue_sha,refunds):
                 raise Stop('УЗК: архив относится к другому объекту.')
             pins[str(previous)]=before
         item=participants[0]
-        plan_path=safe(state['plan'])
+        from .service_archive import operation_evidence
+        plan_path=operation_evidence(journal,state,names=('plan.json',))['plan.json']
         if not plan_path.is_file():
             raise Stop('УЗК: отсутствует исходный план списания для '+', '.join(remaining)+'.')
         plan_sha=sha(plan_path)

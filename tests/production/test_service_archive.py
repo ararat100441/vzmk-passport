@@ -12,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table
 from passport_app.registry import REQUIRED
 from production_app import catalog_ledger, coordinated, core, model, service_archive as archive
-from production_app.storage import read, save, sha, Stop
+from production_app.storage import digest, read, save, sha, Stop
 
 
 @unittest.skipUnless(sys.platform == 'win32', 'Windows rename and locking')
@@ -238,6 +238,14 @@ class CatalogAndCrashTests(unittest.TestCase):
                     'accounting': [participants['catalog'], participants['uzk']]},
                    {'outputs': [{'path': str(output)}], 'fingerprints': {str(output): sha(output)}},
                    {'created_at': 'test'}, {}]
+        data, prepared, released, confirmation, _ = request
+        data['seal'] = digest(data)
+        save(run/'verified.json', {'plan_seal': data['seal']})
+        prepared['plan_seal'] = released['plan_seal'] = confirmation['plan_seal'] = data['seal']
+        confirmation['verified_sha256'] = sha(run/'verified.json')
+        for name, value in (('plan', data), ('prepared', prepared), ('release', released),
+                            ('confirmation', confirmation)):
+            save(run/(name+'.json'), value)
         proof = run/'request.json'
         save(proof, request)
         child = '''

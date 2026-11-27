@@ -139,10 +139,10 @@ class PreviewPDF(unittest.TestCase):
         raw=BytesIO();c=canvas.Canvas(raw,pagesize=(700,900))
         c.drawString(100,100,'KEEP CONTENT');c.save();raw.seek(0)
         for angle in (0,90,180,270):
-            raw.seek(0);p=PdfReader(raw).pages[0]
+            raw.seek(0);w=PdfWriter();p=w.add_page(PdfReader(raw).pages[0])
             p.cropbox=RectangleObject((20,30,680,870));p.rotate(angle)
             _preview_overlay(p)
-            w=PdfWriter();w.add_page(p);out=BytesIO();w.write(out);out.seek(0)
+            out=BytesIO();w.write(out);out.seek(0)
             text=PdfReader(out).pages[0].extract_text()
             self.assertIn('KEEP CONTENT',text)
             self.assertEqual(text.count(PREVIEW_MARK),1)

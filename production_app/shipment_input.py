@@ -8,6 +8,8 @@ from .storage import Stop
 
 HEADERS=('Отправочная марка','Наименование марки','Количество, шт.','Масса 1 шт., кг','Масса всего, кг','Площадь 1 шт., м²','Площадь всего, м²')
 MARKER='VZMK_CLIPBOARD_VOM_1'
+EXCEL_MAX=Decimal('9.99999999999999E+307')
+EXCEL_MIN=Decimal('2.2250738585072E-308')
 
 def numeric(value,label,*,blank=False):
     text=str('' if value is None else value).strip().replace('\u00a0','').replace(' ','').replace(',','.')
@@ -15,6 +17,8 @@ def numeric(value,label,*,blank=False):
     try:n=Decimal(text)
     except InvalidOperation as exc:raise Stop(label+': требуется число.') from exc
     if not n.is_finite() or n<0:raise Stop(label+': требуется неотрицательное число.')
+    if n and not EXCEL_MIN<=n<=EXCEL_MAX:
+        raise Stop(label+': число вне диапазона, поддерживаемого Excel.')
     return n
 
 @dataclass(frozen=True)
@@ -41,14 +45,24 @@ def normalize(rows):
             raise Stop(f'Строка {no}: нужны марка и наименование без формул.')
         q,mu,mt=(numeric(raw[i],f'Строка {no}, {HEADERS[i]}') for i in (2,3,4))
         if q<=0 or q!=q.to_integral_value():raise Stop(f'Строка {no}: количество должно быть положительным целым.')
+        if Decimal(format(q,'.15g'))!=q:raise Stop(f'Строка {no}: Excel не может сохранить количество без округления.')
         if abs(q*mu-mt)>Decimal('.011'):raise Stop(f'Строка {no}: масса всего не равна количеству × массе 1 шт. Проверьте исходные данные.')
         au,at=(numeric(raw[i],f'Строка {no}, площадь',blank=True) for i in (5,6))
         if au is None and at is not None:au=at/q
         elif at is None and au is not None:at=q*au
         elif at is not None and abs(q*au-at)>Decimal('.011'):raise Stop(f'Строка {no}: площадь всего не соответствует количеству × площади 1 шт.')
+        for value in (au,at):
+            if value is not None:numeric(value,f'Строка {no}, площадь')
         result.append((mark,name,q,mu,mt,au,at))
     if not result:raise Stop('ВОМ пуста: вставьте строки из Excel.')
     return Shipment(tuple(result))
+
+
+def manual_row(mark,name,quantity,mass,area):
+    q=numeric(quantity,HEADERS[2])
+    m=numeric(mass,HEADERS[3])
+    a=numeric(area,HEADERS[5],blank=True)
+    return normalize([(mark,name,q,m,q*m,a,None if a is None else q*a)]).rows[0]
 
 def parse_tsv(text):
     if not isinstance(text,str) or len(text)>5_000_000:raise Stop('Некорректный буфер ВОМ.')

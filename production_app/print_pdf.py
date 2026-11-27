@@ -250,11 +250,12 @@ def _preview_overlay(page):
     # Keep the label above that text rather than occupying its first line.
     c.drawCentredString(width/2,height-8,PREVIEW_MARK)
     c.save();stream.seek(0)
-    overlay=PdfReader(stream).pages[0]
-    overlay.add_transformation((1,0,0,1,float(box.left),float(box.bottom)))
-    overlay.mediabox=page.mediabox
-    overlay.cropbox=page.cropbox
-    page.merge_page(overlay)
+    with PdfReader(stream) as reader, PdfWriter() as overlay_writer:
+        overlay=overlay_writer.add_page(reader.pages[0])
+        overlay.add_transformation((1,0,0,1,float(box.left),float(box.bottom)))
+        overlay.mediabox=page.mediabox
+        overlay.cropbox=page.cropbox
+        page.merge_page(overlay)
 
 
 def create_print_pdf(outputs, release_folder, package_folder_name, *, partial_draft=False, preview=False, uzk_required=True):

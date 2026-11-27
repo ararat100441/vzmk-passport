@@ -1,9 +1,98 @@
-"""Non-destructive archival of redundant Excel replacement copies on Windows."""
+"""Preserve operation evidence and redundant Excel replacement copies."""
+import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 
-from .storage import Stop, mutex, read, safe, sha
+from .storage import Stop, mutex, post_commit_path, read, safe, sha
+
+
+EVIDENCE_FILES = ('plan.json', 'prepared.json', 'verified.json', 'confirmation.json', 'release.json')
+
+
+def operation_evidence_writes(stage, run):
+    for name in EVIDENCE_FILES:
+        source = safe(Path(run) / name)
+        yield Path(stage) / 'evidence' / name, source.stat().st_size
+
+
+def require_disk_space(writes):
+    """Count required bytes together when several destinations share one volume."""
+    volumes = {}
+    for destination, size in writes:
+        folder = safe(destination).parent
+        while not folder.is_dir() and folder != folder.parent:
+            folder = folder.parent
+        try:
+            device = folder.stat().st_dev
+        except OSError as exc:
+            raise Stop(f'Не удалось проверить диск назначения {destination}: {exc}') from exc
+        anchor, total = volumes.get(device, (folder, 1024 * 1024))  # Journal and filesystem metadata.
+        volumes[device] = anchor, total + size
+    for folder, required in volumes.values():
+        try:
+            free = shutil.disk_usage(folder).free
+        except OSError as exc:
+            raise Stop(f'Не удалось определить свободное место на диске {folder}: {exc}') from exc
+        if free < required:
+            raise Stop(f'Недостаточно места на диске {folder}. Требуется {required:,} байт, доступно {free:,} байт.')
+
+
+def retain_operation_evidence(stage, run, plan, *, prepared, confirmation, released):
+    """Preserve exact bytes for the files checked by post-commit and refunds."""
+    expected = {'plan.json': plan, 'prepared.json': prepared,
+                'confirmation.json': confirmation, 'release.json': released}
+    payloads, hashes = {}, {}
+    for name in EVIDENCE_FILES:
+        source = safe(Path(run) / name)
+        try:
+            payloads[name] = source.read_bytes()
+            value = json.loads(payloads[name].decode('utf-8'))
+        except (OSError, ValueError) as exc:
+            raise Stop(f'Не удалось сохранить доказательство операции {source}: {exc}') from exc
+        hashes[name] = hashlib.sha256(payloads[name]).hexdigest()
+        if name in expected and value != expected[name]:
+            raise Stop('Доказательство операции изменилось перед записью: ' + str(source))
+    if confirmation.get('verified_sha256') != hashes['verified.json']:
+        raise Stop('Проверка выпуска изменилась перед записью: ' + str(Path(run) / 'verified.json'))
+    folder = safe(Path(stage) / 'evidence')
+    folder.mkdir()
+    for name, payload in payloads.items():
+        destination = safe(folder / name)
+        with destination.open('xb') as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if sha(safe(destination)) != hashes[name]:
+            raise Stop('Не совпал SHA-256 архива операции: ' + str(destination))
+    return hashes
+
+
+def operation_evidence(journal, state, *, names=EVIDENCE_FILES, legacy_post_commit=False):
+    """Read the sealed archive, or use the original paths of historical journals."""
+    if set(names) - set(EVIDENCE_FILES):
+        raise ValueError('Unknown operation evidence filename')
+    if 'evidence' not in state:
+        plan = Path(state['plan'])
+        check_plan = post_commit_path if legacy_post_commit else safe
+        return {name: check_plan(plan) if name == 'plan.json' else safe(plan.parent / name)
+                for name in names}
+    hashes = state['evidence']
+    if not isinstance(hashes, dict) or set(hashes) != set(EVIDENCE_FILES):
+        raise Stop('Повреждена опись доказательств операции: ' + str(journal))
+    folder = safe(Path(journal).parent / 'evidence')
+    paths = {}
+    for name in names:
+        path = safe(folder / name)
+        try:
+            current = sha(path)
+        except OSError as exc:
+            raise Stop(f'Доказательство операции отсутствует или недоступно {path}: {exc}') from exc
+        if current != hashes[name]:
+            raise Stop('Не совпал SHA-256 доказательства операции: ' + str(path))
+        paths[name] = path
+    return paths
 
 
 def _record(path, data):
@@ -124,7 +213,8 @@ def _archive_unreferenced(journal, state):
 
     stage = journal.parent
     plan, target = Path(state['plan']), Path(state['target'])
-    evidence = {journal, plan, target / 'ISSUE.json'}
+    names = EVIDENCE_FILES if 'evidence' in state else ('plan.json',)
+    evidence = {journal, target / 'ISSUE.json', *operation_evidence(journal, state, names=names).values()}
     evidence.update(stage.glob('*.json'))
     evidence.update(plan.parent.glob('*.json'))
     terminal = {'COMPLETE', 'COMPENSATED', 'ABORTED', 'ROLLED_BACK'}
@@ -134,7 +224,9 @@ def _archive_unreferenced(journal, state):
         other = journal_read(safe(sibling))
         if other['phase'] not in terminal:
             other_plan = safe(other['plan'])
-            evidence.update({sibling, other_plan})
+            names = EVIDENCE_FILES if 'evidence' in other else ('plan.json',)
+            evidence.add(sibling)
+            evidence.update(operation_evidence(sibling, other, names=names).values())
             evidence.update(sibling.parent.rglob('*.json'))
             evidence.update(other_plan.parent.glob('*.json'))
     references = [read(safe(path)) for path in evidence]

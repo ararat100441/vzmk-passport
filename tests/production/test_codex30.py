@@ -36,6 +36,7 @@ class SettingsPaths(unittest.TestCase):
             def title(self,*a):pass
             def transient(self,*a):pass
             def grab_set(self):pass
+            def bind(self,*a):pass
             def heading(self,*a,**kw):pass
             def column(self,*a,**kw):pass
             def insert(self,*a,values):self.rows[str(len(self.rows))]=values
@@ -45,7 +46,7 @@ class SettingsPaths(unittest.TestCase):
         cfg={'registry':'R.xlsx','output':'Documents','uzk_registry':'U.xlsm','training':False}
         with TemporaryDirectory() as tmp, ExitStack() as stack:
             app=SimpleNamespace(active=False,root=object(),cfg=dict(cfg),project=SimpleNamespace(get=lambda:'P'),vom=SimpleNamespace(get=lambda:'V.xlsx'),facts={'marks':[]},fit=lambda *a:None,editable=lambda *a,**kw:None,write=lambda *a:None,error=errors.append,choose=lambda *a:None,settings_path=lambda:Path(tmp)/'settings.json',invalidate=lambda:None,refresh=lambda:None)
-            for name in ('Label','Entry','Button','LabelFrame','Treeview'):stack.enter_context(patch.object(gui.ttk,name,Widget))
+            for name in ('Label','Entry','Button','LabelFrame','Treeview','Frame','Combobox'):stack.enter_context(patch.object(gui.ttk,name,Widget))
             stack.enter_context(patch.object(gui.tk,'Toplevel',Widget));stack.enter_context(patch.object(gui.tk,'StringVar',Var))
             stack.enter_context(patch.object(path_config,'visible_settings',return_value={k:v for k,v in cfg.items() if k!='training'}))
             stack.enter_context(patch.object(path_config,'apply_settings',side_effect=lambda old,**kw:dict(old)|{k:kw[k] for k in ('registry','output','uzk_registry')}))

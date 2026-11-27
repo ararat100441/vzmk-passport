@@ -8,14 +8,26 @@ from copy import copy
 from passport_app.registry import read_registry,append_row
 from passport_app.excel import excel_session,open_excel,locked_file,atomic_replace,load_book
 from . import model,facts as factual,office
+from .progress import report
 from .storage import Stop,safe,contained,sha,digest,save,read,local_root,pins,verify_pins,mutex,post_commit_path
 from stage8_closure.storage import frozen
 
 def journal_write(path,state):save(path,state|{'seal':digest(state)})
 
 def journal_read(path):
-    d=read(path);seal=d.pop('seal',None)
+    try:
+        d=read(path)
+        if not isinstance(d,dict):raise ValueError('expected an object')
+    except (OSError,ValueError) as exc:
+        raise Stop('Журнал не читается, автоматическая запись и восстановление остановлены: '+str(path)+'; '+str(exc)) from exc
+    seal=d.pop('seal',None)
     if digest(d)!=seal:raise Stop('Журнал повреждён, автоматическая запись/восстановление запрещены: '+str(path))
+    phases={'STARTED','BACKUP_VERIFIED','PUBLISH_INTENT','DOCUMENTS_PUBLISHED','DOCUMENTS_UNPUBLISHED',
+            'REPLACE_INTENT','REGISTRY_REPLACED','REPLACED','NEEDS_READBACK','COMPLETE','ROLLED_BACK',
+            'ABORTED','COMPENSATING','COMPENSATED'}
+    phases.update(prefix+role for prefix in ('REPLACE_INTENT_','REPLACED_') for role in ('REGISTRY','CATALOG','UZK'))
+    if d.get('phase') not in phases:
+        raise Stop('Неизвестная фаза журнала '+str(d.get('phase'))+': '+str(path))
     if d.get('phase')=='COMPENSATED':
         from .compensation import validate_closed
         validate_closed(path,d)
@@ -103,11 +115,31 @@ def training_guard(cfg):
 
 def pending(registry):
     root=safe(registry).parent/'.vzmk-operations'
-    return [p for p in root.glob('*/journal.json') if journal_read(p).get('phase') not in ('COMPLETE','ROLLED_BACK','ABORTED','COMPENSATED')]
+    waiting=[];damaged=[]
+    for path in sorted(root.glob('*/journal.json')):
+        try:state=journal_read(path)
+        except Stop as exc:
+            damaged.append(str(exc))
+            continue
+        if state['phase'] not in ('COMPLETE','ROLLED_BACK','ABORTED','COMPENSATED'):
+            waiting.append((path,state))
+    if damaged:
+        # An unreadable journal cannot prove which shared books it protects.
+        for path,state in waiting:
+            damaged.append('Ожидает восстановления: '+str(state.get('project') or '')+' '
+                           +str(state.get('number') or '')+' ('+state['phase']+'), '+str(path))
+        raise Stop('\n'.join(damaged))
+    return [path for path,_ in waiting]
 
 def plan(cfg,project,number,vom,facts,new,amend=False,amendment_rows=None):
     registry,documents,output=model.validate_paths(cfg);training_guard(cfg)
-    if pending(registry):raise Stop('Есть незавершённая операция. Откройте «Восстановление»: '+str(pending(registry)[0]))
+    from .project_visibility import ensure_open
+    ensure_open(cfg,project)
+    unfinished=pending(registry)
+    if unfinished:
+        journal=unfinished[0];state=journal_read(journal)
+        identity=' · '.join(str(state[k]) for k in ('project','number') if state.get(k))
+        raise Stop('Есть незавершённая операция '+identity+' ('+state['phase']+'). Откройте «Восстановление»: '+str(journal))
     r=read_registry(registry);p=model.select(r,project);profile=model.profile(cfg,project)
     if amend and new:raise Stop('Добавление марок требует существующего паспорта.')
     if new and number!=p.next_number:raise Stop('Следующий номер изменился: '+p.next_number)
@@ -131,19 +163,19 @@ def plan(cfg,project,number,vom,facts,new,amend=False,amendment_rows=None):
     shared_uzk=None;shared_uzk_sha=None
     if cfg.get('use_shared_uzk'):
         from .shared_uzk import (
-            find_shared_uzk,planned_control,verify_planned_quantities,
+            current_design_quantity,find_shared_uzk,planned_control,verify_planned_quantities,
         )
         shared_uzk=find_shared_uzk(cfg)
         shared_uzk_sha=sha(shared_uzk)
         if amend:
             from .amendment import control_plan,refund_sources
             expected,new_controls,refunds=control_plan(
-                shared_uzk,project,delta,old_facts,old_quantities,final_quantities)
+                shared_uzk,project,delta,old_facts,old_quantities,final_quantities,allow_manual=True)
             refund_rows,refund_pins=refund_sources(
                 registry,old_target,shared_uzk,project,old_hashes['ISSUE.json'],refunds)
         else:
             expected=planned_control(shared_uzk,project,v)
-        verify_planned_quantities(facts,expected)
+        verify_planned_quantities(facts,expected,accept_manual=True)
     if not new and not amend and abs(v.mass-Decimal(str(existing[0]['mass'])))>Decimal('.005'):
         raise Stop('Масса ВОМ не совпадает с существующим паспортом.')
     # Derive UZK DESIGN characteristics from current marks and the accepted
@@ -168,13 +200,13 @@ def plan(cfg,project,number,vom,facts,new,amend=False,amendment_rows=None):
             if row['mark'] in original_marks:
                 old=original_marks[row['mark']]
                 fields=('profile','akz','paint')
-                if expected[row['mark']].get('amendment_original'):
+                if expected[row['mark']].get('amendment_original') and not current_design_quantity(row,expected[row['mark']]):
                     fields+=('standard','uzk_length_mm','uzk_thickness_mm')
                 for field in fields:row[field]=old.get(field,'')
-        # An existing design already contains the established per-piece geometry.
-        # Scale it to the new total; only marks without a retained design need lookup.
-        needs_design={mark for mark in new_controls if not expected[mark].get('amendment_original')}
-        geometry_facts={'marks':[row for row in facts['marks'] if row['mark'] in needs_design]}
+        current_rows=[{**row,'uzk_quantity':current_design_quantity(row,expected[row['mark']])}
+                      for row in facts['marks']]
+        needs_design={row['mark'] for row in current_rows if row['uzk_quantity']}
+        geometry_facts={'marks':[row for row in current_rows if row['mark'] in needs_design]}
         geometry_vom=replace(delta,rows=tuple(row for row in delta.rows if row[0] in needs_design))
     manual=any(has_manual_geometry(row) and row.get('uzk_quantity') not in (0,'0')
                for row in geometry_facts['marks'])
@@ -187,12 +219,41 @@ def plan(cfg,project,number,vom,facts,new,amend=False,amendment_rows=None):
         computed=calculate_design_characteristics(
             geometry_vom if amend else v,geometry_facts,profile_geometry_source,
             expected_sha=(cfg.get('profiles_workbook_sha256') or profile_geometry_sha) if profile_geometry_source else None)
+        if shared_uzk is not None:
+            totals={row['mark']:row for row in facts['marks']}
+            computed=[{**row,'control_source':'MANUAL' if totals[row['mark']].get('uzk_manual_requested') else 'REGISTRY',
+                       'control_quantity':row['quantity']} for row in computed]
         if amend:
             from .amendment import retained_design
             computed=[*retained_design(old_facts,expected),*computed]
-        if wants_design or manual:facts={**facts,'uzk_design':computed}
+            computed=[{**row,'quantity':int(totals[row['mark']]['uzk_quantity'])} for row in computed]
+        if wants_design or manual or shared_uzk is not None:facts={**facts,'uzk_design':computed}
     if amend and not uzk_required:facts={**facts,'uzk_design':[]}
+    accounting=None
+    if new or amend:
+        from .coordinated import accounting_plan
+        planned_debits=({m:x['uzk_quantity'] for m,x in new_controls.items()} if amend else
+                        {m:x['uzk_quantity'] for m,x in expected.items()} if shared_uzk is not None else None)
+        accounting=accounting_plan(cfg,project,number,delta if amend else v,facts,profile,r.projects[project],
+                                   original_quantities=old_quantities if amend else None,controls=planned_debits,
+                                   final_quantities=final_quantities if amend else None,
+                                   refunds=refunds if amend else None,refund_rows=refund_rows if amend else None)
+    # Reject missing or locked inputs before Excel opens a temporary registry.
+    first_refs=profile.get('first_passport_sources',{}).get('sources',{})
+    inputs=[registry,v.path,*[t['path'] for t in profile['templates'].values()],
+            *[t['path'] for t in first_refs.values()],*[e['path'] for e in facts.get('evidence',[])]]
+    if profile.get('catalog'):inputs.append(profile['catalog'])
+    if shared_uzk is not None:inputs.append(shared_uzk)
+    if accounting:inputs.extend(accounting.get('history_sources',[]))
+    if profile_geometry_source is not None:inputs.append(profile_geometry_source)
+    if amend:
+        inputs.extend(old_target/name for name in old_hashes)
+        inputs.extend(refund_pins)
+    inputs=list(dict.fromkeys(safe(p) for p in inputs))
+    for path in inputs:
+        with locked_file(path):pass
     if facts.get('auto_registry_dates'):
+        report('Проверяются даты на копии реестра')
         from .registry_dates import resolve_registry_dates
         # For a new row, today's ending date is a PROPOSAL.
         # Manufacturing START_DATE intentionally stays equal to the
@@ -210,26 +271,14 @@ def plan(cfg,project,number,vom,facts,new,amend=False,amendment_rows=None):
     )
     if shared_uzk is not None and sha(shared_uzk)!=shared_uzk_sha:
         raise Stop('Общий УЗК изменился после расчёта количества. Повторите проверку.')
-    accounting=None
-    if new or amend:
-        from .coordinated import accounting_plan
-        accounting=accounting_plan(cfg,project,number,delta if amend else v,facts,profile,r.projects[project],
-                                   original_quantities=old_quantities if amend else None,
-                                   controls={m:x['uzk_quantity'] for m,x in new_controls.items()} if amend else None,
-                                   final_quantities=final_quantities if amend else None,
-                                   refunds=refunds if amend else None,
-                                   refund_rows=refund_rows if amend else None)
     for n in variants:
         for role in (f'akz{n}',f'akz_appendix{n}'):
             if role not in profile['templates']:raise Stop('Нет собственного шаблона '+role)
     from .templates import validate as validate_templates
     validate_templates(profile,p,variants,cfg.get('training',False))
     # The historically detailed UZK form requires each real welded-joint row.
-    from .word_controls import inspect_word_fields
     from .real_forms import validate_uzk_details
-    from .working_facts import selected_form
-    effective_uzk=selected_form(profile,'uzk')
-    uzk_tokens=set() if effective_uzk.get('exact_reference') else inspect_word_fields(effective_uzk['path'])[0]
+    uzk_tokens=set() if historical_uzk else tokens
     validate_uzk_details(facts,v,required=uzk_required and bool({'UZK_DETAILS_TABLE','UZK_NATIVE_ROW'} & uzk_tokens))
     if uzk_required and 'UZK_NATIVE_ROW' in uzk_tokens:
         from .native_acts import native_rows
@@ -238,29 +287,12 @@ def plan(cfg,project,number,vom,facts,new,amend=False,amendment_rows=None):
     require_form_inputs(profile,facts)
     from .real_forms import require_akz_form_inputs
     require_akz_form_inputs(profile,facts,variants)
-    # Pin the exact FIRST passport source files alongside inputs. Even the
-    # historical acts used for visual provenance (not generation) must not
-    # silently change between CHECK and PREPARE. Dedupe pinned paths.
-    first_refs=profile.get('first_passport_sources',{}).get('sources',{})
-    inputs=list(dict.fromkeys([
-        registry,v.path,
-        *[t['path'] for t in profile['templates'].values()],
-        *[t['path'] for t in first_refs.values()],
-        *[e['path'] for e in facts['evidence']],
-    ]))
-    catalog=profile.get('catalog')
-    if catalog and Path(catalog).is_file():inputs.append(catalog)
-    if shared_uzk is not None:inputs.append(shared_uzk)
-    if accounting:inputs.extend(accounting.get('history_sources',[]))
-    if profile_geometry_source is not None:inputs.append(profile_geometry_source)
     # Frozen human entries supply explicitly confirmed assignments when no catalog exists.
     passport_folder=model.output_passport_directory(cfg,project,profile)
     target=passport_folder/(model.filename(number)+' от '+date.fromisoformat(facts['date']).strftime('%d.%m.%Y'))
     safe(target)
     if amend:
         if target!=old_target:raise Stop('Дата или путь исходного паспорта изменились.')
-        inputs.extend(target/name for name in old_hashes)
-        inputs.extend(refund_pins)
     elif target.exists():raise Stop('Папка готового комплекта уже существует: '+str(target))
     hashes=pins(inputs)
     if amend and any(hashes.get(str(target/name))!=h for name,h in old_hashes.items()):
@@ -276,8 +308,6 @@ def plan(cfg,project,number,vom,facts,new,amend=False,amendment_rows=None):
         raise Stop('Общий УЗК изменился после расчёта количества. Повторите проверку текущих данных.')
     if hashes[str(registry)]!=r.digest or hashes[str(v.path)]!=v.digest:raise Stop('Источник изменился во время проверки.')
     model.profile(cfg,project)
-    for path in inputs:
-        with locked_file(path):pass
     data={'schema':'VZMK_PRODUCTION_PLAN_1','id':uuid4().hex,'cfg':cfg,'project':project,'number':number,
           'new':bool(new),'facts':facts,'vom':str(v.path),'fingerprints':hashes,'target':str(target),
           'marks':len(v.rows),'quantity':str(v.quantity),'mass_kg':str(v.mass),'area_m2':str(v.area),
@@ -320,7 +350,11 @@ def _prepare(d):
         snapshot.unlink(missing_ok=True)
         raise Stop('SHA реестра изменился.')
     v=model.visible_vom(d['vom']);r=read_registry(snapshot);p=model.select(r,d['project'])
+    from .coordinated import prepare_candidates
+    report('Готовятся кандидаты справочника и общего УЗК')
+    accounting=prepare_candidates(d)
     # Recalculate formulas only in the private registry.
+    report('Excel проверяет строку реестра')
     with excel_session() as app:
         if d['new']:
             start=(model.columns(r)['START_DATE'],date.fromisoformat(d['facts']['start_date']))
@@ -341,9 +375,8 @@ def _prepare(d):
     if d['new'] or d.get('amendment'):
         verify_registry(registry,snapshot,d['project'],d['number'],v,date.fromisoformat(d['date']),
                         amend=bool(d.get('amendment')))
+    report('Word и Excel формируют документы паспорта')
     out=office.render(model.profile(d['cfg'],d['project']),p,staged,row,v,d['facts'],outputs,d['cfg'].get('training',False))
-    from .coordinated import prepare_candidates
-    accounting=prepare_candidates(d)
     save(run/'prepared.json',{'plan_seal':d['seal'],'outputs':out,'output_fingerprints':pins([o['path'] for o in out]),'registry':str(snapshot),'row':row,'snapshot_sha256':sha(snapshot),'accounting':accounting})
     return {'status':'PASS','folder':str(outputs),'files':len(out)}
 
@@ -541,6 +574,7 @@ def release(path):
     # Only the FINAL, unwatermarked release copies enter the printable PDF.
     # A failed native Office export stops before any registry modification.
     from .print_pdf import create_print_pdf, verify_package_print
+    report('Word и Excel печатают документы в сводный PDF')
     printed=create_print_pdf(files,output,Path(d['target']).name,uzk_required=d.get('uzk_required',True))
     files.append(printed['output'])
     result={'plan_seal':d['seal'],'outputs':files,
@@ -588,14 +622,23 @@ def commit(path,release_result):
                 if journal.is_file():recover(journal)
             raise
     with mutex(registry),frozen(p for p in d['fingerprints'] if p!=str(registry)):
+        from .project_visibility import ensure_open
+        ensure_open(d['cfg'],d['project'])
         if pending(registry):raise Stop('Незавершённая операция: используйте восстановление.')
         if target.exists():raise Stop('Папка уже существует, перезапись запрещена.')
         token=d['id'];stage=registry.parent/'.vzmk-operations'/token
+        from .service_archive import operation_evidence_writes,require_disk_space,retain_operation_evidence
+        publication=target.parent/('.pending-'+token)
+        writes=[(stage/'backup.xlsx',registry.stat().st_size),*operation_evidence_writes(stage,run)]
+        if d['new']:writes.append((stage/'candidate.xlsx',Path(prepared['registry']).stat().st_size))
+        writes.extend((publication/Path(o['path']).name,Path(o['path']).stat().st_size) for o in released['outputs'])
+        require_disk_space(writes)
         stage.mkdir(parents=True,exist_ok=False)
         backup=stage/'backup.xlsx';candidate=stage/'candidate.xlsx';journal=stage/'journal.json'
         state={'id':token,'phase':'STARTED','registry':str(registry),'target':str(target),
             'backup':str(backup),'original_sha256':d['fingerprints'][str(registry)],'new':d['new'],'plan':str(path),
-            'project':d['project'],'number':d['number']}
+            'project':d['project'],'number':d['number'],
+            'evidence':retain_operation_evidence(stage,run,d,prepared=prepared,confirmation=confirmation,released=released)}
         journal_write(journal,state)
         try:
             with locked_file(registry,writable=d['new']) as original:
@@ -651,20 +694,23 @@ def post_commit_context(journal):
     # exact journal location and confirmed plan below have all been validated.
     journal=post_commit_path(journal);s=journal_read(journal)
     if s['phase']!='NEEDS_READBACK':raise Stop('Неверная фаза проверки.')
-    plan=post_commit_path(s['plan']);d=read(plan);seal=d.get('seal')
+    from .service_archive import operation_evidence
+    files=operation_evidence(journal,s,legacy_post_commit=True)
+    plan=Path(s['plan']);d=read(files['plan.json']);seal=d.get('seal')
     if d.get('schema')!='VZMK_PRODUCTION_PLAN_1' or digest({k:v for k,v in d.items() if k!='seal'})!=seal:
         raise Stop('План повреждён.')
-    if (s['id']!=d['id'] or plan!=local_root()/'jobs'/d['id']/'plan.json'
+    if (s['id']!=d['id'] or not plan.is_absolute() or plan.name!='plan.json'
+            or ('evidence' not in s and plan!=local_root()/'jobs'/d['id']/'plan.json')
             or str(plan.parent)!=d['run'] or s['registry']!=d['registry']
             or s['registry']!=d['cfg']['registry'] or s['target']!=d['target']):
         raise Stop('Пути транзакции не совпадают с защищённым планом.')
     registry=Path(s['registry'])
     if not registry.is_absolute() or journal!=registry.parent/'.vzmk-operations'/s['id']/'journal.json':
         raise Stop('Журнал вне папки операций выбранного реестра.')
-    prepared=read(plan.parent/'prepared.json');verified=read(plan.parent/'verified.json')
-    confirmation=read(plan.parent/'confirmation.json');released=read(plan.parent/'release.json')
+    prepared=read(files['prepared.json']);verified=read(files['verified.json'])
+    confirmation=read(files['confirmation.json']);released=read(files['release.json'])
     if (any(v.get('plan_seal')!=seal for v in (prepared,verified,confirmation,released))
-            or confirmation.get('verified_sha256')!=sha(plan.parent/'verified.json')
+            or confirmation.get('verified_sha256')!=sha(files['verified.json'])
             or not (confirmation.get('reviewed') is True or confirmation.get('direct_issue_confirmed') is True)
             or (confirmation.get('direct_issue_confirmed') is True and confirmation.get('approved') is not True)
             or d['facts'].get('simple_ui') and confirmation.get('approved') is not True):
@@ -702,10 +748,11 @@ def post_commit_context(journal):
 
 
 def readback(journal):
+    report('Проверяются хеши опубликованного комплекта и учёта')
     s,d,registry,target=post_commit_context(journal)
     if s.get('participants'):
         from .coordinated import verify_current,native_readback
-        verify_current(s);native_readback(s)
+        verify_current(s);native_readback(s,d)
     if sha(registry)!=(s['candidate_sha256'] if s['new'] else s['original_sha256']):raise Stop('Реестр изменился после записи.')
     for name,h in s['output_hashes'].items():
         if sha(post_commit_path(target/name))!=h:raise Stop('Изменён документ: '+name)
@@ -716,15 +763,23 @@ def readback(journal):
             found=[e for e in r.projects[d['project']] if e['number']==d['number']]
             if len(found)!=1 or b.Worksheets(r.sheet).Cells(found[0]['row'],r.columns['number']).Value2!=d['number']:raise Stop('Excel: новая строка не подтверждена.')
         finally:b.Close(SaveChanges=False)
-    released=read(Path(s['plan']).parent/'release.json')
+    from .service_archive import operation_evidence
+    released=read(operation_evidence(journal,s,names=('release.json',))['release.json'])
     from .print_pdf import verify_package_print,verify_print_pdf
+    if 'evidence' in s:
+        outputs=released['outputs']
+        names=[Path(item['path']).name for item in outputs]
+        if len(set(names))!=len(names) or set(names)!=set(s['output_hashes']):
+            raise Stop('Опубликованные документы не совпадают с защищённым манифестом.')
+        released={**released,'outputs':[item|{'path':str(target/name)} for item,name in zip(outputs,names)]}
     print_manifest=verify_package_print(released,target.name,uzk_required=d.get('uzk_required',True))
     name=print_manifest['filename']
     if name not in s['output_hashes'] or s['output_hashes'][name]!=print_manifest['sha256']:
         raise Stop('Сводный PDF не совпадает с манифестом выпуска.')
-    verify_print_pdf(target/name,expected_pages=print_manifest['pages'])
+    if 'evidence' not in s:verify_print_pdf(target/name,expected_pages=print_manifest['pages'])
     docs=[{'path':str(target/name),'role':name.rsplit(' - ',1)[-1].rsplit('.',1)[0]}
           for name in s['output_hashes'] if not name.lower().endswith('.pdf')]
+    report('Word и Excel повторно открывают опубликованные документы')
     office.verify_documents(docs,d['number'],d['cfg'].get('training',False),False)
     return {'status':'PASS','task':'readback','plan':s['plan'],'journal':str(journal),
             'print_pdf_pages':print_manifest['pages']}

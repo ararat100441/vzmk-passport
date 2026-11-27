@@ -23,6 +23,7 @@ from profiles_stage4.model import (
     SUPPORTED_RULES,frequency_angle,profile_family_matches,
 )
 from .storage import Stop,sha,safe
+from .shipment_input import EXCEL_MAX,EXCEL_MIN
 
 PROFILE_HEADINGS=(
     'Профиль','Ключ','Тип','НД','h','b','b2','s','t','D','r',
@@ -34,7 +35,7 @@ DIMENSIONS={'h':4,'b':5,'b2':6,'s':7,'t':8,'D':9,'r':10,'R':15}
 def _decimal(value,what):
     try: n=Decimal(str(value))
     except Exception as exc:raise Stop('УЗК: неверное число '+what) from exc
-    if not n.is_finite() or n<=0:
+    if not n.is_finite() or not EXCEL_MIN<=n<=EXCEL_MAX:
         raise Stop('УЗК: неверное положительное число '+what)
     return n
 
@@ -241,7 +242,7 @@ def calculate_design_characteristics(vom,facts,profile_workbook,*,expected_sha=N
             raise Stop('УЗК: у '+assigned+' отсутствует принятое правило.')
         for part in calculated['rows']:
             s=_decimal(part['S'],'S профиля '+assigned)
-            l=_decimal(part['L'],'L профиля '+assigned)*quantity
+            l=_decimal(_decimal(part['L'],'L профиля '+assigned)*quantity,'L профиля '+assigned)
             output.append({
                 'mark':mark,
                 'profile':str(assigned),

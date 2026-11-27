@@ -2,13 +2,15 @@ import os,subprocess,sys,time,traceback
 from pathlib import Path
 from uuid import uuid4
 from datetime import date, datetime
+from dataclasses import replace
 from copy import deepcopy
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox,simpledialog
 from .storage import digest,local_root,read,save,sha,Stop
 from . import model,core,akz_presets,VERSION
 from .external_open import open_external
-from .owner_control import STATEMENT
+from .owner_control import statement_for
+from .project_visibility import closed_projects,current_visibility,save_settings,set_closed
 from .real_forms import DOC_FIELD_LABELS, UZK_COLUMNS, UZK_HEADERS
 
 
@@ -229,11 +231,11 @@ class App:
         self.log.pack(side='left',fill='both',expand=True)
         self.update_vom_kpis()
         root.protocol('WM_DELETE_WINDOW',self.close)
-        self.invalidate();self.refresh()
+        self.invalidate();registry=self.refresh()
         configured=list(self.cfg.get('profiles',{}));name=self.cfg.get('last_project') or (configured[0] if len(configured)==1 else '')
         if name and self.cfg.get('registry') and name in tuple(self.projects['values']):
             self.project.set(name)
-            self.select_project()
+            self.select_project(registry=registry)
         if not self.cfg.get('registry'):root.after(300,self.settings)
         if config_error:root.after(500,lambda:self.error('Не удалось загрузить настройки. Выберите пути заново. Исходники не изменены. '+config_error))
 
@@ -345,10 +347,10 @@ class App:
         from .catalog_ledger import shipment_quantities
         _,_,previous,facts,counts=original_shipment(self.cfg,self.project.get(),self.number.get())
         return control_plan(source,self.project.get(),added_rows(previous,vom,getattr(self,'amendment_rows',None)),facts,counts,
-                            shipment_quantities(vom))[0]
+                            shipment_quantities(vom),allow_manual=True)[0]
 
     def synchronized_facts(self):
-        from .shared_uzk import find_shared_uzk
+        from .shared_uzk import current_design_quantity,find_shared_uzk
         from .catalog_assignments import current_assignments
         from .shipment_sync import synchronize
         from .geometry_selection import GeometrySelection
@@ -362,14 +364,15 @@ class App:
             assignments=current_assignments(profile['catalog'],profile['catalog_sha256'],plan)
         saved=self.project_facts(v)
         data=synchronize(saved,self.project.get(),self.number.get(),self.cfg.get('training',False),plan,assignments)
-        for row in data['marks']:
-            if plan[row['mark']]['uzk_quantity'] and not plan[row['mark']].get('amendment_original') and has_manual_geometry(row):
+        positive=[row for row in data['marks'] if current_design_quantity(row,plan[row['mark']])]
+        for row in positive:
+            if has_manual_geometry(row):
                 manual_dimensions(row)
-        if requires_geometry_catalog(row for row in data['marks'] if not plan[row['mark']].get('amendment_original')):
+        if requires_geometry_catalog(positive):
             geometry=find_approved_geometry(self.cfg,require=True)
             selection=GeometrySelection(geometry,self.cfg,self.project.get())
-            for row in data['marks']:
-                if plan[row['mark']]['uzk_quantity'] and not plan[row['mark']].get('amendment_original') and not has_manual_geometry(row):
+            for row in positive:
+                if not has_manual_geometry(row):
                     row['standard']=selection.resolve(row['mark'],row['profile'],saved_standard=row['standard'])
         self.cfg['uzk_registry']=str(source);self.cfg['use_shared_uzk']=True
         return data
@@ -387,9 +390,7 @@ class App:
     def error(self,exc,*,parent=None):
         text=str(exc)
         self.write(text)
-        if parent is None:
-            messagebox.showerror('Не удалось продолжить',text)
-            return
+        parent=parent if parent is not None and parent.winfo_exists() else self.root
 
         previous_grab=parent.grab_current()
         previous_focus=parent.focus_lastfor()
@@ -428,8 +429,10 @@ class App:
         y=max(0,min(y,screen_h-height-60))
         dialog.geometry(f'{width}x{height}+{x}+{y}')
         try:
+            dialog.update_idletasks()
             dialog.deiconify()
             dialog.wait_visibility()
+            dialog.update_idletasks()
             dialog.grab_set()
             ok.focus_set()
             parent.wait_window(dialog)
@@ -466,7 +469,12 @@ class App:
             draft=self.shipment_rows if saved else None
             def select_mode(origins):
                 if not saved:
-                    self.facts={'marks':facts['marks'],'akz_drafts':facts.get('akz_drafts',{})}
+                    # Historical counts and lengths belong to the issued design,
+                    # not to the newly added items of a repeating mark.
+                    rows=[{k:v for k,v in row.items() if k!='uzk_manual_requested'
+                           and (not row.get('uzk_manual_quantity') or k not in ('uzk_length_mm','uzk_thickness_mm'))}
+                          for row in facts['marks']]
+                    self.facts={'marks':rows,'akz_drafts':facts.get('akz_drafts',{})}
                 self.add_marks_passport=(self.project.get(),self.number.get())
                 self.amendment_rows=origins
             return open_shipment(self,original_rows=original.rows,original_digest=original.digest,
@@ -495,6 +503,7 @@ class App:
         self.fit(dialog,1100,740)
         dialog.transient(self.root)
         dialog.grab_set()
+        dialog.bind('<Escape>',lambda _:dialog.destroy())
         selected={key:tk.StringVar(value=value)
                   for key,value in shown.items()}
         dialog._selected_path_vars=selected
@@ -542,10 +551,10 @@ class App:
                 if not path:raise Stop('Справочник проекта не найден.')
                 from .catalog_ledger import migrate_in_place
                 if not messagebox.askyesno('Справочник — резервная копия',
-                    'Подготовить новую структуру справочника с резервной копией? Общее количество заполняется вручную. Неполная история не даёт подтверждённого остатка.\n'+str(path)):return
+                    'Подготовить новую структуру справочника с резервной копией? Общее количество заполняется вручную. Неполная история не даёт подтверждённого остатка.\n'+str(path),parent=dialog):return
                 result=migrate_in_place(path,self.cfg,self.project.get())
-                self.write(str(result));messagebox.showinfo('Справочник',str(result))
-            except Exception as exc:self.error(exc)
+                self.write(str(result));messagebox.showinfo('Справочник',str(result),parent=dialog)
+            except Exception as exc:self.error(exc,parent=dialog)
         ttk.Button(dialog,text='Подготовить структуру справочника',command=migrate_catalog).grid(row=7,column=1,sticky='w',pady=6)
 
         def choose_current_catalog():
@@ -562,11 +571,11 @@ class App:
                 if len(roots)!=1:raise Stop('Не найдена единственная существующая папка выбранного проекта.')
                 active=resolve_catalog(roots[0],project,path)
                 self.cfg.setdefault('catalog_choices',{})[project]=str(active)
-                save(self.settings_path(),self.cfg);self.invalidate()
+                save_settings(self.settings_path(),self.cfg);self.invalidate()
                 effective.update(model.profile(self.cfg,project))
                 dialog._source_path_vars[0].set(str(active))
                 self.write('Действующий справочник: '+str(active))
-            except Exception as exc:self.error(exc)
+            except Exception as exc:self.error(exc,parent=dialog)
         def create_project_catalog():
             try:
                 folder=filedialog.askdirectory(parent=dialog,title='Уже существующая папка проекта',initialdir=selected['output'].get())
@@ -576,8 +585,8 @@ class App:
                 from .project_catalog import create_catalog
                 result=create_catalog(folder,project,self.cfg)
                 self.write('Создан только справочник: '+result['path'])
-                messagebox.showinfo('Справочник создан',result['path']+'\n'+result['notice'])
-            except Exception as exc:self.error(exc)
+                messagebox.showinfo('Справочник создан',result['path']+'\n'+result['notice'],parent=dialog)
+            except Exception as exc:self.error(exc,parent=dialog)
         ttk.Button(dialog,text='Создать справочник в существующей папке проекта',command=create_project_catalog).grid(row=10,column=1,sticky='w',pady=5)
         ttk.Button(dialog,text='Выбрать действующий справочник',command=choose_current_catalog).grid(row=11,column=1,sticky='w',pady=5)
 
@@ -604,10 +613,10 @@ class App:
                     cfg=core.training_copy(cfg,parent)
                 retained=self.facts if all(cfg.get(k)==self.cfg.get(k) for k in ('registry','output','uzk_registry')) else {}
                 self.cfg=cfg
-                save(self.settings_path(),cfg)
+                save_settings(self.settings_path(),cfg)
                 self.invalidate()
                 dialog.destroy();self.refresh();self.facts=retained
-            except Exception as exc:self.error(exc)
+            except Exception as exc:self.error(exc,parent=dialog)
 
         ttk.Button(dialog,text='Сохранить рабочие пути',
                    command=store).grid(row=8,column=1,sticky='w',pady=12)
@@ -619,6 +628,31 @@ class App:
         ttk.Button(dialog,text='Восстановление после сбоя',
                    command=open_recovery).grid(
                    row=9,column=1,sticky='w',pady=6)
+
+        if self.cfg.get('registry'):
+            group=ttk.Frame(dialog)
+            group.grid(row=12,column=0,columnspan=3,sticky='w',padx=12,pady=8)
+            cfg=current_visibility(self.settings_path(),self.cfg)
+            project=self.project.get()
+            names=closed_projects(cfg)
+            selected_closed=ttk.Combobox(group,values=names,state='readonly',width=28)
+            if names:selected_closed.current(0)
+
+            def change_visibility(name,closed):
+                try:
+                    self.cfg=set_closed(self.settings_path(),self.cfg,name,closed=closed)
+                    dialog.destroy()
+                    self.refresh()
+                    self.write(('Объект закрыт: ' if closed else 'Объект восстановлен: ')+name)
+                except Exception as exc:self.error(exc,parent=dialog)
+
+            ttk.Button(group,text='Закрыть выбранный объект',
+                       state='normal' if project and project not in names else 'disabled',
+                       command=lambda:change_visibility(project,True)).pack(side='left',padx=(0,12))
+            ttk.Label(group,text='Закрытые объекты').pack(side='left',padx=(0,6))
+            selected_closed.pack(side='left',padx=(0,6))
+            ttk.Button(group,text='Восстановить',state='normal' if names else 'disabled',
+                       command=lambda:change_visibility(selected_closed.get(),False)).pack(side='left')
 
     def show_paths(self):
         from .shared_uzk import find_shared_uzk
@@ -636,14 +670,22 @@ class App:
         if not self.cfg.get('registry'):return
         try:
             r=model.read_registry(self.cfg['registry'])
-            self.projects['values']=sorted(r.projects)
+            self.cfg=current_visibility(self.settings_path(),self.cfg)
+            visible=sorted(set(r.projects)-set(closed_projects(self.cfg)))
+            self.projects['values']=visible
+            if self.project.get() and self.project.get() not in visible:
+                self.project.set('');self.number.set('');self.source_number.set('')
+                self.vom.set('');self.shipment_rows=None;self.facts={};self.first_reference=None
+                self.numbers['values']=self.source_numbers['values']=()
+                self.vom_summary.set('Строки ВОМ ещё не введены')
             self.invalidate()
             self.progress.configure(
                 text='Реестр прочитан. Выберите проект; запись не производилась.')
-            if self.project.get():self.select_project()
+            if self.project.get():self.select_project(registry=r)
+            return r
         except Exception as exc:self.error(exc)
 
-    def select_project(self):
+    def select_project(self,registry=None):
         if self.active:return
         self.invalidate();self.facts={};self.first_reference=None;self.number.set('')
         if self.vom.get() and getattr(self,'shipment_project',self.project.get())!=self.project.get():
@@ -652,7 +694,7 @@ class App:
             self.vom_summary.set('Строки ВОМ ещё не введены')
         if self.last_output_project!=self.project.get():self.last_output_folder=None
         try:
-            r=model.read_registry(self.cfg['registry']);name=self.project.get();entries=r.projects[name]
+            r=registry or model.read_registry(self.cfg['registry']);name=self.project.get();entries=r.projects[name]
             self.numbers['values']=[str(e['number']) for e in entries]
             self.source_numbers['values']=list(self.numbers['values'])
             self.number.set(str(entries[0]['number']))
@@ -809,12 +851,12 @@ class App:
                 variants=sorted({int(role[-1]) for role in effective['templates']
                                  if role.startswith('akz')})
                 validate(effective,project,variants,cfg.get('training',False))
-                self.cfg=cfg;save(self.settings_path(),cfg);self.facts={};self.invalidate();d.destroy()
-            except Exception as exc:self.error(exc)
+                self.cfg=cfg;save_settings(self.settings_path(),cfg);self.facts={};self.invalidate();d.destroy()
+            except Exception as exc:self.error(exc,parent=d)
         def forms():
-            if not root.get():self.error('Сначала выберите папку объекта.');return
+            if not root.get():self.error('Сначала выберите папку объекта.',parent=d);return
             folder=Path(root.get())/('Формы_на_утверждение_'+uuid4().hex[:8])
-            if not messagebox.askyesno('Новые формы','Создать отдельные незаполненные формы?\n'+str(folder)+'\nИх необходимо утвердить ответственному лицу перед рабочим применением.'):return
+            if not messagebox.askyesno('Новые формы','Создать отдельные незаполненные формы?\n'+str(folder)+'\nИх необходимо утвердить ответственному лицу перед рабочим применением.',parent=d):return
             d.destroy();self.run('forms',{'folder':str(folder)},lambda result:self.write('Созданы формы без результатов контроля: '+result['folder']+'. Выберите их в настройках объекта; первое приложение выберите из собственных источников.'))
         ttk.Button(d,text='Создать отдельные формы на утверждение',command=forms).grid(row=15,column=1,sticky='w',pady=10)
         ttk.Button(d,text='Сохранить привязки и SHA-256',command=save_profile).grid(row=15,column=1,sticky='e')
@@ -823,7 +865,7 @@ class App:
         if self.active:return
         try:
             v=model.visible_vom(self.vom.get())
-            from .shared_uzk import find_shared_uzk
+            from .shared_uzk import current_design_quantity,find_shared_uzk,manual_control_input
             source=find_shared_uzk(self.cfg,require=True)
             uzk_plan=self.control_for_shipment(source,v)
             # An old saved settings.json may predate the third visible field.
@@ -876,6 +918,10 @@ class App:
         hidden_fields={}
         for mark in dict.fromkeys(str(r[0]) for r in v.rows):
             previous=old.get(mark,{})
+            choice=uzk_plan[mark]
+            extra=previous.get('uzk_manual_requested',0)
+            if type(extra) is not int or not 0<=extra<=choice.get('manual_limit',0):extra=0
+            amount=choice['uzk_quantity']+extra
             hidden_fields[mark]={
                 k:previous[k] for k in ('paint','uzk_result','basis',
                                           'vik_result','vik_basis')
@@ -886,10 +932,10 @@ class App:
                 str(previous.get('profile') or ''),
                 str(previous.get('akz'))
                 if previous.get('akz') not in (None,'') else '',
-                str(uzk_plan[mark]['uzk_quantity']),
+                str(amount),
                 str(previous.get('standard') or ''),
-                str(previous.get('uzk_length_mm') or '') if uzk_plan[mark]['uzk_quantity'] else '',
-                str(previous.get('uzk_thickness_mm') or '') if uzk_plan[mark]['uzk_quantity'] else '',
+                str(previous.get('uzk_length_mm') or '') if amount else '',
+                str(previous.get('uzk_thickness_mm') or '') if amount else '',
             ]
             grid.insert('','end',values=values)
         ttk.Label(
@@ -1151,29 +1197,50 @@ class App:
         from .automatic_acts import (calculate_design_characteristics,find_approved_geometry,
                                      has_manual_geometry,manual_dimensions,requires_geometry_catalog)
         from .geometry_selection import GeometrySelection
-        positive=any(row['uzk_quantity'] and not row.get('amendment_original') for row in uzk_plan.values())
+        def row_facts(item):
+            row=dict(zip(cols,grid.item(item,'values')))
+            choice=uzk_plan[row['mark']]
+            row['uzk_manual_requested']=manual_control_input(row['uzk_quantity'],row['mark'],choice)
+            row['uzk_quantity']=choice['uzk_quantity']+row['uzk_manual_requested']
+            return row
+
+        def geometry_row(row):
+            return {**row,'uzk_quantity':current_design_quantity(row,uzk_plan[row['mark']])}
+
         selection=None
-        if positive:
-            try:
-                geometry=find_approved_geometry(self.cfg,require=False)
-                if geometry:
-                    selection=GeometrySelection(geometry,self.cfg,self.project.get())
-            except Stop as exc:
-                self.write(str(exc))
+        tried_selection=False
+
+        def geometry_selection():
+            nonlocal selection,tried_selection
+            if not tried_selection:
+                tried_selection=True
+                try:
+                    geometry=find_approved_geometry(self.cfg,require=False)
+                    if geometry:selection=GeometrySelection(geometry,self.cfg,self.project.get())
+                except Stop as exc:self.write(str(exc))
+            return selection
         standard_status=ttk.Label(d,wraplength=1080,justify='left')
         standard_status.pack(fill='x',padx=12,pady=5)
+        standard_text=''
         def standard_options(item):
-            vals=grid.item(item,'values')
-            if not uzk_plan[str(vals[0])]['uzk_quantity'] or uzk_plan[str(vals[0])].get('amendment_original') or has_manual_geometry(dict(zip(cols,vals))):
+            row=geometry_row(row_facts(item))
+            if not row['uzk_quantity'] or has_manual_geometry(row):
                 return None
-            return selection.options(str(vals[1])) if selection else []
+            available=geometry_selection()
+            return available.options(row['profile']) if available else []
         def update_standards():
+            nonlocal standard_text
             errors=[]
+            positive=False
             for item in grid.get_children():
                 vals=list(grid.item(item,'values'))
-                if not uzk_plan[str(vals[0])]['uzk_quantity'] or uzk_plan[str(vals[0])].get('amendment_original') or has_manual_geometry(dict(zip(cols,vals))):
-                    continue
-                try:vals[4]=selection.resolve(str(vals[0]),str(vals[1]),saved_standard=str(vals[4])) if selection else ''
+                try:
+                    row=geometry_row(row_facts(item))
+                    if not row['uzk_quantity']:continue
+                    positive=True
+                    if has_manual_geometry(row):continue
+                    available=geometry_selection()
+                    vals[4]=available.resolve(row['mark'],row['profile'],saved_standard=row['standard']) if available else ''
                 except Stop as exc:errors.append(str(exc))
                 grid.item(item,values=vals)
             text=('ГОСТ по умолчанию — первый допустимый в порядке строк Профили.xlsx. '
@@ -1182,8 +1249,11 @@ class App:
             if not positive:
                 text=('Для добавленных марок УЗК не требуется.' if self.adding_marks()
                       else 'План УЗК — 0. ГОСТ / НД для расчёта УЗК не требуется.')
+            if any(row.get('manual_limit') for row in uzk_plan.values()):
+                text+='\nУЗК, шт: двойной щелчок для дополнительного контроля марок, отсутствующих в общем реестре.'
             if errors:text+='\n'+'\n'.join(errors)
-            standard_status.configure(text=text)
+            standard_text=text
+            standard_status.configure(text=standard_text)
             return errors
         def changed_standard(item,col,old,new):
             if col==4 and new!=old and selection:
@@ -1199,37 +1269,40 @@ class App:
                 vals=list(grid.item(item,'values'))
                 vals[4]=''
                 grid.item(item,values=vals)
-            if col in (1,4,5,6):update_standards()
-        def recalculate(*_):
-            refresh_akz()
-            if not positive:return
-            current=[dict(zip(cols,grid.item(item,'values'))) for item in grid.get_children()
-                     if not uzk_plan[grid.set(item,'mark')].get('amendment_original')]
-            geometry_vom=v
-            if self.adding_marks():
-                from dataclasses import replace
-                geometry_vom=replace(v,rows=tuple(r for r in v.rows if not uzk_plan[str(r[0])].get('amendment_original')))
-            auto=selection if requires_geometry_catalog(current) else None
+            if col==3:
+                try:
+                    row=row_facts(item)
+                    grid.set(item,'uzk_quantity',row['uzk_quantity'])
+                except Stop as exc:
+                    grid.set(item,'uzk_quantity',old)
+                    self.error(exc,parent=window)
+            if col in (1,3,4,5,6):update_standards()
+            if col==2:refresh_akz()
+
+        def preview_geometry(*_):
+            current=[]
             try:
-                for row in current:
-                    if uzk_plan[row['mark']]['uzk_quantity'] and not uzk_plan[row['mark']].get('amendment_original') and has_manual_geometry(row):
-                        manual_dimensions(row)
-                design=calculate_design_characteristics(
-                    geometry_vom,{'marks':current},auto.path if auto else None,
-                    expected_sha=auto.pin if auto else None,
-                    approved_rows=auto.known if auto else None)
-                picked={str(grid.item(i,'values')[0]) for i in grid.selection()}
-                parts=[r for r in design if r['mark'] in picked]
+                current=[geometry_row(row_facts(item)) for item in grid.selection()]
+                picked={row['mark'] for row in current}
+                auto=selection if requires_geometry_catalog(current) else None
+                parts=calculate_design_characteristics(
+                    replace(v,rows=tuple(r for r in v.rows if r[0] in picked)),{'marks':current},
+                    auto.path if auto else None,expected_sha=auto.pin if auto else None,
+                    approved_rows=auto.known if auto else None) if current else []
                 suffix='; '.join(r['mark']+': S='+r['thickness_mm']+' мм, L='+r['length_mm']+' мм, '+r['frequency_mhz']+' МГц, '+r['angle_deg']+'°' for r in parts)
-                update_standards()
-                if suffix:standard_status.configure(text=standard_status.cget('text')+'\n'+suffix)
-            except Stop as exc:standard_status.configure(text=standard_status.cget('text')+'\n'+str(exc))
+            except Stop as exc:suffix=str(exc)
+            standard_status.configure(text=standard_text+('\n'+suffix if suffix else ''))
+
+        def can_edit(item,col):
+            choice=uzk_plan[grid.set(item,'mark')]
+            if col==3:return bool(choice.get('manual_limit'))
+            if col in (4,5,6):return bool(geometry_row(row_facts(item))['uzk_quantity'])
+            return not choice.get('amendment_original')
+
         update_standards()
-        self.editable(grid,immutable={0,3},on_change=recalculate,choices={4:standard_options},
-                      on_cell_change=changed_standard,
-                      can_edit=lambda item,col:not uzk_plan[grid.set(item,'mark')].get('amendment_original')
-                      and (col not in (5,6) or int(grid.set(item,'uzk_quantity'))>0))
-        grid.bind('<<TreeviewSelect>>',recalculate)
+        self.editable(grid,immutable={0},on_change=preview_geometry,choices={4:standard_options},
+                      on_cell_change=changed_standard,can_edit=can_edit)
+        grid.bind('<<TreeviewSelect>>',preview_geometry)
         refresh_akz()
 
         def go_back():
@@ -1245,16 +1318,17 @@ class App:
                 from .simple_facts import save_screen_draft
                 from .fact_defaults import remember_defaults
                 from .draft_values import preview_values
-                visible=[dict(zip(cols,grid.item(item,'values'))) for item in grid.get_children()]
-                for row in visible:
-                    if uzk_plan[row['mark']]['uzk_quantity'] and not uzk_plan[row['mark']].get('amendment_original') and has_manual_geometry(row):
+                visible=[row_facts(item) for item in grid.get_children()]
+                current=[geometry_row(row) for row in visible]
+                for row in current:
+                    if row['uzk_quantity'] and has_manual_geometry(row):
                         manual_dimensions(row)
-                if selection and requires_geometry_catalog(row for row in visible if not uzk_plan[row['mark']].get('amendment_original')):
+                if selection and requires_geometry_catalog(current):
                     selection.verify_source()
                     errors=update_standards()
                     if errors:
                         raise Stop('\n'.join(errors))
-                    visible=[dict(zip(cols,grid.item(item,'values'))) for item in grid.get_children()]
+                    visible=[row_facts(item) for item in grid.get_children()]
                 climate_drafts={}
                 for n,info in variant_forms.items():
                     values={
@@ -1306,7 +1380,7 @@ class App:
                 self.facts=draft
                 if selection:self.cfg=selection.settings()
                 self.cfg['last_project']=self.project.get()
-                save(self.settings_path(),self.cfg)
+                save_settings(self.settings_path(),self.cfg)
                 try:remember_defaults(self.project.get(),self.cfg.get('training',False),scope,draft)
                 except (Stop,OSError) as exc:
                     self.write('Ввод сохранён в заявке. Не удалось обновить настройки объекта: '+str(exc))
@@ -1535,7 +1609,7 @@ class App:
                  'запишет отгрузку в три Excel с резервными копиями.\n\n'
                  'Вы подтверждаете реальные результаты контроля, правильность '
                  'ВОМ и право на официальный выпуск БЕЗ предварительного '
-                 'просмотра PDF.\n'+STATEMENT+
+                 'просмотра PDF.\n'+statement_for(d.get('facts',{}))+
                  '\n\nПодтвердить выпуск?')
         if not messagebox.askyesno('Подтверждение итогового выпуска',message):
             self.write('Выпуск отменён до записи. Рабочие Excel не изменены.')
@@ -1598,7 +1672,7 @@ class App:
         if self.active:return
         try:
             paths=core.pending(self.cfg['registry'])
-            if not paths:messagebox.showinfo('Восстановление','Незавершённых операций нет.');return
+            if not paths:messagebox.showinfo('Восстановление','Незавершённых операций нет.',parent=self.root);return
             entries=[]
             for path in sorted(paths):
                 state=core.journal_read(path)
@@ -1616,7 +1690,7 @@ class App:
             if phase=='NEEDS_READBACK':
                 choice=messagebox.askyesnocancel('Выпуск ожидает проверки',label+
                     '\nДа — повторить контрольное чтение Word и Excel и завершить выпуск. '
-                    'Нет — перейти к подтверждению отката. Отмена — закрыть окно.')
+                    'Нет — перейти к подтверждению отката. Отмена — закрыть окно.',parent=self.root)
                 if choice is None:return
                 if choice:
                     def finish(result):
@@ -1626,7 +1700,7 @@ class App:
                              lambda result:self.run('complete',{'journal':journal,'readback_result':self.result_path},finish))
                     return
             if messagebox.askyesno('Откат незавершённой операции',label+
-                    '\nПодтвердите откат. Восстановление проверит SHA рабочих файлов.'):
+                    '\nПодтвердите откат. Восстановление проверит SHA рабочих файлов.',parent=self.root):
                 self.run('recover',{'journal':journal},lambda r:self.write(r))
         except Exception as exc:self.error(exc)
 
@@ -1639,10 +1713,20 @@ class App:
         for widget in (self.projects,self.numbers,self.new_widget,self.vom_widget,self.source_numbers,self.shipment_entry):widget.configure(state='disabled')
         states=[b['state'] for b in self.buttons]
         for b in self.buttons:b.configure(state='disabled')
+        self._job_message=None
         labels={'check':'Проверяются исходные данные','prepare':'Формируются Word и Excel','verify':'Проверяются Word и Excel','confirm':'Сохраняется ваше подтверждение','release':'Готовятся окончательные документы','commit':'Сохраняется отгрузка с резервными копиями','readback':'Проверяется запись отгрузки','complete':'Завершается сохранение','recover':'Восстанавливается незавершённая операция'}
         self.progress.configure(text=labels.get(task,'Выполняется операция')+'. Дождитесь завершения.');self.root.after(500,lambda:self.poll(root,task,callback,states))
     def poll(self,root,task,callback,states,result_deadline=None):
-        if self.active.poll() is None:self.root.after(500,lambda:self.poll(root,task,callback,states));return
+        if self.active.poll() is None:
+            try:
+                progress=read(root/'progress.json')
+                message=progress.get('message') if isinstance(progress,dict) else None
+                if isinstance(message,str) and message!=getattr(self,'_job_message',None):
+                    self._job_message=message
+                    self.progress.configure(text=message+'. Дождитесь завершения.')
+            except (OSError,ValueError):
+                pass
+            self.root.after(500,lambda:self.poll(root,task,callback,states));return
         if result_deadline is None:result_deadline=time.monotonic()+5
         error=None
         try:
@@ -1705,7 +1789,7 @@ class App:
                  'вы вправе выпустить документы и проверили все страницы.\n'
                  'После «Да» будут выполнены итоговые проверки и запись '
                  'в реестр с резервной копией.\n'
-                 +STATEMENT+'\nЕсли контроль не выполнен или результаты неизвестны, нажмите «Нет».\nПодтверждаете текущий контроль и выпуск?')
+                 +statement_for(d.get('facts',{}))+'\nЕсли контроль не выполнен или результаты неизвестны, нажмите «Нет».\nПодтверждаете текущий контроль и выпуск?')
         if not messagebox.askyesno('Предварительный просмотр и выпуск',message):
             self.write('Подтверждение отложено; предварительный PDF доступен. '
                        'Реестр не изменён.')

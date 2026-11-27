@@ -11,6 +11,7 @@ import hashlib,json,os,shutil
 from uuid import uuid4
 from .storage import Stop,safe,sha,read,save,digest,mutex,post_commit_path,windows_file_identity
 from .coordinated import _lock_all,_write_bytes
+from .service_archive import operation_evidence,require_disk_space
 from .core import require_current_journal,recovery_archive
 from passport_app.excel import atomic_replace,locked_file
 
@@ -66,8 +67,9 @@ def validate_closed(journal,state):
             or r.get('approval',{}).get('approved') is not True
             or r['approval'].get('manifest_sha256')!=info['manifest_sha256']):raise Stop('Неверная привязка закрытия компенсации.')
     expected={i['role']:i['path'] for i in state['participants']};approved={i['role']:i for i in m['participants']}
+    plan=operation_evidence(journal,state,names=('plan.json',))['plan.json']
     if (journal!=Path(state['registry']).parent/'.vzmk-operations'/state['id']/'journal.json'
-            or sha(safe(state['plan']))!=m['plan_sha256']):raise Stop('Повреждена привязка плана компенсации.')
+            or sha(plan)!=m['plan_sha256']):raise Stop('Повреждена привязка плана компенсации.')
     if len(r.get('participants',[]))!=3 or {i['role'] for i in r['participants']}!=set(expected):raise Stop('Повреждены участники компенсации.')
     for item in r['participants']:
         role=item['role'];before=stage/('before-'+role+Path(item['path']).suffix);after=stage/('after-'+role+Path(item['path']).suffix)
@@ -90,7 +92,7 @@ def _context(manifest):
     if m.get('schema')!=SCHEMA:raise Stop('Неизвестная схема компенсации.')
     from .core import journal_read
     journal=safe(m['journal']);state=journal_read(journal)
-    plan_path=safe(state['plan']);plan=read(plan_path);seal=plan.pop('seal',None)
+    plan_path=operation_evidence(journal,state,names=('plan.json',))['plan.json'];plan=read(plan_path);seal=plan.pop('seal',None)
     if (plan.get('schema')!='VZMK_PRODUCTION_PLAN_1' or digest(plan)!=seal or sha(plan_path)!=m['plan_sha256']
             or sha(journal)!=m['journal_sha256'] or state['id']!=m['id'] or state['id']!=plan['id']
             or state['phase']!='NEEDS_READBACK' or journal.parent.name!=state['id']
@@ -131,6 +133,12 @@ def apply(manifest,approval):
             if hashlib.sha256(current[item['path']]).hexdigest()!=item['before_sha256']:raise Stop('Новые изменения рабочего файла '+item['role'])
             item['before_identity']=windows_file_identity(item['path'])
         target=safe(state['target']);_documents(state,target)
+        writes=[(stage/'journal.original.json',len(original_bytes)),(stage/'manifest.json',manifest.stat().st_size)]
+        for item in items:
+            candidate_size=Path(item['candidate']).stat().st_size
+            writes.extend([(stage/'before.xlsx',len(current[item['path']])),(stage/'after.xlsx',candidate_size),
+                           (item['path'],candidate_size)])
+        require_disk_space(writes)
         stage.mkdir(exist_ok=False)
         _write_bytes(stage/'journal.original.json',original_bytes)
         _write_bytes(stage/'manifest.json',Path(manifest).read_bytes())
@@ -236,10 +244,14 @@ def recover_interrupted(journal):
         target=safe(intent['target']);unpublished=recovery_archive(journal.parent, target, 'unpublished_documents')
         if target.exists()==unpublished.exists():raise Stop('Неизвестное состояние комплекта компенсации.')
         _documents(old,target if target.exists() else unpublished)
-        for item in items:
-            if hashlib.sha256(payloads[item['path']]).hexdigest()==item['before_sha256']:continue
+        changed=[item for item in items if hashlib.sha256(payloads[item['path']]).hexdigest()!=item['before_sha256']]
+        require_disk_space((item['path'],Path(item['before_copy']).stat().st_size) for item in changed)
+        for item in changed:
             restore=Path(item['path']).with_name('.vzmk-compensation-restore-'+uuid4().hex+Path(item['path']).suffix)
             _write_bytes(restore,Path(item['before_copy']).read_bytes());atomic_replace(restore,item['path'],backup=_archive(stage, item['path'], 'interrupted-after-'+uuid4().hex+Path(item['path']).suffix))
+            restored=stack.enter_context(locked_file(post_commit_path(item['path']),writable=True))
+            if hashlib.sha256(restored).hexdigest()!=item['before_sha256']:
+                raise Stop('Не подтверждено восстановление CURRENT '+item['role'])
         if unpublished.exists():unpublished.rename(target)
         _restore_journal(journal,original.read_bytes());_event(stage,'INTERRUPTED_RESTORED_CURRENT')
     if any(sha(safe(i['path']))!=i['before_sha256'] for i in items):raise Stop('Не подтверждено восстановление CURRENT.')
