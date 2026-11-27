@@ -56,6 +56,22 @@ def _owner_uzk_result(quantity, *, draft):
     return 'ГОДЕН','Подтверждение владельца о выполненном текущем УЗК'
 
 
+def _fill_summary_cell(cell,value):
+    from copy import deepcopy
+    paragraph,=cell.paragraphs
+    runs=paragraph.runs
+    target=next((run for run in runs if run.text),None)
+    if target is None:
+        target=runs[0] if runs else paragraph.add_run()
+        marker_format=paragraph._p.xpath('./w:pPr/w:rPr')
+        if marker_format:
+            if target._r.rPr is not None:target._r.remove(target._r.rPr)
+            target._r.insert(0,deepcopy(marker_format[0]))
+    target.text=value
+    for run in runs:
+        if run is not target:run.text=''
+
+
 def _owner_uzk_summary(path, *, draft, release_sha256=None):
     """Validate the generated summary, changing only result and basis on release."""
     from docx import Document
@@ -86,7 +102,8 @@ def _owner_uzk_summary(path, *, draft, release_sha256=None):
         if qty:
             positive=True
             if release_sha256 is not None:
-                cells[3].text,cells[4].text=_owner_uzk_result(qty,draft=False)
+                for cell,value in zip(cells[3:5],_owner_uzk_result(qty,draft=False)):
+                    _fill_summary_cell(cell,value)
     if not positive:
         raise Stop('УЗК: итоговая таблица контроля не содержит положительного количества.')
     if release_sha256 is not None:

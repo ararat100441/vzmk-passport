@@ -6,6 +6,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from docx import Document
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt
 
 from production_app import core, office, owner_control
 from production_app.storage import Stop, pins, save, sha
@@ -53,6 +56,15 @@ class OwnerSummaryRelease(unittest.TestCase):
         for row in rows:
             for cell,text in zip(table.add_row().cells,row):
                 cell.text=text
+        filled,blank=table.rows[1].cells[3:5]
+        run=filled.paragraphs[0].runs[0]
+        run.font.name='Times New Roman';run.font.size=Pt(11)
+        para=blank.paragraphs[0]
+        ppr=para._p.get_or_add_pPr()
+        marker=OxmlElement('w:rPr')
+        fonts=OxmlElement('w:rFonts');fonts.set(qn('w:ascii'),'Times New Roman');fonts.set(qn('w:hAnsi'),'Times New Roman')
+        size=OxmlElement('w:sz');size.set(qn('w:val'),'22')
+        marker.append(fonts);marker.append(size);ppr.append(marker)
         doc.save(self.draft)
         self.item={'role':'uzk','path':str(self.draft),'owner_uzk_summary':True}
 
@@ -78,6 +90,19 @@ class OwnerSummaryRelease(unittest.TestCase):
         self.assertEqual(rows[1][-1],'L=75/S=8; L=155/S=6')
         self.assertEqual(rows[2][3],'НЕ ТРЕБУЕТСЯ')
         self.assertEqual(self.verify(out,draft=False)[0]['status'],'PASS')
+
+    def test_release_preserves_the_result_run_and_blank_basis_style(self):
+        with patch.object(office,'excel_session'):
+            out,=office.release_copies([self.item],self.output,False,owner_uzk_sha256=sha(self.draft))
+        original=Document(self.draft).tables[0].rows[1].cells
+        result=Document(out['path']).tables[0].rows[1].cells
+        for index in (3,4):
+            para=result[index].paragraphs[0]
+            run,=para.runs
+            self.assertEqual((run.font.name,run.font.size),('Times New Roman',Pt(11)))
+            old_para=original[index].paragraphs[0]
+            self.assertEqual([item.xml for item in para._p.xpath('./w:pPr')],
+                             [item.xml for item in old_para._p.xpath('./w:pPr')])
 
     def test_pending_summary_cannot_release_without_declaration(self):
         with patch.object(office,'excel_session'):
