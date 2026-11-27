@@ -7,6 +7,11 @@ from uuid import uuid4
 
 PREVIEW_MARK='ПРЕДВАРИТЕЛЬНЫЙ ПРОСМОТР — НЕ ВЫПУЩЕНО'
 TEST_MARK=re.compile(r'\b(?:TEST|TRAINING|SAMPLE_ONLY|ТЕСТ)\b|УЧЕБН',re.I)
+UZK_SUMMARY_HEADERS=('Марка','ВОМ, шт','УЗК, шт','Результат','Основание')
+UZK_PENDING_RESULT='Ожидает подтверждения владельца'
+UZK_POSITIVE_RESULT=re.compile(r'\b(?:ГОДЕН|ГОДНА|ГОДНЫ|СООТВЕТСТВУЕТ\s+ТРЕБОВАНИЯМ)\b',re.I)
+UZK_SUMMARY_TITLE='Заключение ультразвукового контроля'
+UZK_SUMMARY_BODY='УЗК: {{UZK_DATE}}\n{{UZK_TABLE}}\nПротоколы: {{EVIDENCE}}'
 
 
 def word_preview_mark(path, *, remove=False):
@@ -41,6 +46,55 @@ def verify_document_marks(text, *, training=False, draft=True):
     if not draft and any(mark in text.upper() for mark in (
             PREVIEW_MARK,'ЧЕРНОВИК','НЕ ДЛЯ ВЫПУСКА','УЧЕБНЫЙ КОМПЛЕКТ')):
         raise Stop('В окончательном документе осталась предварительная маркировка.')
+
+
+def _owner_uzk_result(quantity, *, draft):
+    if not int(quantity):
+        return 'НЕ ТРЕБУЕТСЯ','План УЗК по текущей отгрузке: 0 шт.'
+    if draft:
+        return UZK_PENDING_RESULT,''
+    return 'ГОДЕН','Подтверждение владельца о выполненном текущем УЗК'
+
+
+def _owner_uzk_summary(path, *, draft, release_sha256=None):
+    """Validate the generated summary, changing only result and basis on release."""
+    from docx import Document
+    from .highlighted_reference import _save_preserving_parts
+    from os import replace
+
+    source=path
+    if release_sha256 is not None:
+        from hashlib import sha256
+        from io import BytesIO
+        data=path.read_bytes()
+        if sha256(data).hexdigest()!=release_sha256:
+            raise Stop('УЗК: выпускная копия отличается от проверенного документа.')
+        source=BytesIO(data)
+    document=Document(source)
+    tables=[table for table in document.tables if table.rows and
+            tuple(cell.text for cell in table.rows[0].cells[:5])==UZK_SUMMARY_HEADERS]
+    if len(tables)!=1:
+        raise Stop('УЗК: не найдена единственная таблица результатов текущего контроля.')
+    positive=False
+    for row in tables[0].rows[1:]:
+        cells=row.cells
+        if len(cells)<5 or not re.fullmatch(r'[0-9]+',cells[2].text):
+            raise Stop('УЗК: нарушена структура строки итоговой таблицы.')
+        qty=int(cells[2].text)
+        if (cells[3].text,cells[4].text)!=_owner_uzk_result(qty,draft=draft):
+            raise Stop('УЗК: результат или основание не соответствуют этапу выпуска: '+cells[0].text)
+        if qty:
+            positive=True
+            if release_sha256 is not None:
+                cells[3].text,cells[4].text=_owner_uzk_result(qty,draft=False)
+    if not positive:
+        raise Stop('УЗК: итоговая таблица контроля не содержит положительного количества.')
+    if release_sha256 is not None:
+        temporary=path.with_name('.uzk-'+uuid4().hex+'.docx')
+        _save_preserving_parts(document,source,temporary)
+        replace(temporary,path)
+
+
 from passport_app.excel import excel_session,open_excel,load_book,assert_range_formulas
 from passport_app.vik import word_session,open_word
 from passport_app.appendix import generate_appendix,inspect_template
@@ -71,17 +125,23 @@ def fields(registry,row):
     if any(not d[k] for k in cols):raise Stop('Не заполнены реквизиты/не пересчитаны формулы: '+str(row))
     return d
 
+def blank_word_text(title,body):
+    return (title+' № {{NUMBER}} от {{END_DATE}}\rДоговор: {{CONTRACT}}\rЗаказчик: {{CUSTOMER}}'
+            '\rОбъект: {{OBJECT}}\rШифр: {{CIPHER}}\r'+body.replace('\n','\r')+
+            '\rОтветственное лицо: {{RESPONSIBLE}}\rПодпись: __________________\r')
+
+
 def create_forms(folder):
     """Explicit creation in a NEW directory; requires separate human approval."""
     folder=Path(folder);folder.mkdir(exist_ok=False)
     with word_session() as word:
         for role,title,body in (
             ('vik','Акты визуального и измерительного контроля','ВИК: {{VIK_DATE}}\nСоединения: {{CONNECTIONS}}\n{{VIK_TABLE}}\nПервичные протоколы: {{EVIDENCE}}'),
-            ('uzk','Заключение ультразвукового контроля','УЗК: {{UZK_DATE}}\n{{UZK_TABLE}}\nПротоколы: {{EVIDENCE}}'),
+            ('uzk',UZK_SUMMARY_TITLE,UZK_SUMMARY_BODY),
             ('quality','Документ о качестве','Масса: {{MASS}} кг\nСталь: {{STEEL}}\nКМ: {{KM}}\nКМД: {{KMD_COMPANY}}\nПриложение №1; {{ACCEPTANCE_ACTS}}\n{{EVIDENCE}}')):
             doc=word.Documents.Add()
             try:
-                doc.Content.Text=title+' № {{NUMBER}} от {{END_DATE}}\rДоговор: {{CONTRACT}}\rЗаказчик: {{CUSTOMER}}\rОбъект: {{OBJECT}}\rШифр: {{CIPHER}}\r'+body.replace('\n','\r')+'\rОтветственное лицо: {{RESPONSIBLE}}\rПодпись: __________________\r'
+                doc.Content.Text=blank_word_text(title,body)
                 doc.Content.Font.Name='Times New Roman';doc.Content.Font.Size=11
                 doc.Paragraphs(1).Range.Font.Bold=True
                 doc.SaveAs2(str(folder/(role+'.docx')),FileFormat=16)
@@ -611,6 +671,7 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
         for role in ('vik','uzk','quality'):
             if role=='uzk' and not uzk_required:continue
             ref=profile['templates'][role];target=folder/(filename(facts['number'])+' - '+role+'.docx')
+            owner_uzk_summary=False
             original=first_sources.get(role)
             if original and role in ('vik','uzk'):
                 from .highlighted_reference import (
@@ -685,8 +746,14 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                         rows=[entry[:8] for entry in uzk_details_to_table(details)]
                         word_table(doc,'{{UZK_DETAILS_TABLE}}',headers,rows)
                     else:
-                        rows=[(m,totals[m],by_mark[m]['uzk_quantity'],by_mark[m]['uzk_result'],by_mark[m].get('basis','')) for m in totals]
-                        headers=('Марка','ВОМ, шт','УЗК, шт','Результат','Основание')
+                        owner_uzk_summary=bool(facts.get('owner_confirmation_required'))
+                        rows=[]
+                        for mark,total in totals.items():
+                            record=by_mark[mark];quantity=record['uzk_quantity']
+                            verdict=(_owner_uzk_result(quantity,draft=True) if owner_uzk_summary else
+                                     (record['uzk_result'],record.get('basis','')))
+                            rows.append((mark,total,quantity,*verdict))
+                        headers=UZK_SUMMARY_HEADERS
                         if facts.get('uzk_design') and 'UZK_DESIGN' not in template_tokens | bound_controls:
                             geometry={}
                             for record in facts['uzk_design']:
@@ -704,7 +771,9 @@ def render(profile,project,registry,row,vom,facts,folder,training=False):
                 doc.Repaginate();doc.Save()
             finally:doc.Close(SaveChanges=False)
             word_preview_mark(target)
-            outputs.append({'role':role,'path':str(target)})
+            output={'role':role,'path':str(target)}
+            if owner_uzk_summary:output['owner_uzk_summary']=True
+            outputs.append(output)
     return outputs
 
 def verify_documents(outputs,number,training=False,draft=True):
@@ -743,15 +812,32 @@ def verify_documents(outputs,number,training=False,draft=True):
                         for item in collection:
                             if item.Exists:text+=' '+item.Range.Text
                 if TOKEN.search(text) or any(t in text.upper() for t in forbidden):raise Stop('Незаполненные поля/неподтверждённые данные Word: '+str(path))
+                owner_summary=out['role']=='uzk' and out.get('owner_uzk_summary')
+                if UZK_PENDING_RESULT in text and not (draft and owner_summary):
+                    raise Stop('УЗК: неподтверждённый результат в выпускном документе.')
+                if owner_summary:
+                    if draft and UZK_POSITIVE_RESULT.search(text):
+                        raise Stop('УЗК: положительное заключение до подтверждения владельцем.')
+                    _owner_uzk_summary(path,draft=draft)
                 verify_document_marks(text,training=training,draft=draft)
-                report.append({'file':str(path),'engine':'Microsoft Word','pages':d.ComputeStatistics(2),'status':'PASS'})
+                checked={'file':str(path),'engine':'Microsoft Word','pages':d.ComputeStatistics(2),'status':'PASS'}
+                if owner_summary:checked['owner_uzk_summary']=True
+                report.append(checked)
             finally:d.Close(SaveChanges=False)
     return report
 
-def release_copies(outputs,folder,training):
+def release_copies(outputs,folder,training,*,owner_uzk_sha256=None):
     result=[]
     for out in outputs:
-        target=folder/Path(out['path']).name;shutil.copyfile(out['path'],target);result.append(out|{'path':str(target)})
+        source=Path(out['path']);target=folder/source.name
+        owner_summary=out.get('owner_uzk_summary')
+        if owner_summary:
+            if not owner_uzk_sha256:
+                raise Stop('УЗК: нет подтверждения владельца для выпускной копии.')
+            if sha(source)!=owner_uzk_sha256:
+                raise Stop('УЗК: исходный документ отличается от проверенного.')
+        shutil.copyfile(source,target)
+        result.append(out|{'path':str(target)})
     with excel_session() as app:
         for out in result:
             if Path(out['path']).suffix!='.xlsx':continue
@@ -763,7 +849,10 @@ def release_copies(outputs,folder,training):
                 b.Save()
             finally:b.Close(SaveChanges=False)
     for out in result:
-        if Path(out['path']).suffix=='.docx':word_preview_mark(out['path'],remove=True)
+        path=Path(out['path'])
+        if out.get('owner_uzk_summary'):
+            _owner_uzk_summary(path,draft=True,release_sha256=owner_uzk_sha256)
+        if path.suffix=='.docx':word_preview_mark(out['path'],remove=True)
     return result
 
 def inspect_existing(registry_path,project,number,folder,vom=None):

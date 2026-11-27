@@ -89,6 +89,12 @@ class RepeatedAmendmentGeometry(unittest.TestCase):
 
 class ReportGeometry(unittest.TestCase):
     def test_summary_form_prints_all_groups_without_repeating_mark_or_total(self):
+        self.check_summary_form(owner=False)
+
+    def test_owner_summary_renders_before_confirmation_without_supplied_verdict(self):
+        self.check_summary_form(owner=True)
+
+    def check_summary_form(self, *, owner):
         # Native Office is exercised by the Windows release scenario. Here only
         # the COM boundary is stubbed so the real renderer chooses its template route.
         with TemporaryDirectory() as folder:
@@ -104,7 +110,13 @@ class ReportGeometry(unittest.TestCase):
             mark={'mark':'M','uzk_quantity':2,'uzk_result':'DEV'}
             facts={'number':'2/2026','climates':[],'marks':[mark],
                    'uzk_design':[historical_part('75','8',origin='MANUAL'),historical_part('155','6')]}
-            vom=SimpleNamespace(rows=(('M','DEV',2),))
+            rows=(('M','DEV',2),)
+            if owner:
+                mark.pop('uzk_result')
+                facts['owner_confirmation_required']=True
+                facts['marks'].append({'mark':'Z','uzk_quantity':0})
+                rows+=(('Z','DEV',1),)
+            vom=SimpleNamespace(rows=rows)
             output=root/'out';output.mkdir()
             def open_doc(_app,path,**_kwargs):
                 return docs[Path(path).stem.split(' - ')[1]]
@@ -117,16 +129,22 @@ class ReportGeometry(unittest.TestCase):
                   patch.object(office,'word_table') as table,
                   patch.object(office,'replace_word',side_effect=finalize_text),
                   patch.object(office,'word_preview_mark')):
-                office.render({'templates':templates},None,None,None,vom,facts,output,training=True)
+                outputs=office.render({'templates':templates},None,None,None,vom,facts,output,training=True)
             _,token,headers,rows=table.call_args.args
             self.assertEqual(token,'{{UZK_TABLE}}')
             self.assertEqual(headers[-1],'Расчётная геометрия')
-            self.assertEqual(len(rows),1)
+            self.assertEqual(len(rows),2 if owner else 1)
             self.assertEqual(rows[0][:3],('M',2,2))
             self.assertIn('L=75 мм, S=8 мм',rows[0][-1])
             self.assertIn('L=155 мм, S=6 мм',rows[0][-1])
             self.assertIn('дополнительный',rows[0][-1])
             self.assertIn('по реестру',rows[0][-1])
+            if owner:
+                self.assertEqual(rows[0][3:5],('Ожидает подтверждения владельца',''))
+                self.assertEqual(rows[1][:5],('Z',1,0,'НЕ ТРЕБУЕТСЯ','План УЗК по текущей отгрузке: 0 шт.'))
+                self.assertTrue(next(out for out in outputs if out['role']=='uzk')['owner_uzk_summary'])
+            else:
+                self.assertEqual(rows[0][3],'DEV')
 
     def test_other_design_routes_keep_all_weld_segments_under_one_mark(self):
         parts=[historical_part('75','8',origin='MANUAL'),historical_part('155','6',quantity=2)]

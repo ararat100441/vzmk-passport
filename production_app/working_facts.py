@@ -44,6 +44,9 @@ def selected_form(profile, role):
             supported=is_first_akz_appendix(path)
         else:supported=False
         if supported:return {**original,'exact_reference':True}
+        if role=='uzk':
+            from .templates import is_blank_uzk_summary
+            if is_blank_uzk_summary(path):return original
     inventory=profile.get('first_passport_sources')
     if inventory is not None:
         number=inventory.get('first_number','не указан')

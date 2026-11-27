@@ -14,6 +14,30 @@ WORD_REQUIRED={
 AKZ_REQUIRED={'NUMBER','OBJECT','AKZ_DATE','AIR','SURFACE','HUMIDITY','DEW','THICKNESS','MATERIAL','BASIS','RESPONSIBLE','EVIDENCE'}
 TOKEN=re.compile(r'\{\{([A-Z_0-9]+)\}\}')
 
+
+def is_blank_uzk_summary(path):
+    """Accept the program's own empty summary layout at the selected source."""
+    from xml.etree import ElementTree as ET
+    from zipfile import ZipFile
+    from .word_controls import W
+    from .office import UZK_SUMMARY_BODY,UZK_SUMMARY_TITLE,blank_word_text
+
+    expected=blank_word_text(UZK_SUMMARY_TITLE,UZK_SUMMARY_BODY).splitlines()
+    unsafe={W+tag for tag in ('tbl','sdt','drawing','pict','altChunk','fldSimple','instrText')}
+    with ZipFile(path) as package:
+        body=ET.fromstring(package.read('word/document.xml'))
+        if any(node.tag in unsafe for node in body.iter()):return False
+        paragraphs=[''.join(node.text or '' for node in paragraph.iter(W+'t')).strip()
+                    for paragraph in body.iter(W+'p')]
+        if [line for line in paragraphs if line]!=expected:return False
+        for name in package.namelist():
+            if re.fullmatch(r'word/(?:header\d*|footer\d*|footnotes|endnotes|comments)\.xml',name):
+                content=ET.fromstring(package.read(name))
+                if any(node.tag in unsafe or node.tag==W+'t' and (node.text or '').strip()
+                       for node in content.iter()):return False
+    return True
+
+
 def validate(profile,project,variants,training=False):
     errors=[]
     if profile.get('first_passport_sources') is not None:

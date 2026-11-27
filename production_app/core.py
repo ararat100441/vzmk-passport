@@ -439,7 +439,8 @@ def verify_registry(original,after,project,number,vom,expected_date=None,*,amend
     return e['row']
 
 def verify(path,preview=False):
-    d=load_plan(path);run=Path(d['run']);prepared=read(run/'prepared.json')
+    d=load_plan(path);run=Path(d['run']);prepared_path=run/'prepared.json'
+    prepared_sha=sha(prepared_path);prepared=read(prepared_path)
     if prepared['plan_seal']!=d['seal'] or sha(prepared['registry'])!=prepared['snapshot_sha256']:
         raise Stop('Изменена подготовленная копия реестра.')
     if not prepared.get('output_fingerprints'):
@@ -447,6 +448,9 @@ def verify(path,preview=False):
     verify_pins(prepared['output_fingerprints'])
     report=office.verify_documents(prepared['outputs'],d['number'],d['cfg'].get('training',False))
     hashes=pins([o['path'] for o in prepared['outputs']])
+    checked_summaries=[item['file'] for item in report if item.get('owner_uzk_summary')]
+    if any(hashes[path]!=prepared['output_fingerprints'][path] for path in checked_summaries):
+        raise Stop('УЗК: подготовленный документ изменился во время проверки Word.')
     preview_path=None
     if preview:
         from .print_pdf import create_print_pdf
@@ -459,15 +463,21 @@ def verify(path,preview=False):
             if target.exists():
                 raise Stop('Дублирующийся документ чернового PDF: '+target.name)
             shutil.copyfile(source,target)
+            if item['path'] in checked_summaries and sha(target)!=hashes[item['path']]:
+                raise Stop('УЗК: документ изменился при копировании для просмотра.')
             copied.append({'role':item['role'],'path':str(target)})
         # PDF marking is applied after pagination, on every preview page.
         printout=create_print_pdf(copied,draft,Path(d['target']).name,preview=True,uzk_required=d.get('uzk_required',True))
         preview_path=printout['output']['path']
         hashes.update(pins([preview_path]))
-    save(run/'verified.json',{
+    verification={
         'plan_seal':d['seal'],'documents':report,'fingerprints':hashes,
         'preview_pdf':preview_path,
-    })
+    }
+    if checked_summaries:
+        verification['owner_uzk_preparation']={str(prepared_path):prepared_sha}
+        verify_pins(verification['owner_uzk_preparation'])
+    save(run/'verified.json',verification)
     return {'status':'PASS','files':len(report),'documents':report,
             'preview_pdf':preview_path,'ready_to_confirm':True}
 
@@ -505,6 +515,7 @@ def confirm(path,responsible,reviewed,approved=False,current_control=False,direc
         raise Stop('Не подтверждены достоверность текущих результатов, '
                    'полномочия и утверждённые формы.')
     verify_pins(verified['fingerprints'])
+    verify_pins(verified.get('owner_uzk_preparation',{}))
     if (run/'preview.json').exists():
         shown=read(run/'preview.json')
         if shown['plan_seal']!=d['seal'] or shown['verified_sha256']!=sha(run/'verified.json'):raise Stop('Просмотрен другой комплект. Сформируйте PDF снова.')
@@ -563,13 +574,22 @@ def check_release_graphics(outputs):
 def release(path):
     d=load_plan(path);run=Path(d['run']);prepared=read(run/'prepared.json');verified=read(run/'verified.json');confirmation=read(run/'confirmation.json')
     if confirmation['plan_seal']!=d['seal'] or confirmation['verified_sha256']!=sha(run/'verified.json'):raise Stop('Нет подтверждения.')
+    preparation=verified.get('owner_uzk_preparation',{})
+    verify_pins(preparation)
+    release_options={}
     if d['facts'].get('owner_confirmation_required'):
         from .owner_control import require_declaration
         require_declaration(d,confirmation)
+        summaries=[item['path'] for item in prepared['outputs'] if item.get('owner_uzk_summary')]
+        inspected=[item['file'] for item in verified.get('documents',()) if item.get('owner_uzk_summary')]
+        if summaries!=inspected or len(summaries)>1 or summaries and not preparation:
+            raise Stop('УЗК: состав выпускной копии отличается от проверенного комплекта.')
+        if summaries:
+            release_options['owner_uzk_sha256']=verified['fingerprints'][summaries[0]]
         check_release_graphics(prepared['outputs'])
     verify_pins(verified['fingerprints'])
     output=run/'release';output.mkdir(exist_ok=False)
-    files=office.release_copies(prepared['outputs'],output,d['cfg'].get('training',False))
+    files=office.release_copies(prepared['outputs'],output,d['cfg'].get('training',False),**release_options)
     office.verify_documents(files,d['number'],d['cfg'].get('training',False),draft=False)
     # Only the FINAL, unwatermarked release copies enter the printable PDF.
     # A failed native Office export stops before any registry modification.
